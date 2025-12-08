@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 中古世紀村莊</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #1a1a2e;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    #game-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+    
+    #game-canvas {
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    
+    #ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    
+    #ui-layer > * {
+      pointer-events: auto;
+    }
+    
+    /* 動作選單樣式 */
+    .action-menu {
+      position: absolute;
+      background: #2a2a4a;
+      border: 2px solid #6a6a8a;
+      border-radius: 4px;
+      min-width: 150px;
+      display: none;
+      z-index: 100;
+    }
+    
+    .action-menu-title {
+      padding: 8px 12px;
+      background: #3a3a5a;
+      color: #ffd700;
+      font-size: 14px;
+      border-bottom: 1px solid #6a6a8a;
+    }
+    
+    .action-menu-item {
+      padding: 8px 12px;
+      color: #e0e0e0;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.2s;
+    }
+    
+    .action-menu-item:hover {
+      background: #4a4a6a;
+      color: #fff;
+    }
+    
+    .action-menu-item.disabled {
+      color: #666;
+      cursor: not-allowed;
+    }
+    
+    /* 狀態列 */
+    #status-bar {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border-radius: 4px;
+      color: #fff;
+      font-size: 12px;
+      display: flex;
+      gap: 20px;
+    }
+    
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .stat-bar {
+      width: 60px;
+      height: 8px;
+      background: #333;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    
+    .stat-fill {
+      height: 100%;
+      transition: width 0.3s;
+    }
+    
+    .stat-fill.energy { background: #4CAF50; }
+    .stat-fill.hunger { background: #FF9800; }
+    .stat-fill.social { background: #2196F3; }
+    .stat-fill.happiness { background: #E91E63; }
+    
+    /* 時間顯示 */
+    #time-display {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 8px 12px;
+      border-radius: 4px;
+      color: #ffd700;
+      font-size: 14px;
+    }
+    
+    /* 對話框 */
+    #dialog-box {
+      position: absolute;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80%;
+      max-width: 500px;
+      background: rgba(20, 20, 40, 0.95);
+      border: 2px solid #6a6a8a;
+      border-radius: 8px;
+      padding: 15px;
+      display: none;
+    }
+    
+    #dialog-speaker {
+      color: #ffd700;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    
+    #dialog-text {
+      color: #e0e0e0;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+    
+    <div id="ui-layer">
+      <!-- 時間顯示 -->
+      <div id="time-display">第 1 天 08:00</div>
+      
+      <!-- 狀態列 -->
+      <div id="status-bar">
+        <div id="villager-name" style="color: #ffd700; font-weight: bold; margin-right: 10px;">點擊村民觀察</div>
+        <div class="stat-item">
+          <span>體力</span>
+          <div class="stat-bar">
+            <div class="stat-fill energy" style="width: 0%"></div>
+          </div>
+          <span class="stat-value" id="energy-value">0%</span>
+        </div>
+        <div class="stat-item">
+          <span>飢餓</span>
+          <div class="stat-bar">
+            <div class="stat-fill hunger" style="width: 0%"></div>
+          </div>
+          <span class="stat-value" id="hunger-value">0%</span>
+        </div>
+        <div class="stat-item">
+          <span>社交</span>
+          <div class="stat-bar">
+            <div class="stat-fill social" style="width: 0%"></div>
+          </div>
+          <span class="stat-value" id="social-value">0%</span>
+        </div>
+      </div>
+      
+      <!-- 動作選單 -->
+      <div id="action-menu" class="action-menu">
+        <div class="action-menu-title">選擇動作</div>
+      </div>
+      
+      <!-- 對話框 -->
+      <div id="dialog-box">
+        <div id="dialog-speaker">村民</div>
+        <div id="dialog-text">你好！今天天氣真好。</div>
+      </div>
+    </div>
+  </div>
+  
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

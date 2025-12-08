@@ -1,0 +1,434 @@
+/**
+ * 渲染器 - 處理所有遊戲畫面繪製
+ */
+
+export class Renderer {
+  constructor(ctx, camera, tileSize) {
+    this.ctx = ctx;
+    this.camera = camera;
+    this.tileSize = tileSize;
+    
+    // 地形顏色
+    this.terrainColors = {
+      grass: '#4a7c34',
+      grass_dark: '#3d6b2a',
+      road: '#8b7355',
+      road_light: '#9c8465',
+      water: '#3498db',
+      water_dark: '#2980b9',
+      floor: '#8b7355',
+      wall: '#5d4e37'
+    };
+    
+    // 建築物顏色
+    this.buildingColors = {
+      tavern: { wall: '#6b4423', roof: '#8b4513' },
+      church: { wall: '#d4c5a9', roof: '#696969' },
+      market: { wall: '#deb887', roof: '#cd853f' },
+      blacksmith: { wall: '#4a4a4a', roof: '#2f2f2f' },
+      house: { wall: '#c4a574', roof: '#8b4513' },
+      bakery: { wall: '#deb887', roof: '#d2691e' },
+      farm: { wall: '#9c8b6e', roof: '#8b7355' },
+      well: { wall: '#696969' }
+    };
+  }
+  
+  /**
+   * 渲染地圖
+   */
+  renderMap(map) {
+    const startTileX = Math.floor(this.camera.x / this.tileSize);
+    const startTileY = Math.floor(this.camera.y / this.tileSize);
+    const tilesX = Math.ceil(this.camera.viewportWidth / this.tileSize) + 1;
+    const tilesY = Math.ceil(this.camera.viewportHeight / this.tileSize) + 1;
+    
+    // 渲染地面
+    for (let y = startTileY; y < startTileY + tilesY; y++) {
+      for (let x = startTileX; x < startTileX + tilesX; x++) {
+        if (x < 0 || x >= map.width || y < 0 || y >= map.height) continue;
+        
+        const terrain = map.getTerrain(x, y);
+        this.renderTile(x, y, terrain);
+      }
+    }
+    
+    // 渲染建築物底部
+    for (const building of map.buildings) {
+      this.renderBuilding(building);
+    }
+    
+    // 渲染物件
+    for (const obj of map.objects) {
+      this.renderObject(obj);
+    }
+  }
+  
+  /**
+   * 渲染單一格子
+   */
+  renderTile(tileX, tileY, terrain) {
+    const screenX = tileX * this.tileSize - this.camera.x + this.camera.offsetX;
+    const screenY = tileY * this.tileSize - this.camera.y + this.camera.offsetY;
+    
+    // 根據地形類型選擇顏色
+    let color = this.terrainColors.grass;
+    
+    switch (terrain) {
+      case 0: // 草地
+        // 棋盤格紋理
+        color = (tileX + tileY) % 2 === 0 
+          ? this.terrainColors.grass 
+          : this.terrainColors.grass_dark;
+        break;
+      case 1: // 道路
+        color = (tileX + tileY) % 2 === 0 
+          ? this.terrainColors.road 
+          : this.terrainColors.road_light;
+        break;
+      case 2: // 水
+        color = (tileX + tileY) % 2 === 0 
+          ? this.terrainColors.water 
+          : this.terrainColors.water_dark;
+        break;
+      case 3: // 地板
+        color = this.terrainColors.floor;
+        break;
+    }
+    
+    this.ctx.fillStyle = color;
+    this.ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
+  }
+  
+  /**
+   * 渲染建築物
+   */
+  renderBuilding(building) {
+    const screenX = building.x * this.tileSize - this.camera.x + this.camera.offsetX;
+    const screenY = building.y * this.tileSize - this.camera.y + this.camera.offsetY;
+    const width = building.width * this.tileSize;
+    const height = building.height * this.tileSize;
+    
+    const colors = this.buildingColors[building.type] || this.buildingColors.house;
+    
+    // 建築物地板
+    this.ctx.fillStyle = this.terrainColors.floor;
+    this.ctx.fillRect(screenX, screenY, width, height);
+    
+    // 牆壁
+    this.ctx.fillStyle = colors.wall;
+    
+    // 上牆
+    this.ctx.fillRect(screenX, screenY, width, this.tileSize);
+    // 下牆（留門）
+    const doorX = screenX + Math.floor(width / 2) - this.tileSize / 2;
+    this.ctx.fillRect(screenX, screenY + height - this.tileSize, width, this.tileSize);
+    // 門
+    this.ctx.fillStyle = '#4a3520';
+    this.ctx.fillRect(doorX, screenY + height - this.tileSize, this.tileSize, this.tileSize);
+    
+    // 左右牆
+    this.ctx.fillStyle = colors.wall;
+    this.ctx.fillRect(screenX, screenY, this.tileSize, height);
+    this.ctx.fillRect(screenX + width - this.tileSize, screenY, this.tileSize, height);
+    
+    // 建築物名稱
+    this.ctx.fillStyle = '#fff';
+    this.ctx.font = '10px sans-serif';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(building.name, screenX + width / 2, screenY - 4);
+  }
+  
+  /**
+   * 渲染物件
+   */
+  renderObject(obj) {
+    const screenX = obj.x * this.tileSize - this.camera.x + this.camera.offsetX;
+    const screenY = obj.y * this.tileSize - this.camera.y + this.camera.offsetY;
+    const size = this.tileSize;
+    
+    this.ctx.fillStyle = obj.color || '#8b4513';
+    
+    switch (obj.type) {
+      case 'well':
+        // 水井 - 圓形
+        this.ctx.beginPath();
+        this.ctx.arc(screenX + size / 2, screenY + size / 2, size / 2, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.fillStyle = '#3498db';
+        this.ctx.beginPath();
+        this.ctx.arc(screenX + size / 2, screenY + size / 2, size / 3, 0, Math.PI * 2);
+        this.ctx.fill();
+        break;
+        
+      case 'tree':
+        // 樹 - 樹幹 + 樹冠
+        this.ctx.fillStyle = '#5d4037';
+        this.ctx.fillRect(screenX + size * 0.35, screenY + size * 0.5, size * 0.3, size * 0.5);
+        this.ctx.fillStyle = '#2e7d32';
+        this.ctx.beginPath();
+        this.ctx.arc(screenX + size / 2, screenY + size * 0.4, size * 0.45, 0, Math.PI * 2);
+        this.ctx.fill();
+        break;
+        
+      case 'table':
+        this.ctx.fillStyle = '#8d6e63';
+        this.ctx.fillRect(screenX + 2, screenY + 2, size - 4, size - 4);
+        break;
+        
+      case 'bed':
+        this.ctx.fillStyle = '#795548';
+        this.ctx.fillRect(screenX + 1, screenY + 1, size - 2, size - 2);
+        this.ctx.fillStyle = '#bcaaa4';
+        this.ctx.fillRect(screenX + 2, screenY + 2, size - 4, size / 2);
+        break;
+        
+      case 'chair':
+        this.ctx.fillStyle = '#6d4c41';
+        this.ctx.fillRect(screenX + 3, screenY + 3, size - 6, size - 6);
+        break;
+        
+      default:
+        this.ctx.fillRect(screenX + 2, screenY + 2, size - 4, size - 4);
+    }
+  }
+  
+  /**
+   * 渲染村民
+   */
+  renderVillagers(villagers, selectedVillager = null) {
+    // 按 Y 座標排序（下方的後渲染，遮擋上方的）
+    const sorted = [...villagers].sort((a, b) => a.y - b.y);
+    
+    for (const villager of sorted) {
+      const isSelected = selectedVillager && selectedVillager.id === villager.id;
+      this.renderVillager(villager, isSelected);
+    }
+  }
+  
+  /**
+   * 渲染選中村民的路徑
+   */
+  renderVillagerPath(villager) {
+    if (!villager.moveTarget) return;
+    
+    const [targetX, targetY] = villager.moveTarget;
+    const tileSize = this.tileSize;
+    
+    // 當前位置
+    const startX = villager.x * tileSize - this.camera.x + this.camera.offsetX;
+    const startY = villager.y * tileSize - this.camera.y + this.camera.offsetY;
+    
+    // 目標位置
+    const endX = targetX * tileSize - this.camera.x + this.camera.offsetX;
+    const endY = targetY * tileSize - this.camera.y + this.camera.offsetY;
+    
+    // 畫虛線路徑
+    this.ctx.save();
+    this.ctx.setLineDash([4, 4]);
+    this.ctx.strokeStyle = 'rgba(255, 255, 100, 0.6)';
+    this.ctx.lineWidth = 2;
+    this.ctx.beginPath();
+    this.ctx.moveTo(startX + tileSize / 2, startY + tileSize / 2);
+    this.ctx.lineTo(endX + tileSize / 2, endY + tileSize / 2);
+    this.ctx.stroke();
+    this.ctx.restore();
+    
+    // 畫目標點
+    this.ctx.fillStyle = 'rgba(255, 255, 100, 0.8)';
+    this.ctx.beginPath();
+    this.ctx.arc(endX + tileSize / 2, endY + tileSize / 2, 6, 0, Math.PI * 2);
+    this.ctx.fill();
+    
+    // 目標點外圈
+    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    this.ctx.lineWidth = 2;
+    this.ctx.beginPath();
+    this.ctx.arc(endX + tileSize / 2, endY + tileSize / 2, 8, 0, Math.PI * 2);
+    this.ctx.stroke();
+  }
+  
+  /**
+   * 渲染單一村民
+   */
+  renderVillager(villager, isSelected = false) {
+    const screenX = villager.x * this.tileSize - this.camera.x + this.camera.offsetX;
+    const screenY = villager.y * this.tileSize - this.camera.y + this.camera.offsetY;
+    const size = this.tileSize;
+    
+    // 選中效果：發光圈
+    if (isSelected) {
+      this.ctx.fillStyle = 'rgba(255, 255, 100, 0.3)';
+      this.ctx.beginPath();
+      this.ctx.arc(screenX + size / 2, screenY + size / 2, size * 0.8, 0, Math.PI * 2);
+      this.ctx.fill();
+      
+      this.ctx.strokeStyle = 'rgba(255, 255, 100, 0.8)';
+      this.ctx.lineWidth = 2;
+      this.ctx.beginPath();
+      this.ctx.arc(screenX + size / 2, screenY + size / 2, size * 0.8, 0, Math.PI * 2);
+      this.ctx.stroke();
+    }
+    
+    // 身體
+    this.ctx.fillStyle = villager.color || '#e0c080';
+    this.ctx.fillRect(screenX + 3, screenY + 4, size - 6, size - 4);
+    
+    // 頭
+    this.ctx.fillStyle = '#ffd5b4';
+    this.ctx.beginPath();
+    this.ctx.arc(screenX + size / 2, screenY + 4, 4, 0, Math.PI * 2);
+    this.ctx.fill();
+    
+    // 選中時總是顯示名字
+    if (isSelected || villager.showName) {
+      this.ctx.fillStyle = isSelected ? '#ffff66' : '#fff';
+      this.ctx.font = isSelected ? 'bold 10px sans-serif' : '8px sans-serif';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText(villager.name, screenX + size / 2, screenY - 4);
+    }
+    
+    // 對話泡泡
+    if (villager.bubble) {
+      this.renderBubble(screenX + size / 2, screenY - 8, villager.bubble);
+    }
+  }
+  
+  /**
+   * 渲染對話泡泡
+   */
+  renderBubble(x, y, bubble) {
+    const text = bubble.text || '';
+    const type = bubble.type || 'speech'; // speech, thought, action
+    
+    if (!text) return;
+    
+    this.ctx.font = 'bold 14px sans-serif';
+    const textWidth = this.ctx.measureText(text).width;
+    const padding = 8;
+    const bubbleWidth = Math.min(textWidth + padding * 2, 200);
+    const bubbleHeight = 26;
+    const bubbleX = x - bubbleWidth / 2;
+    const bubbleY = y - bubbleHeight - 12;
+    
+    // 泡泡背景
+    this.ctx.fillStyle = type === 'thought' ? 'rgba(200, 200, 255, 0.95)' : 
+                         type === 'action' ? 'rgba(255, 240, 200, 0.95)' : 
+                         'rgba(255, 255, 255, 0.95)';
+    
+    // 圓角矩形
+    this.roundRect(bubbleX, bubbleY, bubbleWidth, bubbleHeight, 6);
+    this.ctx.fill();
+    
+    // 泡泡邊框
+    this.ctx.strokeStyle = type === 'thought' ? '#8888cc' : 
+                           type === 'action' ? '#ccaa55' : 
+                           '#888';
+    this.ctx.lineWidth = 2;
+    this.roundRect(bubbleX, bubbleY, bubbleWidth, bubbleHeight, 6);
+    this.ctx.stroke();
+    
+    // 小三角（指向角色）
+    if (type === 'speech') {
+      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      this.ctx.beginPath();
+      this.ctx.moveTo(x - 6, bubbleY + bubbleHeight);
+      this.ctx.lineTo(x, bubbleY + bubbleHeight + 8);
+      this.ctx.lineTo(x + 6, bubbleY + bubbleHeight);
+      this.ctx.closePath();
+      this.ctx.fill();
+      this.ctx.stroke();
+    } else if (type === 'thought') {
+      // 思考泡泡用小圓點
+      this.ctx.fillStyle = 'rgba(200, 200, 255, 0.95)';
+      this.ctx.beginPath();
+      this.ctx.arc(x, bubbleY + bubbleHeight + 5, 4, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.beginPath();
+      this.ctx.arc(x - 3, bubbleY + bubbleHeight + 12, 3, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+    
+    // 文字
+    this.ctx.fillStyle = '#333';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    
+    // 截斷過長文字
+    let displayText = text;
+    if (textWidth > 180) {
+      displayText = text.substring(0, 10) + '...';
+    }
+    
+    this.ctx.fillText(displayText, x, bubbleY + bubbleHeight / 2);
+  }
+  
+  /**
+   * 繪製圓角矩形
+   */
+  roundRect(x, y, width, height, radius) {
+    this.ctx.beginPath();
+    this.ctx.moveTo(x + radius, y);
+    this.ctx.lineTo(x + width - radius, y);
+    this.ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    this.ctx.lineTo(x + width, y + height - radius);
+    this.ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    this.ctx.lineTo(x + radius, y + height);
+    this.ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    this.ctx.lineTo(x, y + radius);
+    this.ctx.quadraticCurveTo(x, y, x + radius, y);
+    this.ctx.closePath();
+  }
+  
+  /**
+   * 渲染玩家
+   */
+  renderPlayer(player) {
+    const screenX = player.x * this.tileSize - this.camera.x + this.camera.offsetX;
+    const screenY = player.y * this.tileSize - this.camera.y + this.camera.offsetY;
+    const size = this.tileSize;
+    
+    // 玩家高亮邊框
+    this.ctx.strokeStyle = '#ffd700';
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(screenX + 1, screenY + 1, size - 2, size - 2);
+    
+    // 身體
+    this.ctx.fillStyle = '#4a90d9';
+    this.ctx.fillRect(screenX + 3, screenY + 4, size - 6, size - 4);
+    
+    // 頭
+    this.ctx.fillStyle = '#ffd5b4';
+    this.ctx.beginPath();
+    this.ctx.arc(screenX + size / 2, screenY + 4, 4, 0, Math.PI * 2);
+    this.ctx.fill();
+    
+    // 名字
+    this.ctx.fillStyle = '#ffd700';
+    this.ctx.font = 'bold 9px sans-serif';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(player.name, screenX + size / 2, screenY - 2);
+  }
+  
+  /**
+   * 渲染建築物頂部（遮擋效果）
+   */
+  renderBuildingTops(map) {
+    for (const building of map.buildings) {
+      const colors = this.buildingColors[building.type] || this.buildingColors.house;
+      const screenX = building.x * this.tileSize - this.camera.x + this.camera.offsetX;
+      const screenY = building.y * this.tileSize - this.camera.y + this.camera.offsetY;
+      const width = building.width * this.tileSize;
+      
+      if (colors.roof) {
+        // 屋頂
+        this.ctx.fillStyle = colors.roof;
+        this.ctx.beginPath();
+        this.ctx.moveTo(screenX - 4, screenY);
+        this.ctx.lineTo(screenX + width / 2, screenY - 16);
+        this.ctx.lineTo(screenX + width + 4, screenY);
+        this.ctx.closePath();
+        this.ctx.fill();
+      }
+    }
+  }
+}

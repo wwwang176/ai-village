@@ -1,0 +1,32 @@
+services:
+  # 前端服務
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  # 後端服務
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-3.5-turbo}
+      - DEBUG_OPENAI=${DEBUG_OPENAI:-true}
+    volumes:
+      - ./saves:/app/saves  # 持久化存檔
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
