@@ -109,7 +109,7 @@ export class Dashboard {
         </div>
         <div class="detail-row">
           <span class="label">職業</span>
-          <span class="value">${villager.occupation || '村民'}</span>
+          <span class="value">${this.getOccupationText(villager.occupation)}</span>
         </div>
         <div class="detail-row">
           <span class="label">性格</span>
@@ -245,6 +245,29 @@ export class Dashboard {
     if (!this.game || !this.game.villagerManager) return id;
     const villager = this.game.villagerManager.getVillagerById(id);
     return villager ? villager.name : id;
+  }
+  
+  /**
+   * 職業文字轉換
+   */
+  getOccupationText(occupation) {
+    const occupationMap = {
+      'tavern': '酒保',
+      'church': '神父',
+      'market': '商人',
+      'blacksmith': '鐵匠',
+      'bakery': '麵包師',
+      'butcher_shop': '屠夫',
+      'clinic': '醫師',
+      'barber_shop': '理髮師',
+      'weaver_shop': '織工',
+      'pottery': '陶匠',
+      'tannery': '皮革匠',
+      'farm': '農夫',
+      'dock': '漁夫',
+      'house': '無業'
+    };
+    return occupationMap[occupation] || occupation || '村民';
   }
   
   /**

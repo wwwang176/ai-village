@@ -17,7 +17,11 @@ export class Renderer {
       water: '#3498db',
       water_dark: '#2980b9',
       floor: '#8b7355',
-      wall: '#5d4e37'
+      wall: '#5d4e37',
+      farmland: '#8b6914',
+      farmland_dark: '#7a5c10',
+      dock: '#a0826d',
+      dock_dark: '#8b7355'
     };
     
     // 建築物顏色
@@ -94,6 +98,16 @@ export class Renderer {
       case 3: // 地板
         color = this.terrainColors.floor;
         break;
+      case 4: // 農田
+        color = (tileX + tileY) % 2 === 0 
+          ? this.terrainColors.farmland 
+          : this.terrainColors.farmland_dark;
+        break;
+      case 5: // 碼頭木板
+        color = (tileX + tileY) % 2 === 0 
+          ? this.terrainColors.dock 
+          : this.terrainColors.dock_dark;
+        break;
     }
     
     this.ctx.fillStyle = color;
@@ -108,6 +122,17 @@ export class Renderer {
     const screenY = building.y * this.tileSize - this.camera.y + this.camera.offsetY;
     const width = building.width * this.tileSize;
     const height = building.height * this.tileSize;
+    
+    // 開放式建築（農場、碼頭）不畫牆壁
+    const openBuildings = ['farm', 'dock'];
+    if (openBuildings.includes(building.type)) {
+      // 只顯示名稱
+      this.ctx.fillStyle = '#fff';
+      this.ctx.font = '10px sans-serif';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText(building.name, screenX + width / 2, screenY - 4);
+      return;
+    }
     
     const colors = this.buildingColors[building.type] || this.buildingColors.house;
     
@@ -131,12 +156,6 @@ export class Renderer {
     this.ctx.fillStyle = colors.wall;
     this.ctx.fillRect(screenX, screenY, this.tileSize, height);
     this.ctx.fillRect(screenX + width - this.tileSize, screenY, this.tileSize, height);
-    
-    // 建築物名稱
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = '10px sans-serif';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText(building.name, screenX + width / 2, screenY - 4);
   }
   
   /**
@@ -455,7 +474,13 @@ export class Renderer {
    * 渲染建築物頂部（遮擋效果）
    */
   renderBuildingTops(map) {
+    // 開放式建築不畫屋頂
+    const openBuildings = ['farm', 'dock'];
+    
     for (const building of map.buildings) {
+      // 跳過農場和碼頭
+      if (openBuildings.includes(building.type)) continue;
+      
       const colors = this.buildingColors[building.type] || this.buildingColors.house;
       const screenX = building.x * this.tileSize - this.camera.x + this.camera.offsetX;
       const screenY = building.y * this.tileSize - this.camera.y + this.camera.offsetY;
@@ -470,6 +495,15 @@ export class Renderer {
         this.ctx.lineTo(screenX + width + 4, screenY);
         this.ctx.closePath();
         this.ctx.fill();
+        
+        // 屋頂中央顯示建築名稱（民宅除外）
+        if (building.type !== 'house') {
+          this.ctx.fillStyle = '#fff';
+          this.ctx.font = 'bold 10px sans-serif';
+          this.ctx.textAlign = 'center';
+          this.ctx.textBaseline = 'middle';
+          this.ctx.fillText(building.name, screenX + width / 2, screenY - 6);
+        }
       }
     }
   }

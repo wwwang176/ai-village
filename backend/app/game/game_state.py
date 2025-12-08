@@ -74,8 +74,8 @@ class GameState:
             "relationships": {}
         }
         
-        # 生成村民
-        self._generate_villagers(10)  # 測試用：只生成 10 個村民
+        # 生成村民（13種職業各1人）
+        self._generate_villagers(13)
         
         self.initialized = True
         print(f"🎮 遊戲初始化完成 (種子: {self.seed})")
@@ -88,15 +88,28 @@ class GameState:
         # 建築物定義（加大尺寸，門口2格寬）
         buildings = []
         
-        # 必要建築（加大）
-        required = [
+        # 工作建築（13種職業對應的建築）
+        work_buildings = [
+            # 中心區域
             {"type": "tavern", "name": "酒館", "x": 18, "y": 22, "width": 8, "height": 7},
             {"type": "church", "name": "教堂", "x": 34, "y": 20, "width": 10, "height": 8},
             {"type": "market", "name": "市集", "x": 20, "y": 38, "width": 8, "height": 6},
-            {"type": "blacksmith", "name": "鐵匠舖", "x": 36, "y": 38, "width": 7, "height": 6},
+            {"type": "blacksmith", "name": "鐵匠鋪", "x": 36, "y": 38, "width": 7, "height": 6},
+            # 北區
+            {"type": "bakery", "name": "麵包坊", "x": 8, "y": 20, "width": 6, "height": 5},
+            {"type": "butcher_shop", "name": "肉鋪", "x": 48, "y": 20, "width": 6, "height": 5},
+            {"type": "clinic", "name": "診所", "x": 28, "y": 10, "width": 6, "height": 5},
+            # 南區
+            {"type": "barber_shop", "name": "理髮店", "x": 8, "y": 38, "width": 5, "height": 5},
+            {"type": "weaver_shop", "name": "織坊", "x": 48, "y": 38, "width": 6, "height": 5},
+            {"type": "pottery", "name": "陶坊", "x": 28, "y": 48, "width": 6, "height": 5},
+            {"type": "tannery", "name": "皮革坊", "x": 38, "y": 48, "width": 6, "height": 5},
+            # 外圍
+            {"type": "farm", "name": "農場", "x": 4, "y": 4, "width": 10, "height": 8},
+            {"type": "dock", "name": "碼頭", "x": 52, "y": 4, "width": 8, "height": 6},
         ]
         
-        for i, b in enumerate(required):
+        for i, b in enumerate(work_buildings):
             b["id"] = f"building_{i}"
             # 門口在中間，2格寬
             b["doorX"] = b["x"] + b["width"] // 2
@@ -104,9 +117,10 @@ class GameState:
             b["doorWidth"] = 2  # 門口寬度
             buildings.append(b)
         
-        # 隨機民宅（加大）
+        # 民宅（純住所，不是工作地點）
         house_positions = [
-            (8, 12), (48, 12), (8, 46), (48, 46), (28, 8)
+            (8, 12), (48, 12), (8, 52), (48, 52), (18, 8),
+            (42, 8), (4, 30), (56, 30), (18, 52), (42, 52)
         ]
         for i, (x, y) in enumerate(house_positions):
             buildings.append({
@@ -114,9 +128,9 @@ class GameState:
                 "type": "house",
                 "name": f"民宅 {i+1}",
                 "x": x, "y": y,
-                "width": 6, "height": 6,
+                "width": 6, "height": 5,
                 "doorX": x + 3,
-                "doorY": y + 5,
+                "doorY": y + 4,
                 "doorWidth": 2
             })
         
@@ -124,16 +138,31 @@ class GameState:
         collision = [[0] * width for _ in range(height)]
         terrain = [[0] * width for _ in range(height)]
         
+        # 不需要圍牆的建築類型
+        open_buildings = ["farm", "dock"]
+        
         # 標記建築區域
         for b in buildings:
             door_width = b.get("doorWidth", 1)
             door_x_start = b["doorX"] - door_width // 2
             door_x_end = door_x_start + door_width
+            is_open = b["type"] in open_buildings
             
             for dy in range(b["height"]):
                 for dx in range(b["width"]):
                     x, y = b["x"] + dx, b["y"] + dy
-                    terrain[y][x] = 3  # 地板
+                    
+                    # 根據建築類型設定地形
+                    if b["type"] == "farm":
+                        terrain[y][x] = 4  # 農田
+                    elif b["type"] == "dock":
+                        terrain[y][x] = 5  # 木板碼頭
+                    else:
+                        terrain[y][x] = 3  # 一般地板
+                    
+                    # 開放式建築不產生圍牆
+                    if is_open:
+                        continue
                     
                     # 只有邊緣（牆壁）是碰撞區域
                     is_edge = dx == 0 or dx == b["width"]-1 or dy == 0 or dy == b["height"]-1
@@ -144,6 +173,16 @@ class GameState:
                     # 牆壁不可通行，門口可通行，內部可通行
                     if is_edge and not is_door:
                         collision[y][x] = 1
+        
+        # 碼頭旁邊的水域（在碼頭右側）
+        dock = next((b for b in buildings if b["type"] == "dock"), None)
+        if dock:
+            water_start_x = dock["x"] + dock["width"]
+            for wy in range(dock["y"] - 2, dock["y"] + dock["height"] + 3):
+                for wx in range(water_start_x, min(water_start_x + 8, width)):
+                    if 0 <= wy < height:
+                        terrain[wy][wx] = 2  # 水域
+                        collision[wy][wx] = 1  # 水不可通行
         
         # 道路
         center_y = 32
@@ -204,7 +243,22 @@ class GameState:
             "下雨天", "早起", "吵雜", "蟲子", "寒冷", "炎熱", "說謊的人", "懶惰的人"
         ]
         
-        occupations = ["tavern", "church", "market", "blacksmith", "house"]
+        # 13種職業（對應工作建築）
+        occupations = [
+            "tavern",       # 酒館 - 酒保
+            "church",       # 教堂 - 神父/修女
+            "market",       # 市集 - 商人
+            "blacksmith",   # 鐵匠鋪 - 鐵匠
+            "bakery",       # 麵包坊 - 麵包師
+            "butcher_shop", # 肉鋪 - 屠夫
+            "clinic",       # 診所 - 醫師
+            "barber_shop",  # 理髮店 - 理髮師
+            "weaver_shop",  # 織坊 - 織工
+            "pottery",      # 陶坊 - 陶匠
+            "tannery",      # 皮革坊 - 皮革匠
+            "farm",         # 農場 - 農夫
+            "dock",         # 碼頭 - 漁夫
+        ]
         
         # 打亂名字順序，確保不重複
         random.shuffle(names_male)
