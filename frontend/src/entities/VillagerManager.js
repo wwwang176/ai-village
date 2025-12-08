@@ -313,6 +313,12 @@ export class VillagerManager {
     const lerpSpeed = 15; // 插值速度（越大越快跟上）
     
     for (const villager of this.villagers) {
+      // 如果正在對話或等待社交，不移動
+      if (villager.state === 'talking' || villager.state === 'waiting_social') {
+        villager.updateBubble();
+        continue;
+      }
+      
       // 平滑插值到目標位置
       if (villager.targetX !== undefined) {
         const dx = villager.targetX - villager.x;

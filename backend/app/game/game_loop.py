@@ -74,6 +74,9 @@ class GameLoop:
         self.last_conversation_tick = 0
         self.conversation_tick_interval = 1.5  # 對話回應間隔（秒）
         self.conversation_processing = False  # 防止重複處理
+        
+        # AI 並行控制（限制同時請求數，避免超過 API 速率限制）
+        self.ai_semaphore = asyncio.Semaphore(8)  # 最多 8 個同時 AI 請求
     
     async def run(self):
         """主循環"""
@@ -487,44 +490,56 @@ class GameLoop:
         return tasks
     
     async def process_ai_decisions(self):
-        """處理需要 AI 決策的村民"""
+        """處理需要 AI 決策的村民（並行處理）"""
         import random
         pending = self.game_state.get_villagers_needing_decision()
+        
+        if not pending:
+            return
         
         # 隨機選擇，確保每個村民都有機會被處理
         random.shuffle(pending)
         
-        for villager in pending[:self.ai_decisions_per_tick]:
-            decision = await self.villager_ai.make_decision(
-                villager, 
-                self.game_state
-            )
-            
-            action = decision.get("action", "wander")
-            reason = decision.get("reason", "")
-            
-            # 將 AI 決策轉換為任務排程
-            tasks = self.create_task_queue(villager, action)
-            
-            # 顯示 AI 決策結果
-            logger.info(f"🤖 AI決策: {villager['name']} → {action} (原因: {reason})")
-            logger.info(f"� 任務排程: {[t['type'] for t in tasks]}")
-            
-            # 添加任務到村民
-            self.game_state.add_tasks(villager["id"], tasks)
-            
-            # 推送決策給前端（包含 reason 用於泡泡顯示）
-            await self.manager.broadcast({
-                "type": "villager_decision",
-                "data": {
-                    "villager_id": villager["id"],
-                    "decision": {
-                        "action": action,
-                        "reason": reason,
-                        "mood": decision.get("mood")
-                    }
-                }
-            })
+        # 並行處理所有需要決策的村民
+        async def process_single_decision(villager):
+            """處理單個村民的 AI 決策"""
+            async with self.ai_semaphore:  # 限制同時請求數
+                try:
+                    decision = await self.villager_ai.make_decision(
+                        villager, 
+                        self.game_state
+                    )
+                    
+                    action = decision.get("action", "wander")
+                    reason = decision.get("reason", "")
+                    
+                    # 將 AI 決策轉換為任務排程
+                    tasks = self.create_task_queue(villager, action)
+                    
+                    # 顯示 AI 決策結果
+                    logger.info(f"🤖 AI決策: {villager['name']} → {action} (原因: {reason})")
+                    logger.info(f"📋 任務排程: {[t['type'] for t in tasks]}")
+                    
+                    # 添加任務到村民
+                    self.game_state.add_tasks(villager["id"], tasks)
+                    
+                    # 推送決策給前端（包含 reason 用於泡泡顯示）
+                    await self.manager.broadcast({
+                        "type": "villager_decision",
+                        "data": {
+                            "villager_id": villager["id"],
+                            "decision": {
+                                "action": action,
+                                "reason": reason,
+                                "mood": decision.get("mood")
+                            }
+                        }
+                    })
+                except Exception as e:
+                    logger.error(f"❌ AI決策失敗 {villager['name']}: {e}")
+        
+        # 並行執行所有決策（不限制數量，由 semaphore 控制並發）
+        await asyncio.gather(*[process_single_decision(v) for v in pending])
     
     def check_social_encounters(self) -> list:
         """檢查村民相遇"""
@@ -602,7 +617,7 @@ class GameLoop:
             logger.info(f"💬 對話開始: {villager_a['name']} 對 {villager_b['name']} 說：{first_message['text'][:30]}...")
     
     async def process_conversations(self):
-        """處理所有進行中的對話"""
+        """處理所有進行中的對話（並行處理）"""
         # 防止重複處理
         if self.conversation_processing:
             return
@@ -610,6 +625,7 @@ class GameLoop:
         
         try:
             finished_conversations = []
+            tasks_to_process = []
             
             for conv_id, conv in list(self.active_conversations.items()):
                 # 檢查是否超時（30秒沒回應）
@@ -631,19 +647,29 @@ class GameLoop:
                 if conv.waiting_for_response:
                     continue
                 
+                # 收集需要處理的對話
+                tasks_to_process.append((conv_id, conv))
+            
+            # 並行處理所有對話
+            async def process_single_conversation(conv_id, conv):
                 conv.waiting_for_response = True
-                
-                # 生成下一句回應
-                response = await self.generate_conversation_message(conv, conv.current_speaker)
-                
-                conv.waiting_for_response = False
-                
-                if response:
-                    conv.add_message(conv.current_speaker, response["text"], response.get("end", False))
-                    speaker = conv.villager_a if conv.history[-1]["speaker"] == "a" else conv.villager_b
-                    await self.broadcast_chat_message(conv, conv.history[-1]["speaker"], response["text"])
+                try:
+                    async with self.ai_semaphore:
+                        response = await self.generate_conversation_message(conv, conv.current_speaker)
                     
-                    logger.info(f"💬 {speaker['name']}: {response['text'][:30]}...")
+                    if response:
+                        conv.add_message(conv.current_speaker, response["text"], response.get("end", False))
+                        speaker = conv.villager_a if conv.history[-1]["speaker"] == "a" else conv.villager_b
+                        await self.broadcast_chat_message(conv, conv.history[-1]["speaker"], response["text"])
+                        logger.info(f"💬 {speaker['name']}: {response['text'][:30]}...")
+                except Exception as e:
+                    logger.error(f"❌ 對話處理失敗: {e}")
+                finally:
+                    conv.waiting_for_response = False
+            
+            # 並行執行
+            if tasks_to_process:
+                await asyncio.gather(*[process_single_conversation(cid, c) for cid, c in tasks_to_process])
             
             # 結束已完成的對話
             for conv_id in finished_conversations:
@@ -670,36 +696,76 @@ class GameLoop:
         history_text = conv.get_history_text() or "（對話剛開始）"
         turn_count = conv.get_turn_count()
         
+        # 取得時間和狀態
+        time = self.game_state.get_time()
+        my_stats = villager.get("stats", {})
+        other_stats = other.get("stats", {})
+        
+        # 心情描述
+        def get_mood(stats):
+            if stats.get("energy", 100) < 30:
+                return "很累"
+            if stats.get("hunger", 0) > 70:
+                return "很餓"
+            if stats.get("social", 50) < 20:
+                return "寂寞"
+            if stats.get("happiness", 50) > 70:
+                return "開心"
+            return "普通"
+        
+        my_mood = get_mood(my_stats)
+        
+        # 取得喜好
+        my_prefs = villager.get("preferences", {})
+        other_prefs = other.get("preferences", {})
+        
         prompt = f"""你是中古世紀村莊的村民「{villager['name']}」，正在和「{other['name']}」聊天。
 
-你的資訊：
+【你的資訊】
+- 年齡：{villager.get('age', 25)} 歲
 - 職業：{villager.get('occupation', '村民')}
 - 性格：{', '.join(villager.get('personality', ['普通']))}
+- 興趣：{', '.join(my_prefs.get('hobbies', ['無']))}
+- 喜歡的食物：{', '.join(my_prefs.get('favorite_foods', ['無']))}
+- 討厭：{', '.join(my_prefs.get('dislikes', ['無']))}
+- 目前心情：{my_mood}
+- 體力：{my_stats.get('energy', 100):.0f}%
+- 社交需求：{my_stats.get('social', 50):.0f}%（越低越想聊天）
 
-對方資訊：
+【對方資訊】
+- 名字：{other['name']}
+- 年齡：{other.get('age', 25)} 歲  
 - 職業：{other.get('occupation', '村民')}
+- 性格：{', '.join(other.get('personality', ['普通']))}
+- 興趣：{', '.join(other_prefs.get('hobbies', ['不清楚']))}
 
-你們的關係：
-- 熟悉度：{familiarity}（0-100，越高越熟）
-- 好感度：{affection}（-100到100）
+【你們的關係】
+- 關係類型：{rel.get('type', '陌生人')}
+- 熟悉度：{familiarity}（0=陌生人，100=老朋友）
+- 好感度：{affection}（負=討厭，正=喜歡）
 
-你對 {other['name']} 的記憶：
+【你對 {other['name']} 的記憶】
 {memories_text}
 
-目前對話（第 {turn_count + 1} 輪，最多 6 輪）：
+【現在時間】第 {time['day']} 天 {time['hour']:02d}:{time['minute']:02d}
+
+【目前對話】（第 {turn_count + 1} 輪，最多 6 輪）
 {history_text}
 
-請用繁體中文回應，只說一句話（15字以內）。
-如果覺得對話可以結束了（已經聊了3輪以上），可以說再見。
+請根據你的性格、心情和對對方的了解，用繁體中文回應。
+- 可以聊工作、天氣、村裡八卦、個人煩惱等
+- 如果很熟，可以更親密；如果不熟，可以更客套
+- 只說一句話（20字以內）
+- 如果已經聊了3輪以上，可以說再見結束對話
 
 回傳 JSON 格式：
 {{"text": "你要說的話", "end": false}}
 
-如果要結束對話，設 end 為 true，並說再見。"""
+結束對話時設 end 為 true。"""
 
         try:
             response = await self.villager_ai.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4.1-nano",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=100,
                 temperature=0.8
@@ -740,9 +806,10 @@ class GameLoop:
         self.game_state.update_relationship(villager_a["id"], villager_b["id"], {"familiarity": 2, "affection": 1})
         self.game_state.update_relationship(villager_b["id"], villager_a["id"], {"familiarity": 2, "affection": 1})
         
-        # 增加社交值
-        villager_a.get("stats", {})["social"] = min(100, villager_a.get("stats", {}).get("social", 50) + 15)
-        villager_b.get("stats", {})["social"] = min(100, villager_b.get("stats", {}).get("social", 50) + 15)
+        # 增加社交值（對話完成 +25）
+        villager_a.get("stats", {})["social"] = min(100, villager_a.get("stats", {}).get("social", 50) + 25)
+        villager_b.get("stats", {})["social"] = min(100, villager_b.get("stats", {}).get("social", 50) + 25)
+        logger.info(f"💬 {villager_a['name']} 和 {villager_b['name']} 社交值 +25")
         
         # 生成對話總結並存入記憶
         if len(conv.history) >= 2:
@@ -779,7 +846,7 @@ class GameLoop:
 
         try:
             response = await self.villager_ai.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4.1-nano",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=50,
                 temperature=0.5

@@ -303,7 +303,7 @@ export class Renderer {
   }
   
   /**
-   * 渲染對話泡泡（支援多行）
+   * 渲染對話泡泡（支援多行和自動換行）
    */
   renderBubble(x, y, bubble) {
     const text = bubble.text || '';
@@ -311,18 +311,46 @@ export class Renderer {
     
     if (!text) return;
     
-    // 分割多行文字
-    const lines = text.split('\n');
     const fontSize = 12;
     this.ctx.font = `bold ${fontSize}px sans-serif`;
+    const maxWidth = 180; // 最大文字寬度
+    const padding = 10;
+    const lineHeight = fontSize + 6;
     
-    // 計算每行寬度，找最大寬度
+    // 自動換行處理
+    const wrapText = (text, maxWidth) => {
+      const result = [];
+      // 先按換行符分割
+      const paragraphs = text.split('\n');
+      
+      for (const paragraph of paragraphs) {
+        if (this.ctx.measureText(paragraph).width <= maxWidth) {
+          result.push(paragraph);
+        } else {
+          // 需要換行
+          let line = '';
+          for (const char of paragraph) {
+            const testLine = line + char;
+            if (this.ctx.measureText(testLine).width > maxWidth) {
+              if (line) result.push(line);
+              line = char;
+            } else {
+              line = testLine;
+            }
+          }
+          if (line) result.push(line);
+        }
+      }
+      return result;
+    };
+    
+    const lines = wrapText(text, maxWidth);
+    
+    // 計算泡泡大小
     const lineWidths = lines.map(line => this.ctx.measureText(line).width);
     const maxLineWidth = Math.max(...lineWidths);
     
-    const padding = 10;
-    const lineHeight = fontSize + 4;
-    const bubbleWidth = Math.min(maxLineWidth + padding * 2, 250);
+    const bubbleWidth = maxLineWidth + padding * 2;
     const bubbleHeight = lines.length * lineHeight + padding * 2;
     const bubbleX = x - bubbleWidth / 2;
     const bubbleY = y - bubbleHeight - 12;

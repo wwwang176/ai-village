@@ -321,9 +321,9 @@ class VillagerAI:
             if villager["occupation"] != "house":
                 return {"action": "go_work", "target": None, "reason": "該工作了", "mood": "neutral"}
         
-        # 社交需求
+        # 社交需求 - 主動找人聊天
         if stats["social"] < 30:
-            return {"action": "go_tavern", "target": None, "reason": "想找人聊聊", "mood": "lonely"}
+            return {"action": "socialize", "target": None, "reason": "想找人聊聊", "mood": "lonely"}
         
         # 隨機閒逛
         actions = ["wander", "rest", "go_church", "go_market"]

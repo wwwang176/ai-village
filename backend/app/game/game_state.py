@@ -75,7 +75,7 @@ class GameState:
         }
         
         # 生成村民
-        self._generate_villagers(29)
+        self._generate_villagers(10)  # 測試用：只生成 10 個村民
         
         self.initialized = True
         print(f"🎮 遊戲初始化完成 (種子: {self.seed})")
@@ -177,8 +177,10 @@ class GameState:
     
     def _generate_villagers(self, count: int):
         """生成村民"""
-        names_male = ["艾德蒙", "約翰", "威廉", "亨利", "湯瑪斯", "羅伯特", "理查", "查爾斯"]
-        names_female = ["瑪莉", "伊莉莎白", "安娜", "凱薩琳", "艾瑪", "露西", "克萊兒", "蘇菲"]
+        names_male = ["艾德蒙", "約翰", "威廉", "亨利", "湯瑪斯", "羅伯特", "理查", "查爾斯",
+                      "喬治", "愛德華", "法蘭克", "亞瑟", "雷蒙", "奧利佛", "賽乃斯", "馬可"]
+        names_female = ["瑪莉", "伊莉莎白", "安娜", "凱薩琳", "艾瑪", "露西", "克萊兒", "蘇菲",
+                        "夏洛特", "愛麗絲", "維多莉亞", "艾蓮娜", "羅莎", "貝蒂", "海倫", "伊芙"]
         
         personalities = {
             "positive": ["friendly", "hardworking", "generous", "optimistic", "curious"],
@@ -186,11 +188,53 @@ class GameState:
             "neutral": ["introvert", "extrovert", "romantic", "religious"]
         }
         
+        # 喜好池
+        hobbies = [
+            "閱讀", "釣魚", "園藝", "烹飪", "唱歌", "跳舞", "下棋", "繪畫",
+            "狩獵", "釀酒", "縫紉", "木工", "講故事", "觀星", "收集石頭", "養寵物"
+        ]
+        
+        # 喜歡的食物
+        favorite_foods = [
+            "烤肉", "麵包", "乳酪", "蘋果派", "燉菜", "烤魚", "蜂蜜蛋糕", "葡萄酒"
+        ]
+        
+        # 討厭的事物
+        dislikes = [
+            "下雨天", "早起", "吵雜", "蟲子", "寒冷", "炎熱", "說謊的人", "懶惰的人"
+        ]
+        
         occupations = ["tavern", "church", "market", "blacksmith", "house"]
+        
+        # 打亂名字順序，確保不重複
+        random.shuffle(names_male)
+        random.shuffle(names_female)
+        used_names = set()
+        male_index = 0
+        female_index = 0
         
         for i in range(count):
             gender = random.choice(["male", "female"])
-            name = random.choice(names_male if gender == "male" else names_female)
+            
+            # 從對應性別的名字池中取出不重複的名字
+            if gender == "male":
+                if male_index < len(names_male):
+                    name = names_male[male_index]
+                    male_index += 1
+                else:
+                    # 男性名字用完，改用女性
+                    gender = "female"
+                    name = names_female[female_index]
+                    female_index += 1
+            else:
+                if female_index < len(names_female):
+                    name = names_female[female_index]
+                    female_index += 1
+                else:
+                    # 女性名字用完，改用男性
+                    gender = "male"
+                    name = names_male[male_index]
+                    male_index += 1
             
             # 隨機性格
             traits = [random.choice(personalities["positive"])]
@@ -216,6 +260,16 @@ class GameState:
             # 出生在住所門口
             spawn = self.get_building_by_id(residence) if residence else self.map_data["buildings"][0]
             
+            # 隨機選擇喜好（1-3個）
+            num_hobbies = random.randint(1, 3)
+            villager_hobbies = random.sample(hobbies, num_hobbies)
+            
+            # 隨機喜歡的食物（1-2個）
+            villager_foods = random.sample(favorite_foods, random.randint(1, 2))
+            
+            # 隨機討厭的事物（1-2個）
+            villager_dislikes = random.sample(dislikes, random.randint(1, 2))
+            
             villager = {
                 "id": f"villager_{i}",
                 "name": name,
@@ -228,11 +282,16 @@ class GameState:
                 "x": spawn["doorX"],
                 "y": spawn["doorY"] + 1,
                 "stats": {
-                    "energy": 70 + random.random() * 30,
-                    "hunger": random.random() * 30,
-                    "social": 40 + random.random() * 30,
-                    "happiness": 50 + random.random() * 30,
-                    "health": 80 + random.random() * 20
+                    "energy": random.randint(30, 100),  # 更隨機的體力
+                    "hunger": random.randint(0, 60),    # 更隨機的飢餓
+                    "social": random.randint(20, 80),   # 更隨機的社交
+                    "happiness": random.randint(40, 90),
+                    "health": random.randint(70, 100)
+                },
+                "preferences": {
+                    "hobbies": villager_hobbies,        # 興趣愛好
+                    "favorite_foods": villager_foods,   # 喜歡的食物
+                    "dislikes": villager_dislikes       # 討厭的事物
                 },
                 "state": "idle",
                 "memories": [],
@@ -242,6 +301,53 @@ class GameState:
             }
             
             self.villagers[villager["id"]] = villager
+        
+        # 生成村民後，建立初始關係
+        self._generate_initial_relationships()
+    
+    def _generate_initial_relationships(self):
+        """為村民建立初始關係（喜歡/討厭/暗戀等）"""
+        villager_ids = list(self.villagers.keys())
+        
+        # 關係類型
+        relationship_types = [
+            {"type": "好友", "affection": (30, 60), "familiarity": (50, 80)},
+            {"type": "討厭", "affection": (-50, -20), "familiarity": (20, 50)},
+            {"type": "暗戀", "affection": (40, 80), "familiarity": (10, 40)},
+            {"type": "競爭對手", "affection": (-30, 0), "familiarity": (40, 70)},
+            {"type": "崇拜", "affection": (50, 90), "familiarity": (30, 60)},
+            {"type": "普通認識", "affection": (-10, 20), "familiarity": (20, 40)},
+        ]
+        
+        for villager_id in villager_ids:
+            villager = self.villagers[villager_id]
+            other_ids = [vid for vid in villager_ids if vid != villager_id]
+            
+            # 每個村民隨機對 2-4 個人有特殊關係
+            num_relationships = random.randint(2, min(4, len(other_ids)))
+            targets = random.sample(other_ids, num_relationships)
+            
+            for target_id in targets:
+                target = self.villagers[target_id]
+                
+                # 隨機選擇關係類型
+                rel_type = random.choice(relationship_types)
+                
+                affection = random.randint(rel_type["affection"][0], rel_type["affection"][1])
+                familiarity = random.randint(rel_type["familiarity"][0], rel_type["familiarity"][1])
+                
+                villager["relationships"][target_id] = {
+                    "affection": affection,
+                    "familiarity": familiarity,
+                    "type": rel_type["type"],
+                    "tags": [rel_type["type"]]
+                }
+                
+                # 記錄到日誌
+                if rel_type["type"] in ["好友", "暗戀", "崇拜"]:
+                    print(f"💕 {villager['name']} {rel_type['type']} {target['name']}")
+                elif rel_type["type"] in ["討厭", "競爭對手"]:
+                    print(f"💢 {villager['name']} {rel_type['type']} {target['name']}")
     
     def update_time(self, delta_time: float):
         """更新遊戲時間"""
