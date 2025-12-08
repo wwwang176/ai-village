@@ -167,8 +167,8 @@ class GameLoop:
     
     def process_task_queue(self, villager: dict, delta_time: float):
         """處理村民的任務隊列"""
-        # 如果正在等待社交，不處理任務
-        if villager.get("state") == "waiting_social":
+        # 如果正在對話或等待社交，不處理任務
+        if villager.get("state") in ["talking", "waiting_social"]:
             return
         
         task_queue = villager.get("task_queue", [])
@@ -814,6 +814,7 @@ class GameLoop:
     async def broadcast_chat_message(self, conv: Conversation, speaker: str, text: str):
         """廣播單條對話訊息"""
         villager = conv.villager_a if speaker == "a" else conv.villager_b
+        target = conv.villager_b if speaker == "a" else conv.villager_a
         
         await self.manager.broadcast({
             "type": "villager_chat",
@@ -821,6 +822,7 @@ class GameLoop:
                 "conversation_id": conv.id,
                 "villager_id": villager["id"],
                 "villager_name": villager["name"],
+                "target_name": target["name"],
                 "text": text,
                 "turn": conv.get_turn_count()
             }

@@ -17,7 +17,7 @@ export class Camera {
     this.offsetY = 0;
     
     this.target = null;       // 跟隨目標
-    this.smoothing = 0.1;     // 平滑跟隨係數
+    this.smoothing = 0.3;     // 平滑跟隨係數（更快跟隨）
     this.tileSize = 16;
     
     // 縮放
@@ -56,6 +56,21 @@ export class Camera {
    */
   follow(entity) {
     this.target = entity;
+  }
+  
+  /**
+   * 立即定位鏡頭到目標（不使用平滑）
+   */
+  centerOn(entity) {
+    if (!entity) return;
+    
+    const effectiveWidth = this.viewportWidth / this.zoom;
+    const effectiveHeight = this.viewportHeight / this.zoom;
+    
+    this.x = entity.x * this.tileSize - effectiveWidth / 2 + this.tileSize / 2;
+    this.y = entity.y * this.tileSize - effectiveHeight / 2 + this.tileSize / 2;
+    
+    this.clamp();
   }
   
   /**

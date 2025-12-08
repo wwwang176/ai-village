@@ -364,20 +364,26 @@ export class Game {
   handleVillagerChat(data) {
     console.log('📨 收到對話訊息:', data);
     
-    const { villager_id, villager_name, text, turn } = data;
+    const { villager_id, villager_name, target_name, text, turn } = data;
     
     if (!villager_id || !text) {
       console.warn('⚠️ 對話資料不完整:', data);
       return;
     }
     
-    // 顯示對話泡泡（持續時間根據輪數調整）
-    const duration = 3000 + (turn || 0) * 500; // 越後面的輪次顯示越久
+    // 組合完整訊息：「對XX說：」+ 內容
+    const fullText = target_name ? `對${target_name}說：\n${text}` : text;
+    
+    // 顯示對話泡泡（持續時間根據輪數和文字長度調整）
+    const baseDuration = 4000 + (turn || 0) * 500;
+    const textDuration = Math.min(text.length * 100, 3000); // 每字 100ms，最多 3 秒
+    const duration = baseDuration + textDuration;
+    
     const villager = this.villagerManager.getVillagerById(villager_id);
     
     if (villager) {
-      villager.showBubble(text, 'speech', duration);
-      console.log(`💬 [${villager_name}]: ${text}`);
+      villager.showBubble(fullText, 'speech', duration);
+      console.log(`💬 [${villager_name}] 對 [${target_name}] 說: ${text}`);
     } else {
       console.warn(`⚠️ 找不到村民: ${villager_id}`);
     }
@@ -476,6 +482,8 @@ export class Game {
       console.log(`👁️ 開始觀察: ${villager.name}`);
       // 鏡頭跟隨選中的村民
       this.camera.follow(villager);
+      // 立即定位鏡頭到村民位置
+      this.camera.centerOn(villager);
     }
   }
   

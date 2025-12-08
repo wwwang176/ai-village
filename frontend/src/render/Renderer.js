@@ -303,7 +303,7 @@ export class Renderer {
   }
   
   /**
-   * 渲染對話泡泡
+   * 渲染對話泡泡（支援多行）
    */
   renderBubble(x, y, bubble) {
     const text = bubble.text || '';
@@ -311,11 +311,19 @@ export class Renderer {
     
     if (!text) return;
     
-    this.ctx.font = 'bold 14px sans-serif';
-    const textWidth = this.ctx.measureText(text).width;
-    const padding = 8;
-    const bubbleWidth = Math.min(textWidth + padding * 2, 200);
-    const bubbleHeight = 26;
+    // 分割多行文字
+    const lines = text.split('\n');
+    const fontSize = 12;
+    this.ctx.font = `bold ${fontSize}px sans-serif`;
+    
+    // 計算每行寬度，找最大寬度
+    const lineWidths = lines.map(line => this.ctx.measureText(line).width);
+    const maxLineWidth = Math.max(...lineWidths);
+    
+    const padding = 10;
+    const lineHeight = fontSize + 4;
+    const bubbleWidth = Math.min(maxLineWidth + padding * 2, 250);
+    const bubbleHeight = lines.length * lineHeight + padding * 2;
     const bubbleX = x - bubbleWidth / 2;
     const bubbleY = y - bubbleHeight - 12;
     
@@ -357,18 +365,15 @@ export class Renderer {
       this.ctx.fill();
     }
     
-    // 文字
+    // 繪製多行文字
     this.ctx.fillStyle = '#333';
     this.ctx.textAlign = 'center';
-    this.ctx.textBaseline = 'middle';
+    this.ctx.textBaseline = 'top';
     
-    // 截斷過長文字
-    let displayText = text;
-    if (textWidth > 180) {
-      displayText = text.substring(0, 10) + '...';
+    for (let i = 0; i < lines.length; i++) {
+      const lineY = bubbleY + padding + i * lineHeight;
+      this.ctx.fillText(lines[i], x, lineY);
     }
-    
-    this.ctx.fillText(displayText, x, bubbleY + bubbleHeight / 2);
   }
   
   /**
