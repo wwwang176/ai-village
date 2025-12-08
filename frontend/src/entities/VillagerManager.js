@@ -302,6 +302,17 @@ export class VillagerManager {
         if (data.occupation) {
           villager.occupation = data.occupation;
         }
+        
+        // 同步個人資料（用於 Dashboard）
+        if (data.age) {
+          villager.age = data.age;
+        }
+        if (data.personality) {
+          villager.personality = data.personality;
+        }
+        if (data.preferences) {
+          villager.preferences = data.preferences;
+        }
       }
     }
   }

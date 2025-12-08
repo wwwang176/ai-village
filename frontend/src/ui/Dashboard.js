@@ -93,6 +93,7 @@ export class Dashboard {
     const tasks = villager.tasks || [];
     const memories = villager.memories || [];
     const relationships = villager.relationships || {};
+    const preferences = villager.preferences || {};
     
     let html = `
       <!-- 基本資訊 -->
@@ -103,8 +104,16 @@ export class Dashboard {
           <span class="value">${villager.name}</span>
         </div>
         <div class="detail-row">
+          <span class="label">年齡</span>
+          <span class="value">${villager.age || '?'} 歲</span>
+        </div>
+        <div class="detail-row">
           <span class="label">職業</span>
           <span class="value">${villager.occupation || '村民'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">性格</span>
+          <span class="value">${(villager.personality || []).join(', ') || '普通'}</span>
         </div>
         <div class="detail-row">
           <span class="label">狀態</span>
@@ -113,6 +122,23 @@ export class Dashboard {
         <div class="detail-row">
           <span class="label">位置</span>
           <span class="value">(${Math.floor(villager.x)}, ${Math.floor(villager.y)})</span>
+        </div>
+      </div>
+      
+      <!-- 喜好 -->
+      <div class="detail-section">
+        <div class="detail-title">💜 喜好</div>
+        <div class="detail-row">
+          <span class="label">興趣</span>
+          <span class="value">${(preferences.hobbies || []).join(', ') || '無'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">喜歡食物</span>
+          <span class="value">${(preferences.favorite_foods || []).join(', ') || '無'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">討厭</span>
+          <span class="value">${(preferences.dislikes || []).join(', ') || '無'}</span>
         </div>
       </div>
       
