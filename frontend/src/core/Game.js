@@ -528,6 +528,7 @@ export class Game {
     this.ctx.save();
     
     // 以畫面中心為縮放中心
+    // 因為相機已經讓目標在畫面中心，所以縮放時目標會保持在中心
     const centerX = this.canvas.width / 2;
     const centerY = this.canvas.height / 2;
     this.ctx.translate(centerX, centerY);

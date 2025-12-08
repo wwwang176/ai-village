@@ -64,11 +64,9 @@ export class Camera {
   centerOn(entity) {
     if (!entity) return;
     
-    const effectiveWidth = this.viewportWidth / this.zoom;
-    const effectiveHeight = this.viewportHeight / this.zoom;
-    
-    this.x = entity.x * this.tileSize - effectiveWidth / 2 + this.tileSize / 2;
-    this.y = entity.y * this.tileSize - effectiveHeight / 2 + this.tileSize / 2;
+    // 不考慮縮放，讓目標在未縮放的視窗中居中
+    this.x = entity.x * this.tileSize - this.viewportWidth / 2 + this.tileSize / 2;
+    this.y = entity.y * this.tileSize - this.viewportHeight / 2 + this.tileSize / 2;
     
     this.clamp();
   }
@@ -79,13 +77,10 @@ export class Camera {
   update() {
     if (!this.target) return;
     
-    // 考慮縮放後的有效視窗大小
-    const effectiveWidth = this.viewportWidth / this.zoom;
-    const effectiveHeight = this.viewportHeight / this.zoom;
-    
-    // 目標螢幕中心位置（考慮縮放）
-    const targetX = this.target.x * this.tileSize - effectiveWidth / 2 + this.tileSize / 2;
-    const targetY = this.target.y * this.tileSize - effectiveHeight / 2 + this.tileSize / 2;
+    // 相機不考慮縮放，只讓目標在未縮放的視窗中居中
+    // 縮放會在渲染時以畫面中心為中心進行
+    const targetX = this.target.x * this.tileSize - this.viewportWidth / 2 + this.tileSize / 2;
+    const targetY = this.target.y * this.tileSize - this.viewportHeight / 2 + this.tileSize / 2;
     
     // 平滑移動
     this.x += (targetX - this.x) * this.smoothing;
@@ -97,23 +92,36 @@ export class Camera {
   
   /**
    * 限制鏡頭在地圖範圍內，視窗大於地圖時置中
+   * 如果有跟隨目標，則不限制範圍（讓村民始終居中）
    */
   clamp() {
+    // 考慮縮放後的有效視窗大小
+    const effectiveWidth = this.viewportWidth / this.zoom;
+    const effectiveHeight = this.viewportHeight / this.zoom;
+    
+    // 如果有跟隨目標，不限制鏡頭範圍（讓目標始終居中）
+    if (this.target) {
+      this.offsetX = 0;
+      this.offsetY = 0;
+      return;
+    }
+    
+    // 沒有跟隨目標時，限制在地圖範圍內
     // 計算偏移量（視窗大於地圖時用於置中）
-    if (this.viewportWidth > this.mapWidth) {
-      this.offsetX = (this.viewportWidth - this.mapWidth) / 2;
+    if (effectiveWidth > this.mapWidth) {
+      this.offsetX = (effectiveWidth - this.mapWidth) / 2;
       this.x = 0;
     } else {
       this.offsetX = 0;
-      this.x = Math.max(0, Math.min(this.x, this.mapWidth - this.viewportWidth));
+      this.x = Math.max(0, Math.min(this.x, this.mapWidth - effectiveWidth));
     }
     
-    if (this.viewportHeight > this.mapHeight) {
-      this.offsetY = (this.viewportHeight - this.mapHeight) / 2;
+    if (effectiveHeight > this.mapHeight) {
+      this.offsetY = (effectiveHeight - this.mapHeight) / 2;
       this.y = 0;
     } else {
       this.offsetY = 0;
-      this.y = Math.max(0, Math.min(this.y, this.mapHeight - this.viewportHeight));
+      this.y = Math.max(0, Math.min(this.y, this.mapHeight - effectiveHeight));
     }
   }
   
