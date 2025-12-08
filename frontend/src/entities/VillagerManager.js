@@ -291,6 +291,17 @@ export class VillagerManager {
         if (data.stats) {
           villager.stats = data.stats;
         }
+        
+        // 同步記憶和關係（用於 Dashboard）
+        if (data.memories) {
+          villager.memories = data.memories;
+        }
+        if (data.relationships) {
+          villager.relationships = data.relationships;
+        }
+        if (data.occupation) {
+          villager.occupation = data.occupation;
+        }
       }
     }
   }

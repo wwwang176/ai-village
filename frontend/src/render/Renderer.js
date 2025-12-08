@@ -37,10 +37,11 @@ export class Renderer {
    * 渲染地圖
    */
   renderMap(map) {
-    const startTileX = Math.floor(this.camera.x / this.tileSize);
-    const startTileY = Math.floor(this.camera.y / this.tileSize);
-    const tilesX = Math.ceil(this.camera.viewportWidth / this.tileSize) + 1;
-    const tilesY = Math.ceil(this.camera.viewportHeight / this.tileSize) + 1;
+    // 簡單方案：渲染整個地圖（讓 canvas transform 處理縮放）
+    const startTileX = 0;
+    const startTileY = 0;
+    const tilesX = map.width;
+    const tilesY = map.height;
     
     // 渲染地面
     for (let y = startTileY; y < startTileY + tilesY; y++) {
@@ -279,13 +280,21 @@ export class Renderer {
     this.ctx.arc(screenX + size / 2, screenY + 4, 4, 0, Math.PI * 2);
     this.ctx.fill();
     
-    // 選中時總是顯示名字
-    if (isSelected || villager.showName) {
-      this.ctx.fillStyle = isSelected ? '#ffff66' : '#fff';
-      this.ctx.font = isSelected ? 'bold 10px sans-serif' : '8px sans-serif';
-      this.ctx.textAlign = 'center';
-      this.ctx.fillText(villager.name, screenX + size / 2, screenY - 4);
-    }
+    // 永遠顯示名字（在身體下方）
+    this.ctx.fillStyle = isSelected ? '#ffff66' : '#fff';
+    this.ctx.font = isSelected ? 'bold 9px sans-serif' : '8px sans-serif';
+    this.ctx.textAlign = 'center';
+    // 添加陰影讓文字更清晰
+    this.ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+    this.ctx.shadowBlur = 2;
+    this.ctx.shadowOffsetX = 1;
+    this.ctx.shadowOffsetY = 1;
+    this.ctx.fillText(villager.name, screenX + size / 2, screenY + size + 8);
+    // 重置陰影
+    this.ctx.shadowColor = 'transparent';
+    this.ctx.shadowBlur = 0;
+    this.ctx.shadowOffsetX = 0;
+    this.ctx.shadowOffsetY = 0;
     
     // 對話泡泡
     if (villager.bubble) {

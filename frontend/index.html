@@ -159,6 +159,195 @@
       color: #e0e0e0;
       line-height: 1.5;
     }
+    
+    /* Dashboard 側邊欄 */
+    #dashboard {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      width: 280px;
+      max-height: calc(100vh - 80px);
+      background: rgba(20, 20, 40, 0.95);
+      border: 2px solid #6a6a8a;
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    #dashboard-header {
+      padding: 10px 15px;
+      background: #3a3a5a;
+      color: #ffd700;
+      font-weight: bold;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+    
+    #dashboard-toggle {
+      font-size: 12px;
+      color: #aaa;
+    }
+    
+    #villager-list {
+      max-height: 200px;
+      overflow-y: auto;
+      border-bottom: 1px solid #4a4a6a;
+    }
+    
+    .villager-item {
+      padding: 8px 15px;
+      color: #e0e0e0;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      border-bottom: 1px solid #3a3a5a;
+    }
+    
+    .villager-item:hover {
+      background: #3a3a5a;
+    }
+    
+    .villager-item.selected {
+      background: #4a4a6a;
+      color: #ffd700;
+    }
+    
+    .villager-state {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      background: #555;
+    }
+    
+    .villager-state.idle { background: #666; }
+    .villager-state.walking { background: #2196F3; }
+    .villager-state.talking { background: #9C27B0; }
+    .villager-state.eating { background: #FF9800; }
+    .villager-state.working { background: #4CAF50; }
+    .villager-state.resting { background: #795548; }
+    
+    /* 詳細資訊面板 */
+    #villager-details {
+      padding: 15px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    
+    .detail-section {
+      margin-bottom: 15px;
+    }
+    
+    .detail-title {
+      color: #ffd700;
+      font-size: 12px;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #4a4a6a;
+      padding-bottom: 4px;
+    }
+    
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      color: #ccc;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    
+    .detail-row .label { color: #888; }
+    .detail-row .value { color: #fff; }
+    
+    .task-list, .memory-list, .relationship-list {
+      font-size: 11px;
+      color: #aaa;
+    }
+    
+    .task-item, .memory-item, .relationship-item {
+      padding: 4px 0;
+      border-bottom: 1px solid #333;
+    }
+    
+    .memory-item .memory-with {
+      color: #ffd700;
+    }
+    
+    .relationship-item {
+      display: flex;
+      justify-content: space-between;
+    }
+    
+    .relationship-name { color: #fff; }
+    .relationship-stats { color: #4CAF50; font-size: 10px; }
+    
+    #no-selection {
+      color: #666;
+      text-align: center;
+      padding: 20px;
+    }
+    
+    /* 滾動條樣式 */
+    #villager-list::-webkit-scrollbar,
+    #villager-details::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    #villager-list::-webkit-scrollbar-track,
+    #villager-details::-webkit-scrollbar-track {
+      background: #2a2a4a;
+    }
+    
+    #villager-list::-webkit-scrollbar-thumb,
+    #villager-details::-webkit-scrollbar-thumb {
+      background: #6a6a8a;
+      border-radius: 3px;
+    }
+    
+    /* 縮放控制 */
+    #zoom-controls {
+      position: absolute;
+      top: 10px;
+      right: 140px;
+      display: flex;
+      gap: 5px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 5px 10px;
+      border-radius: 4px;
+    }
+    
+    .zoom-btn {
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 4px;
+      background: #4a4a6a;
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    
+    .zoom-btn:hover {
+      background: #6a6a8a;
+    }
+    
+    .zoom-btn:active {
+      background: #8a8aaa;
+    }
+    
+    #zoom-level {
+      color: #ffd700;
+      font-size: 12px;
+      min-width: 45px;
+      text-align: center;
+      line-height: 28px;
+    }
   </style>
 </head>
 <body>
@@ -168,6 +357,27 @@
     <div id="ui-layer">
       <!-- 時間顯示 -->
       <div id="time-display">第 1 天 08:00</div>
+      
+      <!-- 縮放控制 -->
+      <div id="zoom-controls">
+        <button class="zoom-btn" id="zoom-out-btn">−</button>
+        <span id="zoom-level">100%</span>
+        <button class="zoom-btn" id="zoom-in-btn">+</button>
+      </div>
+      
+      <!-- Dashboard 側邊欄 -->
+      <div id="dashboard">
+        <div id="dashboard-header">
+          <span>🏘️ 村民列表</span>
+          <span id="dashboard-toggle">▼</span>
+        </div>
+        <div id="villager-list">
+          <!-- 村民列表會動態生成 -->
+        </div>
+        <div id="villager-details">
+          <div id="no-selection">點擊村民查看詳情</div>
+        </div>
+      </div>
       
       <!-- 狀態列 -->
       <div id="status-bar">

@@ -12,6 +12,7 @@ import { VillagerManager } from '../entities/VillagerManager.js';
 import { Player } from '../entities/Player.js';
 import { InputHandler } from './InputHandler.js';
 import { UIManager } from '../ui/UIManager.js';
+import { Dashboard } from '../ui/Dashboard.js';
 import { apiClient } from '../api/ApiClient.js';
 
 export class Game {
@@ -97,6 +98,63 @@ export class Game {
     
     // 初始化 UI 管理器
     this.uiManager = new UIManager(this);
+    
+    // 初始化 Dashboard
+    this.dashboard = new Dashboard(this);
+    
+    // 定期更新 Dashboard
+    setInterval(() => {
+      if (this.dashboard) {
+        this.dashboard.update();
+      }
+    }, 500);
+    
+    // 初始化縮放控制
+    this.initZoomControls();
+  }
+  
+  /**
+   * 初始化縮放控制
+   */
+  initZoomControls() {
+    const zoomInBtn = document.getElementById('zoom-in-btn');
+    const zoomOutBtn = document.getElementById('zoom-out-btn');
+    const zoomLevel = document.getElementById('zoom-level');
+    
+    if (zoomInBtn) {
+      zoomInBtn.addEventListener('click', () => {
+        this.camera.zoomIn();
+        this.updateZoomDisplay();
+      });
+    }
+    
+    if (zoomOutBtn) {
+      zoomOutBtn.addEventListener('click', () => {
+        this.camera.zoomOut();
+        this.updateZoomDisplay();
+      });
+    }
+    
+    // 滑鼠滾輪縮放
+    this.canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      if (e.deltaY < 0) {
+        this.camera.zoomIn();
+      } else {
+        this.camera.zoomOut();
+      }
+      this.updateZoomDisplay();
+    });
+  }
+  
+  /**
+   * 更新縮放顯示
+   */
+  updateZoomDisplay() {
+    const zoomLevel = document.getElementById('zoom-level');
+    if (zoomLevel) {
+      zoomLevel.textContent = `${Math.round(this.camera.zoom * 100)}%`;
+    }
   }
   
   /**
@@ -301,18 +359,28 @@ export class Game {
   }
   
   /**
-   * 處理村民間對話
+   * 處理村民間對話（新的多輪對話格式）
    */
   handleVillagerChat(data) {
-    const { villager_a_id, villager_a_name, villager_b_id, text_a, text_b } = data;
+    console.log('📨 收到對話訊息:', data);
     
-    // 顯示 A 的對話泡泡
-    this.villagerManager.showVillagerBubble(villager_a_id, text_a, 'speech', 4000);
+    const { villager_id, villager_name, text, turn } = data;
     
-    // 延遲 1.5 秒後顯示 B 的回應
-    setTimeout(() => {
-      this.villagerManager.showVillagerBubble(villager_b_id, text_b, 'speech', 4000);
-    }, 1500);
+    if (!villager_id || !text) {
+      console.warn('⚠️ 對話資料不完整:', data);
+      return;
+    }
+    
+    // 顯示對話泡泡（持續時間根據輪數調整）
+    const duration = 3000 + (turn || 0) * 500; // 越後面的輪次顯示越久
+    const villager = this.villagerManager.getVillagerById(villager_id);
+    
+    if (villager) {
+      villager.showBubble(text, 'speech', duration);
+      console.log(`💬 [${villager_name}]: ${text}`);
+    } else {
+      console.warn(`⚠️ 找不到村民: ${villager_id}`);
+    }
   }
   
   /**
@@ -406,6 +474,24 @@ export class Game {
     this.selectedVillager = villager;
     if (villager) {
       console.log(`👁️ 開始觀察: ${villager.name}`);
+      // 鏡頭跟隨選中的村民
+      this.camera.follow(villager);
+    }
+  }
+  
+  /**
+   * 根據 ID 選取村民
+   */
+  selectVillagerById(villagerId) {
+    if (!this.villagerManager) return;
+    
+    const villager = this.villagerManager.getVillagerById(villagerId);
+    if (villager) {
+      this.selectVillager(villager);
+      // 同步更新 Dashboard 選擇狀態
+      if (this.dashboard) {
+        this.dashboard.selectedVillagerId = villagerId;
+      }
     }
   }
   
@@ -429,6 +515,17 @@ export class Game {
     this.ctx.fillStyle = '#1a1a2e';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     
+    // 應用縮放
+    const zoom = this.camera.zoom;
+    this.ctx.save();
+    
+    // 以畫面中心為縮放中心
+    const centerX = this.canvas.width / 2;
+    const centerY = this.canvas.height / 2;
+    this.ctx.translate(centerX, centerY);
+    this.ctx.scale(zoom, zoom);
+    this.ctx.translate(-centerX, -centerY);
+    
     // 渲染地圖
     this.renderer.renderMap(this.map);
     
@@ -442,6 +539,9 @@ export class Game {
     
     // 渲染建築物頂部（遮擋效果）
     this.renderer.renderBuildingTops(this.map);
+    
+    // 還原縮放
+    this.ctx.restore();
   }
   
   /**

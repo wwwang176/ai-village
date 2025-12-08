@@ -590,11 +590,44 @@ class GameState:
         # 否則回家
         return self._get_home_target(villager)
     
-    def _get_social_target(self, villager: dict) -> Optional[Tuple[int, int]]:
-        """取得社交地點（市集、酒館或教堂）"""
-        options = ["market", "tavern", "church"]
-        building_type = random.choice(options)
-        return self._get_building_target(building_type)
+    def _get_social_target(self, villager: dict) -> Tuple[Optional[Tuple[int, int]], Optional[str]]:
+        """取得社交目標 - 找附近的村民聊天
+        回傳: (座標, 目標村民ID) 或 (座標, None)
+        """
+        current_x = villager["x"]
+        current_y = villager["y"]
+        
+        # 排除正在對話中或等待社交中的村民
+        excluded_states = ["talking", "waiting_social"]
+        
+        # 找附近的村民（半徑 20 格內）
+        candidates = []
+        for other in self.villagers.values():
+            if other["id"] == villager["id"]:
+                continue
+            if other.get("state") in excluded_states:
+                continue
+            
+            dx = other["x"] - current_x
+            dy = other["y"] - current_y
+            dist = (dx**2 + dy**2) ** 0.5
+            
+            if dist < 20:
+                # 計算優先度：熟悉度 + 好感度 - 距離
+                rel = villager.get("relationships", {}).get(other["id"], {})
+                familiarity = rel.get("familiarity", 0)
+                affection = rel.get("affection", 0)
+                priority = familiarity + affection - dist
+                candidates.append((other, dist, priority))
+        
+        if candidates:
+            # 按優先度排序，優先找熟悉的人
+            candidates.sort(key=lambda x: x[2], reverse=True)
+            target_villager = candidates[0][0]
+            return ((target_villager["x"], target_villager["y"]), target_villager["id"])
+        
+        # 找不到人，去市集碰碰運氣
+        return (self._get_building_target("market"), None)
     
     def _get_wander_target(self, villager: dict) -> Optional[Tuple[int, int]]:
         """隨機閒逛目標"""

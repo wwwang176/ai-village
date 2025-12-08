@@ -19,6 +19,36 @@ export class Camera {
     this.target = null;       // 跟隨目標
     this.smoothing = 0.1;     // 平滑跟隨係數
     this.tileSize = 16;
+    
+    // 縮放
+    this.zoom = 1.0;
+    this.minZoom = 0.5;
+    this.maxZoom = 3.0;
+    this.zoomStep = 0.25;
+  }
+  
+  /**
+   * 放大
+   */
+  zoomIn() {
+    this.zoom = Math.min(this.maxZoom, this.zoom + this.zoomStep);
+    console.log(`🔍 縮放: ${(this.zoom * 100).toFixed(0)}%`);
+  }
+  
+  /**
+   * 縮小
+   */
+  zoomOut() {
+    this.zoom = Math.max(this.minZoom, this.zoom - this.zoomStep);
+    console.log(`🔍 縮放: ${(this.zoom * 100).toFixed(0)}%`);
+  }
+  
+  /**
+   * 重置縮放
+   */
+  resetZoom() {
+    this.zoom = 1.0;
+    console.log(`🔍 縮放: 100%`);
   }
   
   /**
@@ -34,9 +64,13 @@ export class Camera {
   update() {
     if (!this.target) return;
     
-    // 目標螢幕中心位置
-    const targetX = this.target.x * this.tileSize - this.viewportWidth / 2 + this.tileSize / 2;
-    const targetY = this.target.y * this.tileSize - this.viewportHeight / 2 + this.tileSize / 2;
+    // 考慮縮放後的有效視窗大小
+    const effectiveWidth = this.viewportWidth / this.zoom;
+    const effectiveHeight = this.viewportHeight / this.zoom;
+    
+    // 目標螢幕中心位置（考慮縮放）
+    const targetX = this.target.x * this.tileSize - effectiveWidth / 2 + this.tileSize / 2;
+    const targetY = this.target.y * this.tileSize - effectiveHeight / 2 + this.tileSize / 2;
     
     // 平滑移動
     this.x += (targetX - this.x) * this.smoothing;
