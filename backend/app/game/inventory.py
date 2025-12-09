@@ -10,8 +10,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("Inventory")
 
-# 工具列表
-TOOLS = ["hoe", "pickaxe", "axe", "shears", "cleaver", "hammer", "saw", "scraper"]
+# 從統一設定檔匯入工具列表
+from ..data.item_categories import TOOLS, FOODS
 
 # 職業需要的工具及資訊
 OCCUPATION_TOOLS = {
@@ -179,3 +179,48 @@ class InventorySystem:
                 return dropped_item
         
         return None
+    
+    def drop_one_for_food(self, villager: dict) -> Optional[dict]:
+        """為了撿食物而丟東西（優先丟原料，其次工具，不丟食物）
+        
+        返回被放下的物品資訊，或 None
+        """
+        inventory = villager.get("inventory", [None, None, None])
+        
+        # 優先丟原料（非食物、非工具）
+        for i, slot in enumerate(inventory):
+            if slot is None:
+                continue
+            item_id = slot.get("item_id")
+            if item_id not in FOODS and item_id not in TOOLS:
+                return self._drop_slot(villager, i)
+        
+        # 其次丟工具
+        for i, slot in enumerate(inventory):
+            if slot is None:
+                continue
+            item_id = slot.get("item_id")
+            if item_id in TOOLS:
+                return self._drop_slot(villager, i)
+        
+        return None
+    
+    def _drop_slot(self, villager: dict, slot_index: int) -> Optional[dict]:
+        """把指定背包格子的物品丟到地上"""
+        slot = villager["inventory"][slot_index]
+        if not slot:
+            return None
+        
+        item_id = slot.get("item_id")
+        quantity = slot.get("quantity", 1)
+        
+        x, y = int(villager["x"]), int(villager["y"])
+        self.game_state.add_world_item(
+            item_id=item_id,
+            x=x, y=y,
+            quantity=quantity,
+            owner_id=villager["id"]
+        )
+        
+        villager["inventory"][slot_index] = None
+        return {"item_id": item_id, "quantity": quantity}

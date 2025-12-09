@@ -189,6 +189,19 @@ class DropItemEffect(TaskEffect):
             return True  # 沒東西放不算失敗
 
 
+class DropForFoodEffect(TaskEffect):
+    """為了撿食物而丟東西（優先丟原料，其次工具）"""
+    
+    def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
+        dropped = ctx.inventory.drop_one_for_food(villager)
+        if dropped:
+            logger.info(f"📦 {villager['name']} 為了撿食物丟下了 {dropped['item_id']} x{dropped['quantity']}")
+            return True
+        else:
+            logger.info(f"📦 {villager['name']} 沒有可以丟的東西")
+            return True  # 沒東西丟不算失敗
+
+
 # ==================== 羊相關效果 ====================
 
 class ShearSheepEffect(TaskEffect):
@@ -307,6 +320,7 @@ TASK_EFFECTS: Dict[str, TaskEffect] = {
     "buy_material": BuyMaterialEffect(),
     "buy_food": BuyFoodEffect(),
     "drop_one_item": DropItemEffect(),
+    "drop_item": DropForFoodEffect(),
     "shear_sheep": ShearSheepEffect(),
     "buy_sheep": BuySheepEffect(),
     "slaughter_sheep": SlaughterSheepEffect(),

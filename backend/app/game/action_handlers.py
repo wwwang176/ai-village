@@ -61,6 +61,25 @@ class ActionHandler(ABC):
     def create_tasks(self, villager: dict, ctx: ActionContext) -> List[dict]:
         """創建任務列表"""
         pass
+    
+    def _find_owned_ground_item(self, villager: dict, item_id: str, ctx: ActionContext) -> Optional[dict]:
+        """找村民擁有的地上物品"""
+        owner_items = ctx.game_state.get_items_by_owner(villager["id"])
+        for item in owner_items:
+            if item.get("item_id") == item_id:
+                return item
+        return None
+    
+    def _try_pickup_owned(self, villager: dict, item_id: str, ctx: ActionContext) -> Optional[List[dict]]:
+        """嘗試從地上撿起自己的物品，返回任務列表或 None"""
+        ground_item = self._find_owned_ground_item(villager, item_id, ctx)
+        if ground_item:
+            logger.info(f"📦 {villager['name']} 地上有自己的 {item_id}，去撿起來")
+            return [
+                Task(type="move", target=(ground_item["x"], ground_item["y"])).to_dict(),
+                Task(type="pickup", item_id=ground_item["id"], duration=1).to_dict()
+            ]
+        return None
 
 
 # ==================== 基本行為處理器 ====================
@@ -202,6 +221,18 @@ class GoWorkActionHandler(ActionHandler):
     
     def _handle_no_tool(self, villager: dict, ctx: ActionContext) -> List[dict]:
         """處理沒有工具的情況"""
+        from .production import OCCUPATION_TOOLS
+        
+        occupation = villager.get("occupation", "")
+        required_tool = OCCUPATION_TOOLS.get(occupation)
+        
+        # 1. 先嘗試撿地上自己的工具
+        if required_tool:
+            pickup_tasks = self._try_pickup_owned(villager, required_tool, ctx)
+            if pickup_tasks:
+                return pickup_tasks
+        
+        # 2. 沒有則去購買
         tasks = []
         
         # 檢查背包是否滿了
@@ -209,7 +240,6 @@ class GoWorkActionHandler(ActionHandler):
         has_empty_slot = any(slot is None for slot in inventory)
         
         if not has_empty_slot:
-            # 背包滿了，先回家放一格物品
             logger.info(f"🎒 {villager['name']} 背包滿了，先回家放東西")
             home = ctx.get_building_by_id(villager.get("residence"))
             if home:
@@ -217,7 +247,6 @@ class GoWorkActionHandler(ActionHandler):
                 tasks.append(Task(type="move", target=home_target).to_dict())
                 tasks.append(Task(type="drop_one_item", duration=1).to_dict())
         
-        # 去鐵匠購買工具
         logger.info(f"🔧 {villager['name']} 沒有工具，改去鐵匠購買")
         blacksmith = ctx.get_building("blacksmith")
         if blacksmith:
@@ -250,14 +279,10 @@ class GoWorkActionHandler(ActionHandler):
         """處理缺少原料的情況（補貨量 = 消耗 × 3）"""
         from ..data.supply_chain import MATERIAL_PRODUCERS, MATERIAL_QUANTITIES, RESTOCK_MULTIPLIER
         
-        # 1. 先檢查地上有沒有自己擁有的該原料
-        ground_item = self._find_owned_ground_item(villager, material, ctx)
-        if ground_item:
-            logger.info(f"📦 {villager['name']} 地上有自己的 {material}，去撿起來")
-            return [
-                Task(type="move", target=(ground_item["x"], ground_item["y"])).to_dict(),
-                Task(type="pickup", item_id=ground_item["id"], duration=1).to_dict()
-            ]
+        # 1. 先嘗試撿地上自己的原料
+        pickup_tasks = self._try_pickup_owned(villager, material, ctx)
+        if pickup_tasks:
+            return pickup_tasks
         
         # 2. 計算補貨量 = 消耗 × 倍數
         consumption = MATERIAL_QUANTITIES.get(material, 1)
@@ -290,14 +315,6 @@ class GoWorkActionHandler(ActionHandler):
             Task(type="move_to_villager", target=(supplier["x"], supplier["y"]), target_villager_id=supplier["id"]).to_dict(),
             Task(type="buy_material", supplier_id=supplier["id"], material=material, quantity=want_quantity, duration=2).to_dict()
         ]
-    
-    def _find_owned_ground_item(self, villager: dict, item_id: str, ctx: ActionContext) -> Optional[dict]:
-        """找村民擁有的地上物品"""
-        owner_items = ctx.game_state.get_items_by_owner(villager["id"])
-        for item in owner_items:
-            if item.get("item_id") == item_id:
-                return item
-        return None
     
     def _find_supplier_villager(self, occupation: str, material: str, ctx: ActionContext) -> Optional[dict]:
         """找到有庫存的供應商（背包 + 地上物品，>= 1 就算有貨）"""
@@ -359,15 +376,27 @@ class BuyFoodActionHandler(ActionHandler):
                         Task(type="cook", duration=3).to_dict()
                     ]
         
-        # 3. 檢查家裡地上有沒有自己的麵包可以撿
-        home_bread = self._find_home_bread(villager, ctx)
-        if home_bread:
-            logger.info(f"🍞 {villager['name']} 家裡有麵包，回家撿")
-            return [
-                Task(type="move", target=(home_bread["x"], home_bread["y"])).to_dict(),
-                Task(type="pickup", item_id=home_bread["id"], duration=1).to_dict(),
+        # 3. 檢查地上有沒有自己的麵包可以撿（統一使用基類方法）
+        ground_bread = self._find_owned_ground_item(villager, "bread", ctx)
+        if ground_bread:
+            tasks = []
+            
+            # 檢查背包是否滿了
+            has_empty_slot = any(slot is None for slot in inventory)
+            if not has_empty_slot:
+                # 背包滿了，先丟一個非食物物品
+                drop_index = self._find_non_food_slot(inventory)
+                if drop_index is not None:
+                    logger.info(f"🎒 {villager['name']} 背包滿了，先丟一個東西")
+                    tasks.append(Task(type="drop_item", duration=1).to_dict())
+            
+            logger.info(f"🍞 {villager['name']} 地上有自己的麵包，去撿")
+            tasks.extend([
+                Task(type="move", target=(ground_bread["x"], ground_bread["y"])).to_dict(),
+                Task(type="pickup", item_id=ground_bread["id"], duration=1).to_dict(),
                 Task(type="eat", duration=2).to_dict()
-            ]
+            ])
+            return tasks
         
         # 4. 背包沒食物，尋找有食物賣的村民
         for food_item, seller_occupation in FOOD_SELLERS:
@@ -416,12 +445,24 @@ class BuyFoodActionHandler(ActionHandler):
         logger.info(f"😢 {villager['name']} 沒有地方煮飯，只能挨餓")
         return tasks
     
-    def _find_home_bread(self, villager: dict, ctx: ActionContext) -> Optional[dict]:
-        """找村民家裡地上的麵包"""
-        owner_items = ctx.game_state.get_items_by_owner(villager["id"])
-        for item in owner_items:
-            if item.get("item_id") == "bread":
-                return item
+    def _find_non_food_slot(self, inventory: list) -> Optional[int]:
+        """找到一個非食物的背包格子（優先丟原料）"""
+        from ..data.item_categories import FOODS, TOOLS
+        
+        # 優先丟原料（非食物、非工具）
+        for i, slot in enumerate(inventory):
+            if slot:
+                item_id = slot.get("item_id")
+                if item_id not in FOODS and item_id not in TOOLS:
+                    return i
+        
+        # 其次丟工具
+        for i, slot in enumerate(inventory):
+            if slot:
+                item_id = slot.get("item_id")
+                if item_id in TOOLS:
+                    return i
+        
         return None
     
     def _find_food_seller(self, occupation: str, food_item: str, ctx: ActionContext) -> Optional[dict]:
