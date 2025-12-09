@@ -188,15 +188,9 @@ class GoWorkActionHandler(ActionHandler):
         if not ctx.production.has_tool(villager):
             return self._handle_no_tool(villager, ctx)
         
-        # 2. 檢查是否有原料（L2/L3 職業）
-        missing_material = self._check_missing_material(villager, ctx)
-        if missing_material:
-            return self._handle_missing_material(villager, missing_material, ctx)
-        
-        # 3. 有工具有原料，根據職業處理
         occupation = villager.get("occupation")
         
-        # 牧羊人特殊處理
+        # 2. 牧羊人特殊處理（不需要原料，透過羊系統）
         if occupation == "shepherd":
             sheep_tasks = ctx.sheep.create_shepherd_work_tasks(villager)
             if sheep_tasks:
@@ -204,13 +198,20 @@ class GoWorkActionHandler(ActionHandler):
             logger.info(f"🐑 {villager['name']} 沒有可以剪毛的羊")
             return tasks
         
-        # 屠夫特殊處理
+        # 3. 屠夫特殊處理（不需要原料，透過羊系統買羊殺羊）
         if occupation == "butcher":
             butcher_tasks = ctx.sheep.create_butcher_work_tasks(villager)
             if butcher_tasks:
                 return butcher_tasks
             logger.info(f"🔪 {villager['name']} 沒有可以宰殺的羊")
             return tasks
+        
+        # 4. 檢查是否有原料（L2/L3 職業）
+        missing_material = self._check_missing_material(villager, ctx)
+        if missing_material:
+            return self._handle_missing_material(villager, missing_material, ctx)
+        
+        # 5. 有工具有原料，根據職業處理
         
         # 一般職業：移動到工作地點
         work_target = ctx.resolve_target(villager, "go_work")

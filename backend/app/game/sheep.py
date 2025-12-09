@@ -157,9 +157,12 @@ class SheepSystem:
             logger.info(f"🔪 {villager['name']} 準備去宰殺羊 {sheep['id']}")
         else:
             # 沒有羊，去找牧羊人買羊
+            logger.info(f"🔪 {villager['name']} 沒有羊，嘗試向牧羊人買羊")
             buy_task = self.create_buy_sheep_task(villager)
             if buy_task:
                 tasks.extend(buy_task)
+            else:
+                logger.info(f"🔪 {villager['name']} 無法買羊（牧羊人沒有足夠的羊）")
         
         return tasks
     
@@ -175,14 +178,17 @@ class SheepSystem:
                 break
         
         if not shepherd:
+            logger.info(f"🐑 {buyer['name']} 找不到牧羊人")
             return tasks
         
         # 檢查牧羊人是否有可賣的成羊（至少留 2 隻用於繁殖）
         shepherd_sheep = self.game_state.get_sheep_by_owner(shepherd["id"])
         adult_sheep = [s for s in shepherd_sheep if s["is_adult"]]
         
+        logger.info(f"🐑 牧羊人 {shepherd['name']} 擁有 {len(shepherd_sheep)} 隻羊，{len(adult_sheep)} 隻成羊")
+        
         if len(adult_sheep) <= 2:
-            logger.info(f"🐑 牧羊人 {shepherd['name']} 羊不夠，無法出售")
+            logger.info(f"🐑 牧羊人 {shepherd['name']} 羊不夠（需 > 2 隻成羊），無法出售")
             return tasks
         
         # 走到牧羊人位置
