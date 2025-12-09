@@ -1,0 +1,218 @@
+"""
+地圖生成器 - 生成遊戲地圖、建築物、地形
+"""
+
+import random
+from typing import List, Dict
+
+
+# 工作建築定義（職業對應建築）
+WORK_BUILDINGS = [
+    # === 左上區：食物生產 ===
+    {"type": "farm", "name": "農田", "x": 4, "y": 4, "width": 12, "height": 10},
+    {"type": "mill", "name": "磨坊", "x": 20, "y": 4, "width": 7, "height": 6},
+    {"type": "bakery", "name": "麵包店", "x": 30, "y": 4, "width": 7, "height": 6},
+    
+    # === 右上區：礦業 ===
+    {"type": "mine", "name": "礦場", "x": 76, "y": 4, "width": 12, "height": 8},
+    {"type": "blacksmith", "name": "鐵匠舖", "x": 60, "y": 4, "width": 8, "height": 7},
+    
+    # === 中央區：商業 ===
+    {"type": "market", "name": "市集", "x": 40, "y": 40, "width": 16, "height": 10},
+    {"type": "tavern", "name": "酒館", "x": 40, "y": 54, "width": 10, "height": 7},
+    
+    # === 左下區：木材 ===
+    {"type": "lumber_camp", "name": "伐木場", "x": 4, "y": 76, "width": 12, "height": 10},
+    {"type": "carpentry", "name": "木工坊", "x": 20, "y": 80, "width": 8, "height": 7},
+    
+    # === 右下區：畜牧 ===
+    {"type": "pasture", "name": "牧場", "x": 72, "y": 72, "width": 16, "height": 12},
+    {"type": "butcher_shop", "name": "肉舖", "x": 56, "y": 80, "width": 8, "height": 7},
+    
+    # === 右中區：服飾 ===
+    {"type": "weaver_shop", "name": "織坊", "x": 76, "y": 40, "width": 8, "height": 6},
+    {"type": "tannery", "name": "皮革坊", "x": 76, "y": 50, "width": 8, "height": 6},
+    {"type": "tailor_shop", "name": "裁縫店", "x": 76, "y": 60, "width": 8, "height": 6},
+]
+
+# 開放式建築（戶外，不需要圍牆）
+OPEN_BUILDINGS = ["farm", "mine", "lumber_camp", "pasture", "market"]
+
+# 地形類型對照
+TERRAIN_TYPES = {
+    "farm": 4,       # 農田
+    "mine": 5,       # 礦場
+    "lumber_camp": 6, # 伐木場
+    "pasture": 7,    # 牧場
+    "market": 8,     # 市集廣場
+    "default": 3,    # 一般地板
+}
+
+
+def generate_map(seed: int, width: int = 96, height: int = 96) -> dict:
+    """
+    生成遊戲地圖
+    
+    Args:
+        seed: 隨機種子
+        width: 地圖寬度
+        height: 地圖高度
+        
+    Returns:
+        地圖資料字典
+    """
+    random.seed(seed)
+    
+    buildings = []
+    
+    # 添加工作建築
+    for i, b in enumerate(WORK_BUILDINGS):
+        building = b.copy()
+        building["id"] = f"building_{i}"
+        building["doorX"] = building["x"] + building["width"] // 2
+        building["doorY"] = building["y"] + building["height"] - 1
+        building["doorWidth"] = 2
+        buildings.append(building)
+    
+    # 生成隨機散落的民宅
+    houses = _generate_random_houses(
+        buildings, width, height, 
+        house_count=13, house_w=6, house_h=5, margin=3
+    )
+    buildings.extend(houses)
+    
+    # 生成地形和碰撞地圖
+    terrain, collision = _generate_terrain_and_collision(
+        buildings, width, height
+    )
+    
+    # 添加道路
+    _add_roads(terrain, width, height)
+    
+    # 物件
+    objects = [
+        {"id": "well_1", "type": "well", "name": "水井", "x": 31, "y": 30,
+         "actions": [{"id": "draw_water", "name": "打水", "duration": 3000}]}
+    ]
+    
+    return {
+        "width": width,
+        "height": height,
+        "seed": seed,
+        "terrain": terrain,
+        "collision": collision,
+        "buildings": buildings,
+        "objects": objects
+    }
+
+
+def _generate_random_houses(
+    existing_buildings: List[dict],
+    width: int, height: int,
+    house_count: int = 13,
+    house_w: int = 6, house_h: int = 5,
+    margin: int = 3
+) -> List[dict]:
+    """生成隨機散落的民宅"""
+    
+    # 建立已佔用區域
+    occupied = [[False] * width for _ in range(height)]
+    
+    for b in existing_buildings:
+        for dy in range(-margin, b["height"] + margin):
+            for dx in range(-margin, b["width"] + margin):
+                nx, ny = b["x"] + dx, b["y"] + dy
+                if 0 <= nx < width and 0 <= ny < height:
+                    occupied[ny][nx] = True
+    
+    houses = []
+    max_attempts = 500
+    attempts = 0
+    
+    while len(houses) < house_count and attempts < max_attempts:
+        attempts += 1
+        
+        # 隨機位置（避開邊緣）
+        x = random.randint(8, width - house_w - 8)
+        y = random.randint(8, height - house_h - 8)
+        
+        # 檢查是否可以放置
+        can_place = True
+        for dy in range(-margin, house_h + margin):
+            for dx in range(-margin, house_w + margin):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < width and 0 <= ny < height:
+                    if occupied[ny][nx]:
+                        can_place = False
+                        break
+            if not can_place:
+                break
+        
+        if can_place:
+            # 標記為已佔用
+            for dy in range(-margin, house_h + margin):
+                for dx in range(-margin, house_w + margin):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < width and 0 <= ny < height:
+                        occupied[ny][nx] = True
+            
+            houses.append({
+                "id": f"building_{len(existing_buildings) + len(houses)}",
+                "type": "house",
+                "name": f"民宅 {len(houses) + 1}",
+                "x": x, "y": y,
+                "width": house_w, "height": house_h,
+                "doorX": x + 3,
+                "doorY": y + house_h - 1,
+                "doorWidth": 2
+            })
+    
+    print(f"🏠 生成了 {len(houses)} 間民宅")
+    return houses
+
+
+def _generate_terrain_and_collision(
+    buildings: List[dict],
+    width: int, height: int
+) -> tuple:
+    """生成地形和碰撞地圖"""
+    
+    collision = [[0] * width for _ in range(height)]
+    terrain = [[0] * width for _ in range(height)]
+    
+    for b in buildings:
+        door_width = b.get("doorWidth", 1)
+        door_x_start = b["doorX"] - door_width // 2
+        door_x_end = door_x_start + door_width
+        is_open = b["type"] in OPEN_BUILDINGS
+        
+        for dy in range(b["height"]):
+            for dx in range(b["width"]):
+                x, y = b["x"] + dx, b["y"] + dy
+                
+                # 設定地形類型
+                terrain[y][x] = TERRAIN_TYPES.get(b["type"], TERRAIN_TYPES["default"])
+                
+                # 開放式建築不產生圍牆
+                if is_open:
+                    continue
+                
+                # 只有邊緣（牆壁）是碰撞區域
+                is_edge = dx == 0 or dx == b["width"]-1 or dy == 0 or dy == b["height"]-1
+                
+                # 檢查是否是門口
+                is_door = (y == b["doorY"] and door_x_start <= x < door_x_end)
+                
+                # 牆壁不可通行
+                if is_edge and not is_door:
+                    collision[y][x] = 1
+    
+    return terrain, collision
+
+
+def _add_roads(terrain: List[List[int]], width: int, height: int):
+    """添加道路"""
+    center_y = 32
+    for x in range(10, 54):
+        terrain[center_y][x] = 1
+        terrain[center_y+1][x] = 1

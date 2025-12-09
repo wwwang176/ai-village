@@ -9,6 +9,8 @@ from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
 
 from .pathfinding import PathFinding
+from .map_generator import generate_map
+from .target_resolver import TargetResolver
 
 
 class GameState:
@@ -88,180 +90,15 @@ class GameState:
         # 生成羊群（牧場初始 4 隻羊）
         self._generate_sheep()
         
+        # 初始化目標解析器
+        self.target_resolver = TargetResolver(self)
+        
         self.initialized = True
         print(f"🎮 遊戲初始化完成 (種子: {self.seed})")
     
     def _generate_map(self) -> dict:
         """生成地圖"""
-        width = 96
-        height = 96
-        
-        # 建築物定義（重新規劃位置，避免重疊）
-        buildings = []
-        
-        # 工作建築（13種職業對應的建築）- 分區規劃
-        work_buildings = [
-            # === 左上區：食物生產 ===
-            {"type": "farm", "name": "農田", "x": 4, "y": 4, "width": 12, "height": 10},          # 農夫
-            {"type": "mill", "name": "磨坊", "x": 20, "y": 4, "width": 7, "height": 6},           # 磨坊主
-            {"type": "bakery", "name": "麵包店", "x": 30, "y": 4, "width": 7, "height": 6},       # 麵包師
-            
-            # === 右上區：礦業 ===
-            {"type": "mine", "name": "礦場", "x": 76, "y": 4, "width": 12, "height": 8},          # 礦工
-            {"type": "blacksmith", "name": "鐵匠舖", "x": 60, "y": 4, "width": 8, "height": 7},   # 鐵匠
-            
-            # === 中央區：商業 ===
-            {"type": "market", "name": "市集", "x": 40, "y": 40, "width": 16, "height": 10},      # 商人
-            {"type": "tavern", "name": "酒館", "x": 40, "y": 54, "width": 10, "height": 7},       # 公共場所
-            
-            # === 左下區：木材 ===
-            {"type": "lumber_camp", "name": "伐木場", "x": 4, "y": 76, "width": 12, "height": 10},# 伐木工
-            {"type": "carpentry", "name": "木工坊", "x": 20, "y": 80, "width": 8, "height": 7},   # 木匠
-            
-            # === 右下區：畜牧 ===
-            {"type": "pasture", "name": "牧場", "x": 72, "y": 72, "width": 16, "height": 12},     # 牧羊人
-            {"type": "butcher_shop", "name": "肉舖", "x": 56, "y": 80, "width": 8, "height": 7},  # 屠夫
-            
-            # === 右中區：服飾 ===
-            {"type": "weaver_shop", "name": "織坊", "x": 76, "y": 40, "width": 8, "height": 6},   # 織工
-            {"type": "tannery", "name": "皮革坊", "x": 76, "y": 50, "width": 8, "height": 6},     # 皮革匠
-            {"type": "tailor_shop", "name": "裁縫店", "x": 76, "y": 60, "width": 8, "height": 6}, # 裁縫
-        ]
-        
-        for i, b in enumerate(work_buildings):
-            b["id"] = f"building_{i}"
-            # 門口在中間，2格寬
-            b["doorX"] = b["x"] + b["width"] // 2
-            b["doorY"] = b["y"] + b["height"] - 1
-            b["doorWidth"] = 2  # 門口寬度
-            buildings.append(b)
-        
-        # 民宅（13間，每個村民一間）- 隨機散落
-        # 先建立已佔用區域
-        occupied = [[False] * width for _ in range(height)]
-        margin = 3  # 建築物間距
-        
-        for b in buildings:
-            for dy in range(-margin, b["height"] + margin):
-                for dx in range(-margin, b["width"] + margin):
-                    nx, ny = b["x"] + dx, b["y"] + dy
-                    if 0 <= nx < width and 0 <= ny < height:
-                        occupied[ny][nx] = True
-        
-        # 隨機生成 13 間房屋
-        house_count = 0
-        max_attempts = 500
-        attempts = 0
-        house_w, house_h = 6, 5
-        
-        while house_count < 13 and attempts < max_attempts:
-            attempts += 1
-            
-            # 隨機位置（避開邊緣）
-            x = random.randint(8, width - house_w - 8)
-            y = random.randint(8, height - house_h - 8)
-            
-            # 檢查是否可以放置
-            can_place = True
-            for dy in range(-margin, house_h + margin):
-                for dx in range(-margin, house_w + margin):
-                    nx, ny = x + dx, y + dy
-                    if 0 <= nx < width and 0 <= ny < height:
-                        if occupied[ny][nx]:
-                            can_place = False
-                            break
-                if not can_place:
-                    break
-            
-            if can_place:
-                # 標記為已佔用
-                for dy in range(-margin, house_h + margin):
-                    for dx in range(-margin, house_w + margin):
-                        nx, ny = x + dx, y + dy
-                        if 0 <= nx < width and 0 <= ny < height:
-                            occupied[ny][nx] = True
-                
-                buildings.append({
-                    "id": f"building_{len(buildings)}",
-                    "type": "house",
-                    "name": f"民宅 {house_count + 1}",
-                    "x": x, "y": y,
-                    "width": house_w, "height": house_h,
-                    "doorX": x + 3,
-                    "doorY": y + house_h - 1,
-                    "doorWidth": 2
-                })
-                house_count += 1
-        
-        print(f"🏠 生成了 {house_count} 間民宅")
-        
-        # 生成碰撞地圖
-        collision = [[0] * width for _ in range(height)]
-        terrain = [[0] * width for _ in range(height)]
-        
-        # 不需要圍牆的建築類型（戶外開放空間）
-        open_buildings = ["farm", "mine", "lumber_camp", "pasture", "market"]
-        
-        # 標記建築區域
-        for b in buildings:
-            door_width = b.get("doorWidth", 1)
-            door_x_start = b["doorX"] - door_width // 2
-            door_x_end = door_x_start + door_width
-            is_open = b["type"] in open_buildings
-            
-            for dy in range(b["height"]):
-                for dx in range(b["width"]):
-                    x, y = b["x"] + dx, b["y"] + dy
-                    
-                    # 根據建築類型設定地形
-                    if b["type"] == "farm":
-                        terrain[y][x] = 4  # 農田
-                    elif b["type"] == "mine":
-                        terrain[y][x] = 5  # 礦場（石頭地面）
-                    elif b["type"] == "lumber_camp":
-                        terrain[y][x] = 6  # 伐木場（森林地面）
-                    elif b["type"] == "pasture":
-                        terrain[y][x] = 7  # 牧場（草地）
-                    elif b["type"] == "market":
-                        terrain[y][x] = 8  # 市集廣場（石板地）
-                    else:
-                        terrain[y][x] = 3  # 一般地板
-                    
-                    # 開放式建築不產生圍牆
-                    if is_open:
-                        continue
-                    
-                    # 只有邊緣（牆壁）是碰撞區域
-                    is_edge = dx == 0 or dx == b["width"]-1 or dy == 0 or dy == b["height"]-1
-                    
-                    # 檢查是否是門口（2格寬）
-                    is_door = (y == b["doorY"] and door_x_start <= x < door_x_end)
-                    
-                    # 牆壁不可通行，門口可通行，內部可通行
-                    if is_edge and not is_door:
-                        collision[y][x] = 1
-        
-        # 道路
-        center_y = 32
-        for x in range(10, 54):
-            terrain[center_y][x] = 1
-            terrain[center_y+1][x] = 1
-        
-        # 物件
-        objects = [
-            {"id": "well_1", "type": "well", "name": "水井", "x": 31, "y": 30,
-             "actions": [{"id": "draw_water", "name": "打水", "duration": 3000}]}
-        ]
-        
-        return {
-            "width": width,
-            "height": height,
-            "seed": self.seed,
-            "terrain": terrain,
-            "collision": collision,
-            "buildings": buildings,
-            "objects": objects
-        }
+        return generate_map(self.seed)
     
     def _get_player_spawn(self) -> dict:
         """取得玩家出生點"""
@@ -948,130 +785,8 @@ class GameState:
         villager: dict, 
         action: str
     ) -> Optional[Tuple[int, int]]:
-        """
-        根據 action 決定目標位置
-        
-        Args:
-            villager: 村民資料
-            action: AI 決定的行為
-            
-        Returns:
-            目標座標 (x, y) 或 None
-        """
-        # 行為對應的目標類型
-        action_targets = {
-            "go_work": lambda v: self._get_work_target(v),
-            "go_home": lambda v: self._get_home_target(v),
-            "go_market": lambda v: self._get_building_target("market"),
-            "go_blacksmith": lambda v: self._get_building_target("blacksmith"),
-            "eat": lambda v: self._get_eat_target(v),
-            "rest": lambda v: self._get_home_target(v),
-            "sleep": lambda v: self._get_home_target(v),
-            "socialize": lambda v: self._get_social_target(v),
-            "wander": lambda v: self._get_wander_target(v),
-        }
-        
-        resolver = action_targets.get(action)
-        if resolver:
-            return resolver(villager)
-        
-        # 未知行為，隨機閒逛
-        return self._get_wander_target(villager)
-    
-    def _get_work_target(self, villager: dict) -> Optional[Tuple[int, int]]:
-        """取得工作地點"""
-        workplace_id = villager.get("workplace")
-        if workplace_id:
-            building = self.get_building_by_id(workplace_id)
-            if building:
-                return self.get_building_door(building)
-        # 沒有工作地點的村民，去市集逛逛
-        return self._get_building_target("market")
-    
-    def _get_home_target(self, villager: dict) -> Optional[Tuple[int, int]]:
-        """取得住所"""
-        residence_id = villager.get("residence")
-        if residence_id:
-            building = self.get_building_by_id(residence_id)
-            if building:
-                return self.get_building_door(building)
-        # 沒有住所的村民，隨機找一間民宅
-        house = self.get_random_building_of_type("house")
-        if house:
-            return self.get_building_door(house)
-        return None
-    
-    def _get_building_target(self, building_type: str) -> Optional[Tuple[int, int]]:
-        """取得特定類型建築物"""
-        building = self.get_building_by_type(building_type)
-        if building:
-            return self.get_building_door(building)
-        return None
-    
-    def _get_eat_target(self, villager: dict) -> Optional[Tuple[int, int]]:
-        """取得吃東西的地點（酒館或家）"""
-        # 優先去酒館
-        target = self._get_building_target("tavern")
-        if target:
-            return target
-        # 否則回家
-        return self._get_home_target(villager)
-    
-    def _get_social_target(self, villager: dict) -> Tuple[Optional[Tuple[int, int]], Optional[str]]:
-        """取得社交目標 - 找附近的村民聊天
-        回傳: (座標, 目標村民ID) 或 (座標, None)
-        """
-        current_x = villager["x"]
-        current_y = villager["y"]
-        
-        # 排除正在對話中或等待社交中的村民
-        excluded_states = ["talking", "waiting_social"]
-        
-        # 找附近的村民（半徑 20 格內）
-        candidates = []
-        for other in self.villagers.values():
-            if other["id"] == villager["id"]:
-                continue
-            if other.get("state") in excluded_states:
-                continue
-            
-            dx = other["x"] - current_x
-            dy = other["y"] - current_y
-            dist = (dx**2 + dy**2) ** 0.5
-            
-            if dist < 20:
-                # 計算優先度：熟悉度 + 好感度 - 距離
-                rel = villager.get("relationships", {}).get(other["id"], {})
-                familiarity = rel.get("familiarity", 0)
-                affection = rel.get("affection", 0)
-                priority = familiarity + affection - dist
-                candidates.append((other, dist, priority))
-        
-        if candidates:
-            # 按優先度排序，優先找熟悉的人
-            candidates.sort(key=lambda x: x[2], reverse=True)
-            target_villager = candidates[0][0]
-            return ((target_villager["x"], target_villager["y"]), target_villager["id"])
-        
-        # 找不到人，去市集碰碰運氣
-        return (self._get_building_target("market"), None)
-    
-    def _get_wander_target(self, villager: dict) -> Optional[Tuple[int, int]]:
-        """隨機閒逛目標"""
-        current_x = int(villager["x"])
-        current_y = int(villager["y"])
-        
-        # 在附近隨機找一個可走的點
-        for _ in range(10):
-            dx = random.randint(-8, 8)
-            dy = random.randint(-8, 8)
-            target_x = max(1, min(self.map_data["width"] - 2, current_x + dx))
-            target_y = max(1, min(self.map_data["height"] - 2, current_y + dy))
-            
-            if self.pathfinder and self.pathfinder.is_walkable(target_x, target_y):
-                return (target_x, target_y)
-        
-        return None
+        """根據 action 決定目標位置（委託給 TargetResolver）"""
+        return self.target_resolver.resolve(villager, action)
     
     # ==================== 路徑計算 ====================
     

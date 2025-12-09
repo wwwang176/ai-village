@@ -1,0 +1,321 @@
+"""
+生產系統 - 管理生產、工具使用、交易
+"""
+
+import random
+import logging
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .game_state import GameState
+    from .inventory import InventorySystem
+
+logger = logging.getLogger("Production")
+
+# 職業需要的工具
+OCCUPATION_TOOLS = {
+    "farmer": "hoe",
+    "miner": "pickaxe",
+    "lumberjack": "axe",
+    "shepherd": "shears",
+    "butcher": "cleaver",
+    "blacksmith": "hammer",
+    "carpenter": "saw",
+    "tanner": "scraper",
+    "tailor": "shears",
+}
+
+# 生產配方定義
+PRODUCTION_RECIPES = {
+    # L1 職業：不需要原料
+    "farmer": [
+        {"output": "grain", "output_name": "穀物", "quantity": 2, "inputs": []},
+    ],
+    "miner": [
+        {"output": "ore", "output_name": "鐵礦", "quantity": 2, "inputs": []},
+    ],
+    "lumberjack": [
+        {"output": "wood", "output_name": "木材", "quantity": 2, "inputs": []},
+    ],
+    "shepherd": [
+        {"output": "wool", "output_name": "羊毛", "quantity": 2, "inputs": []},
+        {"output": "hide", "output_name": "羊皮", "quantity": 2, "inputs": []},
+    ],
+    
+    # L2 職業：需要原料
+    "miller": [
+        {"output": "flour", "output_name": "麵粉", "quantity": 2, "inputs": [("grain", 2)]},
+    ],
+    "butcher": [
+        {"output": "meat_raw", "output_name": "生肉", "quantity": 2, "inputs": []},
+    ],
+    "blacksmith": [
+        {"output": "iron", "output_name": "鐵錠", "quantity": 2, "inputs": [("ore", 2)]},
+    ],
+    "weaver": [
+        {"output": "cloth", "output_name": "布料", "quantity": 2, "inputs": [("wool", 2)]},
+    ],
+    "tanner": [
+        {"output": "leather", "output_name": "皮革", "quantity": 2, "inputs": [("hide", 2)]},
+    ],
+    
+    # L3 職業：需要半成品
+    "baker": [
+        {"output": "bread", "output_name": "麵包", "quantity": 4, "inputs": [("flour", 2)]},
+    ],
+    "carpenter": [
+        {"output": "furniture", "output_name": "家具", "quantity": 1, "inputs": [("wood", 2), ("iron", 1)]},
+    ],
+    "tailor": [
+        {"output": "clothes", "output_name": "衣服", "quantity": 2, "inputs": [("cloth", 2), ("leather", 1)]},
+    ],
+    
+    # 特殊職業
+    "merchant": None,
+}
+
+# 原料價格表
+MATERIAL_PRICES = {
+    "grain": 3, "livestock": 8, "flour": 6, "ore": 5,
+    "wood": 4, "wool": 4, "hide": 5, "iron": 10,
+    "cloth": 8, "leather": 8, "meat_raw": 6, "bread": 4
+}
+
+# 食物資訊
+FOOD_INFO = {
+    "bread": {"name": "麵包", "price": 3, "hunger_restore": 30},
+    "meat_raw": {"name": "生肉", "price": 5, "hunger_restore": 40},
+    "meat": {"name": "肉品", "price": 6, "hunger_restore": 50},
+}
+
+
+class ProductionSystem:
+    """生產系統管理器"""
+    
+    def __init__(self, game_state: "GameState", inventory_system: "InventorySystem"):
+        self.game_state = game_state
+        self.inventory_system = inventory_system
+    
+    def use_tool(self, villager: dict) -> str:
+        """使用村民的工具（消耗耐久度）
+        
+        返回:
+            - "no_tool": 沒有需要的工具
+            - "broken": 工具損壞
+            - 數字字串: 剩餘耐久度百分比
+            - "no_need": 此職業不需要工具
+        """
+        occupation = villager.get("occupation", "")
+        required_tool = OCCUPATION_TOOLS.get(occupation)
+        
+        if not required_tool:
+            return "no_need"
+        
+        inventory = villager.get("inventory", [None, None, None])
+        tool_slot = None
+        tool_index = -1
+        
+        for i, slot in enumerate(inventory):
+            if slot and slot.get("item_id") == required_tool:
+                tool_slot = slot
+                tool_index = i
+                break
+        
+        if not tool_slot:
+            return "no_tool"
+        
+        # 消耗耐久度（每次工作消耗 5 點）
+        durability = tool_slot.get("durability", 100)
+        durability -= 5
+        
+        if durability <= 0:
+            villager["inventory"][tool_index] = None
+            return "broken"
+        
+        tool_slot["durability"] = durability
+        return str(durability)
+    
+    def has_tool(self, villager: dict) -> bool:
+        """檢查村民是否有工作需要的工具"""
+        occupation = villager.get("occupation", "")
+        required_tool = OCCUPATION_TOOLS.get(occupation)
+        
+        if not required_tool:
+            return True
+        
+        inventory = villager.get("inventory", [None, None, None])
+        for slot in inventory:
+            if slot and slot.get("item_id") == required_tool:
+                if slot.get("durability", 0) > 0:
+                    return True
+        
+        return False
+    
+    def produce(self, villager: dict) -> dict:
+        """執行生產，根據職業產出物品
+        
+        返回:
+            {"success": True/False, "product": "物品名", "quantity": 數量, "location": "背包/地上", "reason": "失敗原因"}
+        """
+        occupation = villager.get("occupation", "")
+        recipes = PRODUCTION_RECIPES.get(occupation)
+        
+        if not recipes:
+            return {"success": False, "reason": "此職業不生產物品"}
+        
+        inventory = villager.get("inventory", [None, None, None])
+        
+        # 找出所有可以生產的配方
+        viable_recipes = []
+        failed_reasons = []
+        
+        for recipe in recipes:
+            can_produce = True
+            for input_item, input_qty in recipe["inputs"]:
+                owned_qty = self.inventory_system.count_item(inventory, input_item)
+                if owned_qty < input_qty:
+                    can_produce = False
+                    failed_reasons.append(f"缺少原料 {input_item}（需要 {input_qty}，擁有 {owned_qty}）")
+                    break
+            
+            if can_produce:
+                viable_recipes.append(recipe)
+        
+        if not viable_recipes:
+            return {"success": False, "reason": failed_reasons[0] if failed_reasons else "沒有可生產的配方"}
+        
+        # 隨機選擇一個可生產的配方
+        recipe = random.choice(viable_recipes)
+        
+        # 消耗原料
+        for input_item, input_qty in recipe["inputs"]:
+            self.inventory_system.remove_item(villager, input_item, input_qty)
+        
+        # 產出物品
+        output_item = recipe["output"]
+        output_qty = recipe["quantity"]
+        location = self.inventory_system.add_item(villager, output_item, output_qty)
+        
+        return {
+            "success": True,
+            "product": recipe["output_name"],
+            "quantity": output_qty,
+            "location": location
+        }
+    
+    def execute_food_purchase(self, buyer: dict, task: dict) -> dict:
+        """執行食物購買並消費"""
+        seller_id = task.get("seller_id")
+        food_item = task.get("food_item")
+        quantity = 2
+        
+        food_info = FOOD_INFO.get(food_item, {"name": food_item, "price": 4, "hunger_restore": 30})
+        total_price = food_info["price"] * quantity
+        
+        seller = self.game_state.get_villager(seller_id)
+        if not seller:
+            return {"success": False, "reason": "找不到賣家"}
+        
+        seller_name = seller.get("name", "未知")
+        
+        # 檢查買家金錢
+        buyer_money = buyer.get("money", 0)
+        if buyer_money < total_price:
+            return {"success": False, "reason": f"錢不夠（需要 ${total_price}）", "seller_name": seller_name}
+        
+        # 檢查賣家庫存
+        seller_inventory = seller.get("inventory", [None, None, None])
+        seller_slot_index = -1
+        
+        for i, slot in enumerate(seller_inventory):
+            if slot and slot.get("item_id") == food_item:
+                if slot.get("quantity", 0) >= quantity:
+                    seller_slot_index = i
+                    break
+        
+        if seller_slot_index == -1:
+            return {"success": False, "reason": f"賣家沒有足夠的 {food_info['name']}", "seller_name": seller_name}
+        
+        # 執行交易
+        buyer["money"] = buyer_money - total_price
+        seller["money"] = seller.get("money", 0) + total_price
+        
+        seller_slot = seller_inventory[seller_slot_index]
+        if seller_slot["quantity"] <= quantity:
+            seller["inventory"][seller_slot_index] = None
+        else:
+            seller_slot["quantity"] -= quantity
+        
+        # 買家吃掉食物
+        stats = buyer.get("stats", {})
+        hunger_restore = food_info["hunger_restore"] * quantity
+        stats["hunger"] = max(0, stats.get("hunger", 50) - hunger_restore)
+        
+        if "pending_food_trade" in buyer:
+            del buyer["pending_food_trade"]
+        
+        return {
+            "success": True,
+            "food_name": food_info["name"],
+            "price": total_price,
+            "hunger_restore": hunger_restore,
+            "seller_name": seller_name
+        }
+    
+    def execute_material_trade(self, buyer: dict, task: dict) -> dict:
+        """執行原料交易"""
+        supplier_id = task.get("supplier_id")
+        material = task.get("material")
+        quantity = 2
+        
+        price_per_unit = MATERIAL_PRICES.get(material, 5)
+        total_price = price_per_unit * quantity
+        
+        seller = self.game_state.get_villager(supplier_id)
+        if not seller:
+            return {"success": False, "reason": "找不到賣家"}
+        
+        seller_name = seller.get("name", "未知")
+        
+        # 檢查買家金錢
+        buyer_money = buyer.get("money", 0)
+        if buyer_money < total_price:
+            return {"success": False, "reason": f"錢不夠（需要 ${total_price}，擁有 ${buyer_money}）", "seller_name": seller_name}
+        
+        # 檢查賣家庫存
+        seller_inventory = seller.get("inventory", [None, None, None])
+        seller_slot_index = -1
+        seller_qty = 0
+        
+        for i, slot in enumerate(seller_inventory):
+            if slot and slot.get("item_id") == material:
+                seller_qty = slot.get("quantity", 0)
+                if seller_qty >= quantity:
+                    seller_slot_index = i
+                    break
+        
+        if seller_slot_index == -1:
+            return {"success": False, "reason": f"賣家沒有足夠的 {material}", "seller_name": seller_name}
+        
+        # 執行交易
+        buyer["money"] = buyer_money - total_price
+        seller["money"] = seller.get("money", 0) + total_price
+        
+        seller_slot = seller_inventory[seller_slot_index]
+        if seller_slot["quantity"] <= quantity:
+            seller["inventory"][seller_slot_index] = None
+        else:
+            seller_slot["quantity"] -= quantity
+        
+        self.inventory_system.add_item(buyer, material, quantity)
+        
+        if "pending_trade" in buyer:
+            del buyer["pending_trade"]
+        
+        return {
+            "success": True,
+            "material": material,
+            "quantity": quantity,
+            "price": total_price,
+            "seller_name": seller_name
+        }
