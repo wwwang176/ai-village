@@ -11,21 +11,73 @@ const PERSONALITIES = {
   neutral: ['introvert', 'extrovert', 'romantic', 'religious']
 };
 
+// 任務類型中文翻譯
+export const TASK_NAMES = {
+  move: '移動',
+  move_to_villager: '前往村民',
+  eat: '吃東西',
+  rest: '休息',
+  sleep: '睡覺',
+  work: '工作',
+  wait: '等待',
+  socialize: '社交',
+  pickup: '撿取物品',
+  drop_item: '放下物品',
+  buy_tool: '購買工具',
+  buy_material: '購買原料',
+  buy_food: '購買食物',
+  cook: '烹飪',
+};
+
+// 性格特質中文翻譯
+export const PERSONALITY_NAMES = {
+  // 正面
+  friendly: '友善',
+  hardworking: '勤勞',
+  generous: '慷慨',
+  optimistic: '樂觀',
+  curious: '好奇',
+  // 負面
+  greedy: '貪婪',
+  lazy: '懶惰',
+  suspicious: '多疑',
+  grumpy: '暴躁',
+  gossip: '八卦',
+  // 中性
+  introvert: '內向',
+  extrovert: '外向',
+  romantic: '浪漫',
+  religious: '虔誠',
+};
+
 // 名字池
 const NAMES = {
   male: ['艾德蒙', '約翰', '威廉', '亨利', '湯瑪斯', '羅伯特', '理查', '查爾斯', '喬治', '愛德華'],
   female: ['瑪莉', '伊莉莎白', '安娜', '凱薩琳', '艾瑪', '露西', '克萊兒', '蘇菲', '愛麗絲', '夏洛特']
 };
 
-// 職業與對應建築
+// 職業與對應建築（13 種職業）
 const OCCUPATIONS = {
-  tavern: { name: '酒保', color: '#8b4513' },
-  church: { name: '神父', color: '#4a4a4a' },
-  market: { name: '商人', color: '#daa520' },
+  // 食物鏈
+  farmer: { name: '農夫', color: '#228b22' },
+  miller: { name: '磨坊主', color: '#d2b48c' },
+  butcher: { name: '屠夫', color: '#8b0000' },
+  baker: { name: '麵包師', color: '#d2691e' },
+  
+  // 器具鏈
+  miner: { name: '礦工', color: '#4a4a4a' },
+  lumberjack: { name: '伐木工', color: '#8b4513' },
   blacksmith: { name: '鐵匠', color: '#696969' },
-  bakery: { name: '麵包師', color: '#d2691e' },
-  farm: { name: '農夫', color: '#228b22' },
-  house: { name: '村民', color: '#8b7355' }
+  carpenter: { name: '木匠', color: '#a0522d' },
+  
+  // 服飾鏈
+  shepherd: { name: '牧羊人', color: '#87ceeb' },
+  weaver: { name: '織工', color: '#9370db' },
+  tanner: { name: '皮革匠', color: '#8b7355' },
+  tailor: { name: '裁縫', color: '#ff69b4' },
+  
+  // 特殊
+  merchant: { name: '商人', color: '#daa520' },
 };
 
 export class Villager extends Entity {

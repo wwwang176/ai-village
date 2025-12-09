@@ -1,3 +1,5 @@
+import { PERSONALITY_NAMES, TASK_NAMES } from '../entities/Villager.js';
+
 /**
  * 村民 Dashboard - 顯示村民列表和詳細資訊
  */
@@ -113,7 +115,7 @@ export class Dashboard {
         </div>
         <div class="detail-row">
           <span class="label">性格</span>
-          <span class="value">${(villager.personality || []).join(', ') || '普通'}</span>
+          <span class="value">${this.getPersonalityText(villager.personality)}</span>
         </div>
         <div class="detail-row">
           <span class="label">狀態</span>
@@ -176,7 +178,7 @@ export class Dashboard {
         <div class="detail-title">📝 任務隊列</div>
         <div class="task-list">
           ${tasks.length > 0 
-            ? tasks.map((task, i) => `<div class="task-item">${i + 1}. ${task}</div>`).join('')
+            ? tasks.map((task, i) => `<div class="task-item">${i + 1}. ${this.getTaskText(task)}</div>`).join('')
             : '<div class="task-item">無任務</div>'
           }
         </div>
@@ -319,6 +321,26 @@ export class Dashboard {
       'house': '無業'
     };
     return occupationMap[occupation] || occupation || '村民';
+  }
+  
+  /**
+   * 性格文字轉換
+   */
+  getPersonalityText(personality) {
+    if (!personality || personality.length === 0) return '普通';
+    return personality.map(p => PERSONALITY_NAMES[p] || p).join('、');
+  }
+  
+  /**
+   * 任務文字轉換
+   */
+  getTaskText(task) {
+    if (typeof task === 'string') {
+      return TASK_NAMES[task] || task;
+    }
+    // 任務是物件時
+    const taskType = task.type || task;
+    return TASK_NAMES[taskType] || taskType;
   }
   
   /**
