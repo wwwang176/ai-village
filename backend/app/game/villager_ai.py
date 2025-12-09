@@ -57,7 +57,7 @@ class VillagerAI:
         try:
             # 建構提示詞
             prompt = self._build_decision_prompt(villager, game_state)
-            system_prompt = self._get_system_prompt()
+            system_prompt = self._get_system_prompt(villager, game_state)
             
             messages = [
                 {"role": "system", "content": system_prompt},
@@ -183,42 +183,154 @@ class VillagerAI:
             print(f"相遇生成錯誤: {e}")
             return self._rule_based_encounter(villager_a, villager_b)
     
-    def _get_system_prompt(self) -> str:
-        return """你是一個中古世紀村莊模擬遊戲的 AI 系統。
+    def _get_system_prompt(self, villager: dict, game_state) -> str:
+        """根據村民狀態動態生成系統提示詞"""
+        # 檢查是否有可賣產品
+        sell_action = self._get_sell_action(villager)
+        # 檢查是否可以工作（有原料或有供應商可以買）
+        can_work = self._can_work(villager, game_state)
+        
+        # 動態生成行為列表
+        action_list = [
+            "- buy_food: 買食物吃",
+            "- go_home: 回家休息",
+        ]
+        
+        # 只有在能工作時才顯示選項（有原料或有錢買）
+        if can_work:
+            action_list.append("- go_work: 去工作地點工作")
+        
+        action_list.extend([
+            "- go_market: 去市集逛逛（社交）",
+            "- sleep: 睡覺（晚上）",
+            "- wander: 隨意閒逛",
+        ])
+        
+        # 動態加入賣東西選項
+        if sell_action:
+            action_list.append(f"- sell_goods: {sell_action} ← 【最優先！必須先做這個】")
+        
+        actions = "可用的行為類型：\n" + "\n".join(action_list)
+        
+        # 動態生成優先順序說明
+        priorities = [
+            "1. 【有產品要賣】→ 必須先賣東西 (sell_goods)" if sell_action else None,
+            "2. 飽足度 < 30% → 必須去買食物 (buy_food)",
+            "3. 體力 < 30% → 必須回家休息 (go_home) 或睡覺 (sleep)",
+            "4. 工作時間內 → 應該去工作 (go_work)" if can_work else None,
+            "5. 其他需求可以根據性格和時間自由選擇",
+        ]
+        priority_text = "\n".join([p for p in priorities if p])
+        
+        return f"""你是一個中古世紀村莊模擬遊戲的 AI 系統。
 你需要根據村民的性格、狀態和環境，決定他們的下一步行為。
 
-【重要】需求優先順序（由高到低）：
-1. 飽足度 < 30% → 必須去買食物 (buy_food)
-2. 體力 < 30% → 必須回家休息 (go_home) 或睡覺 (sleep)
-3. 工作時間內 → 應該去工作 (go_work)
-4. 其他需求可以根據性格和時間自由選擇
+【重要】你只能從下方「可用的行為類型」中選擇！
+{priority_text}
 
-【職業工作時間】
-- 農夫/牧羊人: 05:00-14:00（早起）
-- 麵包師: 04:00-13:00（凌晨烤麵包）
-- 礦工/伐木工/屠夫: 06:00-15:00
-- 磨坊主: 07:00-16:00
-- 鐵匠/木匠/織工/皮革匠: 08:00-17:00
-- 裁縫: 09:00-18:00
-- 商人: 08:00-18:00
-
-可用的行為類型：
-- buy_food: 買食物吃 ← 餓了要來這裡！
-- go_home: 回家休息
-- go_work: 去工作地點工作
-- go_market: 去市集逛逛（社交）
-- sleep: 睡覺（晚上）
-- wander: 隨意閒逛
+{actions}
 
 回應必須是 JSON 格式:
-{
-  "action": "行為類型",
+{{
+  "action": "行為類型（必須是上方列出的選項之一）",
   "reason": "簡短的理由（村民心中所想，用繁體中文，10字以內）",
   "mood": "當前心情"
-}
+}}
 
 注意：不需要提供座標，系統會自動處理移動。
-保持角色性格一致，做出合理的決策。"""
+只能選擇上方列出的行為！"""
+    
+    def _get_sell_action(self, villager: dict) -> str:
+        """檢查村民是否有可賣產品，返回描述或空字串"""
+        from ..data.supply_chain import SELLABLE_OCCUPATIONS
+        
+        occupation = villager.get("occupation", "")
+        sellable_item = SELLABLE_OCCUPATIONS.get(occupation)
+        
+        if not sellable_item:
+            return ""
+        
+        # 檢查背包是否有該產品
+        inventory = villager.get("inventory", [])
+        for slot in inventory:
+            if slot and slot.get("item_id") == sellable_item:
+                qty = slot.get("quantity", 1)
+                item_name = {"furniture": "家具", "clothes": "衣服"}.get(sellable_item, sellable_item)
+                return f"賣{item_name}給商人（背包有 {qty} 個）"
+        
+        return ""
+    
+    def _can_work(self, villager: dict, game_state) -> bool:
+        """檢查村民是否有足夠原料可以工作（有原料，或有錢+供應商有貨）"""
+        from ..data.supply_chain import REQUIRED_MATERIALS, MATERIAL_PRODUCERS
+        from ..game.production import MATERIAL_PRICES
+        
+        occupation = villager.get("occupation", "")
+        required = REQUIRED_MATERIALS.get(occupation, [])
+        
+        # 不需要原料的職業（農夫、牧羊人、礦工、伐木工）可以直接工作
+        if not required:
+            return True
+        
+        inventory = villager.get("inventory", [])
+        money = villager.get("money", 0)
+        
+        logger.info(f"🔍 _can_work: {villager['name']}({occupation}) 需要原料: {required}, 金錢: ${money}")
+        
+        # 檢查每種需要的原料
+        for material in required:
+            # 背包有原料嗎？
+            has_material = False
+            for slot in inventory:
+                if slot and slot.get("item_id") == material and slot.get("quantity", 0) >= 1:
+                    has_material = True
+                    break
+            
+            if has_material:
+                logger.info(f"   ✓ {material}: 背包有")
+                continue  # 這個原料有了，檢查下一個
+            
+            # 沒有原料，檢查：有錢 + 供應商有貨
+            price = MATERIAL_PRICES.get(material, 5)
+            if money < price:
+                logger.info(f"   ✗ {material}: 背包沒有，錢不夠(需${price})")
+                return False  # 沒錢買
+            
+            # 檢查供應商有沒有庫存
+            supplier_occupation = MATERIAL_PRODUCERS.get(material)
+            if not supplier_occupation:
+                logger.info(f"   ✗ {material}: 沒有供應商")
+                return False  # 沒有供應商
+            
+            supplier_has_stock = self._check_supplier_stock(game_state, supplier_occupation, material)
+            if not supplier_has_stock:
+                logger.info(f"   ✗ {material}: {supplier_occupation}沒有庫存")
+                return False  # 供應商沒貨
+            
+            logger.info(f"   ✓ {material}: 背包沒有，但有錢且{supplier_occupation}有貨")
+        
+        logger.info(f"   → 可以工作")
+        return True
+    
+    def _check_supplier_stock(self, game_state, supplier_occupation: str, material: str) -> bool:
+        """檢查供應商是否有庫存"""
+        for v in game_state.villagers.values():
+            if v.get("occupation") != supplier_occupation:
+                continue
+            
+            # 計算背包庫存
+            inventory = v.get("inventory", [])
+            for slot in inventory:
+                if slot and slot.get("item_id") == material and slot.get("quantity", 0) >= 1:
+                    return True
+            
+            # 計算地上庫存
+            owner_items = game_state.get_items_by_owner(v["id"])
+            for item in owner_items:
+                if item.get("item_id") == material and item.get("quantity", 0) >= 1:
+                    return True
+        
+        return False
 
     def _get_dialogue_system_prompt(self) -> str:
         return """你是一個中古世紀村莊的村民。

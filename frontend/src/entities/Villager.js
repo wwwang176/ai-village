@@ -23,9 +23,11 @@ export const TASK_NAMES = {
   socialize: '社交',
   pickup: '撿取物品',
   drop_item: '放下物品',
+  drop_one_item: '放下物品',
   buy_tool: '購買工具',
   buy_material: '購買原料',
   buy_food: '購買食物',
+  sell_to_merchant: '販賣給商人',
   cook: '烹飪',
 };
 

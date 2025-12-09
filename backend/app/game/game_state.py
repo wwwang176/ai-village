@@ -307,8 +307,8 @@ class GameState:
                     "favorite_foods": villager_foods,   # 喜歡的食物
                     "dislikes": villager_dislikes       # 討厭的事物
                 },
-                "inventory": inventory,                 # 背包（3格）
-                "money": random.randint(30, 80),        # 初始金錢
+                "inventory": inventory,                 # 背包（5格）
+                "money": 500 if occupation == "merchant" else random.randint(30, 80),  # 商人有較多錢
                 "state": "idle",
                 "memories": [],
                 "relationships": {},

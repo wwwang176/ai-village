@@ -321,6 +321,85 @@ class PickupEffect(TaskEffect):
         return True
 
 
+# ==================== 販賣給商人效果 ====================
+
+class SellToMerchantEffect(TaskEffect):
+    """販賣物品給商人"""
+    
+    def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
+        from ..data.supply_chain import MERCHANT_BUY_PRICES
+        
+        merchant_id = task.get("merchant_id")
+        item_id = task.get("item")
+        
+        if not merchant_id or not item_id:
+            logger.info(f"💰 {villager['name']} 販賣失敗：缺少參數")
+            return False
+        
+        # 找商人
+        game_state = ctx.production.game_state
+        merchant = game_state.get_villager(merchant_id)
+        if not merchant:
+            logger.info(f"💰 {villager['name']} 找不到商人")
+            return False
+        
+        # 取得價格
+        price = MERCHANT_BUY_PRICES.get(item_id, 5)
+        
+        # 檢查商人有沒有錢
+        merchant_money = merchant.get("money", 0)
+        if merchant_money < price:
+            logger.info(f"💰 商人 {merchant['name']} 沒有足夠的錢 (需要 ${price}，擁有 ${merchant_money})")
+            return False
+        
+        # 檢查賣家背包是否有物品
+        inventory = villager.get("inventory", [None] * 5)
+        item_slot = None
+        item_index = -1
+        for i, slot in enumerate(inventory):
+            if slot and slot.get("item_id") == item_id:
+                item_slot = slot
+                item_index = i
+                break
+        
+        if not item_slot:
+            logger.info(f"💰 {villager['name']} 背包沒有 {item_id}")
+            return False
+        
+        # 計算賣出數量（全部賣出）
+        sell_qty = item_slot.get("quantity", 1)
+        total_price = price * sell_qty
+        
+        # 檢查商人是否有足夠的錢買全部
+        if merchant_money < total_price:
+            # 商人錢不夠，只買得起部分
+            sell_qty = merchant_money // price
+            if sell_qty <= 0:
+                logger.info(f"💰 商人 {merchant['name']} 錢不夠買任何 {item_id}")
+                return False
+            total_price = price * sell_qty
+        
+        # 執行交易
+        # 1. 賣家移除物品
+        if item_slot.get("quantity", 1) <= sell_qty:
+            villager["inventory"][item_index] = None
+        else:
+            item_slot["quantity"] -= sell_qty
+        
+        # 2. 金錢轉移
+        villager["money"] = villager.get("money", 0) + total_price
+        merchant["money"] = merchant_money - total_price
+        
+        # 3. 物品消失（視為出口）- 商人不保留物品
+        
+        # 清除交易資訊
+        if "pending_sell" in villager:
+            del villager["pending_sell"]
+        
+        logger.info(f"💰 {villager['name']} 賣了 {sell_qty} 個 {item_id} 給 {merchant['name']}，獲得 ${total_price}")
+        return True
+
+
 # ==================== 效果註冊表 ====================
 
 TASK_EFFECTS: Dict[str, TaskEffect] = {
@@ -338,6 +417,7 @@ TASK_EFFECTS: Dict[str, TaskEffect] = {
     "slaughter_sheep": SlaughterSheepEffect(),
     "cook": CookEffect(),
     "pickup": PickupEffect(),
+    "sell_to_merchant": SellToMerchantEffect(),
 }
 
 

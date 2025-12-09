@@ -280,6 +280,7 @@ class GoWorkActionHandler(ActionHandler):
     def _handle_missing_material(self, villager: dict, material: str, ctx: ActionContext) -> List[dict]:
         """處理缺少原料的情況（補貨量 = 消耗 × 3）"""
         from ..data.supply_chain import MATERIAL_PRODUCERS, MATERIAL_QUANTITIES, RESTOCK_MULTIPLIER
+        from ..game.production import MATERIAL_PRICES
         
         # 1. 先嘗試撿地上自己的原料
         pickup_tasks = self._try_pickup_owned(villager, material, ctx)
@@ -290,7 +291,14 @@ class GoWorkActionHandler(ActionHandler):
         consumption = MATERIAL_QUANTITIES.get(material, 1)
         want_quantity = consumption * RESTOCK_MULTIPLIER
         
-        # 3. 找出誰生產這個原料
+        # 3. 檢查錢夠不夠（至少買 1 個）
+        price_per_unit = MATERIAL_PRICES.get(material, 5)
+        money = villager.get("money", 0)
+        if money < price_per_unit:
+            logger.info(f"💸 {villager['name']} 沒有足夠的錢買 {material}（需要 ${price_per_unit}，擁有 ${money}）")
+            return []  # 返回空，讓 AI 重新決策（可能會選擇 sell_goods）
+        
+        # 4. 找出誰生產這個原料
         supplier_occupation = MATERIAL_PRODUCERS.get(material)
         if not supplier_occupation:
             return []
@@ -489,6 +497,65 @@ class BuyFoodActionHandler(ActionHandler):
         return None
 
 
+# ==================== 販賣物品行為處理器 ====================
+
+class SellGoodsActionHandler(ActionHandler):
+    """販賣物品給商人"""
+    
+    def create_tasks(self, villager: dict, ctx: ActionContext) -> List[dict]:
+        from ..data.supply_chain import SELLABLE_OCCUPATIONS, MERCHANT_BUY_PRICES
+        
+        occupation = villager.get("occupation", "")
+        sellable_item = SELLABLE_OCCUPATIONS.get(occupation)
+        
+        if not sellable_item:
+            logger.info(f"💰 {villager['name']} 沒有可賣的物品")
+            return []
+        
+        # 檢查背包是否有可賣的物品
+        inventory = villager.get("inventory", [None] * 5)
+        has_item = False
+        for slot in inventory:
+            if slot and slot.get("item_id") == sellable_item:
+                has_item = True
+                break
+        
+        if not has_item:
+            logger.info(f"💰 {villager['name']} 背包沒有 {sellable_item}")
+            return []
+        
+        # 找商人
+        merchant = self._find_merchant(ctx)
+        if not merchant:
+            logger.info(f"💰 {villager['name']} 找不到商人")
+            return []
+        
+        # 記錄交易資訊
+        villager["pending_sell"] = {
+            "item": sellable_item,
+            "merchant_id": merchant["id"]
+        }
+        
+        logger.info(f"💰 {villager['name']} 準備向商人 {merchant['name']} 賣 {sellable_item}")
+        
+        tasks = []
+        # 移動到商人位置
+        if ctx.need_move(villager, (merchant["x"], merchant["y"])):
+            tasks.append(Task(type="move_to_villager", target=(merchant["x"], merchant["y"]), target_villager_id=merchant["id"]).to_dict())
+        
+        # 執行販賣
+        tasks.append(Task(type="sell_to_merchant", merchant_id=merchant["id"], item=sellable_item, duration=2).to_dict())
+        
+        return tasks
+    
+    def _find_merchant(self, ctx: ActionContext) -> Optional[dict]:
+        """找到商人"""
+        for v in ctx.game_state.villagers.values():
+            if v.get("occupation") == "merchant":
+                return v
+        return None
+
+
 # ==================== 行為註冊表 ====================
 
 ACTION_HANDLERS: Dict[str, ActionHandler] = {
@@ -500,6 +567,7 @@ ACTION_HANDLERS: Dict[str, ActionHandler] = {
     "socialize": SocializeActionHandler(),
     "go_work": GoWorkActionHandler(),
     "buy_food": BuyFoodActionHandler(),
+    "sell_goods": SellGoodsActionHandler(),
     "wander": WanderActionHandler(),
 }
 

@@ -77,7 +77,9 @@ class Task:
     target_villager_id: Optional[str] = None     # 目標村民 ID
     seller_id: Optional[str] = None              # 賣家 ID
     supplier_id: Optional[str] = None            # 供應商 ID
+    merchant_id: Optional[str] = None             # 商人 ID（賣東西用）
     material: Optional[str] = None               # 原料名稱
+    item: Optional[str] = None                   # 物品名稱（賣東西用）
     food_item: Optional[str] = None              # 食物名稱
     sheep_id: Optional[str] = None               # 羊 ID
     item_id: Optional[str] = None                # 地上物品 ID（撿起用）
@@ -97,6 +99,10 @@ class Task:
             result["seller_id"] = self.seller_id
         if self.supplier_id:
             result["supplier_id"] = self.supplier_id
+        if self.merchant_id:
+            result["merchant_id"] = self.merchant_id
+        if self.item:
+            result["item"] = self.item
         if self.material:
             result["material"] = self.material
         if self.food_item:
@@ -119,7 +125,9 @@ class Task:
             target_villager_id=data.get("target_villager_id"),
             seller_id=data.get("seller_id"),
             supplier_id=data.get("supplier_id"),
+            merchant_id=data.get("merchant_id"),
             material=data.get("material"),
+            item=data.get("item"),
             food_item=data.get("food_item"),
             sheep_id=data.get("sheep_id"),
             item_id=data.get("item_id"),

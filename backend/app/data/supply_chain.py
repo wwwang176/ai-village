@@ -109,3 +109,21 @@ def get_required_materials_for_occupation(occupation: str) -> List[str]:
 def get_shops_for_need(need_type: str) -> List[str]:
     """取得滿足某需求的店家"""
     return CONSUMER_SHOPS.get(need_type, [])
+
+
+# ============================================================
+# 商人收購系統
+# ============================================================
+
+# 商人收購的物品及價格
+MERCHANT_BUY_PRICES = {
+    "furniture": 15,    # 家具
+    "clothes": 12,      # 衣服
+    "bread": 3,         # 麵包（商人也可以收購多餘食物）
+}
+
+# 哪些職業可以賣東西給商人
+SELLABLE_OCCUPATIONS = {
+    "carpenter": "furniture",   # 木匠賣家具
+    "tailor": "clothes",        # 裁縫賣衣服
+}
