@@ -383,8 +383,8 @@ class ConversationSystem:
             "type": "conversation",
             "with": other_name,
             "summary": summary,
-            "day": self.game_state.day,
-            "hour": int(self.game_state.hour)
+            "day": self.game_state.game_time.day,
+            "hour": self.game_state.game_time.hour
         }
         
         villager["memories"].append(memory)

@@ -39,7 +39,6 @@ PRODUCTION_RECIPES = {
     ],
     "shepherd": [
         {"output": "wool", "output_name": "羊毛", "quantity": 2, "inputs": []},
-        {"output": "hide", "output_name": "羊皮", "quantity": 2, "inputs": []},
     ],
     
     # L2 職業：需要原料
@@ -48,6 +47,7 @@ PRODUCTION_RECIPES = {
     ],
     "butcher": [
         {"output": "meat_raw", "output_name": "生肉", "quantity": 2, "inputs": []},
+        {"output": "hide", "output_name": "羊皮", "quantity": 1, "inputs": []},
     ],
     "blacksmith": [
         {"output": "iron", "output_name": "鐵錠", "quantity": 2, "inputs": [("ore", 2)]},

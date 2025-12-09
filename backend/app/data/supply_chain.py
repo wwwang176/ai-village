@@ -13,7 +13,7 @@ from typing import List, Optional
 SUPPLY_CHAIN = {
     # 食物鏈
     "miller": ["farmer"],               # 磨坊主 ← 農夫（穀物）
-    "butcher": ["farmer"],              # 屠夫 ← 農夫（牲畜）
+    # butcher 透過羊系統購羊，不需要供應商
     "baker": ["miller"],                # 麵包師 ← 磨坊主（麵粉）
     
     # 器具鏈
@@ -22,7 +22,7 @@ SUPPLY_CHAIN = {
     
     # 服飾鏈
     "weaver": ["shepherd"],             # 織工 ← 牧羊人（羊毛）
-    "tanner": ["shepherd"],             # 皮革匠 ← 牧羊人（羊皮）
+    "tanner": ["butcher"],              # 皮革匠 ← 屠夫（羊皮）
     "tailor": ["weaver", "tanner"],     # 裁縫 ← 織工（布料）+ 皮革匠（皮革）
 }
 
@@ -30,7 +30,7 @@ SUPPLY_CHAIN = {
 # 各職業需要的原料
 REQUIRED_MATERIALS = {
     "miller": ["grain"],                # 磨坊主需要穀物
-    "butcher": ["livestock"],           # 屠夫需要牲畜
+    # butcher 透過羊系統購買和宰殺羊，不需要原料
     "baker": ["flour"],                 # 麵包師需要麵粉
     "blacksmith": ["ore"],              # 鐵匠需要鐵礦
     "carpenter": ["wood", "iron"],      # 木匠需要木材+鐵錠
@@ -43,11 +43,11 @@ REQUIRED_MATERIALS = {
 # 原料 → 生產者對應表
 MATERIAL_PRODUCERS = {
     "grain": "farmer",          # 穀物 ← 農夫
-    "livestock": "farmer",      # 牲畜 ← 農夫
+    # livestock 透過羊系統處理，不是物品
     "ore": "miner",             # 鐵礦 ← 礦工
     "wood": "lumberjack",       # 木材 ← 伐木工
     "wool": "shepherd",         # 羊毛 ← 牧羊人
-    "hide": "shepherd",         # 羊皮 ← 牧羊人
+    "hide": "butcher",          # 羊皮 ← 屠夫（宰殺羊獲得）
     "flour": "miller",          # 麵粉 ← 磨坊主
     "meat_raw": "butcher",      # 生肉 ← 屠夫
     "iron": "blacksmith",       # 鐵錠 ← 鐵匠
@@ -65,6 +65,27 @@ CONSUMER_SHOPS = {
     "clothing": ["tailor"],             # 衣服 → 裁縫
     "misc": ["merchant"],               # 其他 → 商人
 }
+
+
+# 生產配方中各原料需要的數量
+MATERIAL_QUANTITIES = {
+    "grain": 2,
+    "flour": 2,
+    "ore": 2,
+    "wood": 2,
+    "wool": 2,
+    "hide": 2,
+    "iron": 1,
+    "cloth": 2,
+    "leather": 1
+}
+
+
+# 食物賣家對應表（食物 → 生產者職業）
+FOOD_SELLERS = [
+    ("bread", "baker"),       # 麵包 → 麵包師
+    ("meat_raw", "butcher"),  # 生肉 → 屠夫
+]
 
 
 def get_supplier_occupation(material: str) -> Optional[str]:

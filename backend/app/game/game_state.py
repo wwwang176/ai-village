@@ -11,6 +11,7 @@ from datetime import datetime
 from .pathfinding import PathFinding
 from .map_generator import generate_map
 from .target_resolver import TargetResolver
+from .models import GameTime, VillagerStats, Sheep
 
 
 class GameState:
@@ -19,10 +20,7 @@ class GameState:
         self.seed = None
         
         # 時間系統
-        self.day = 1
-        self.hour = 8
-        self.minute = 0
-        self.time_scale = 60  # 1 現實秒 = 60 遊戲秒
+        self.game_time = GameTime()
         
         # 地圖資料
         self.map_data = None
@@ -282,13 +280,13 @@ class GameState:
                 "personality": traits,
                 "x": spawn["doorX"],
                 "y": spawn["doorY"] + 1,
-                "stats": {
-                    "energy": random.randint(30, 100),  # 更隨機的體力
-                    "hunger": random.randint(0, 60),    # 更隨機的飢餓
-                    "social": random.randint(20, 80),   # 更隨機的社交
-                    "happiness": random.randint(40, 90),
-                    "health": random.randint(70, 100)
-                },
+                "stats": VillagerStats(
+                    energy=random.randint(30, 100),
+                    hunger=random.randint(0, 60),
+                    social=random.randint(20, 80),
+                    happiness=random.randint(40, 90),
+                    health=random.randint(70, 100)
+                ).to_dict(),
                 "preferences": {
                     "hobbies": villager_hobbies,        # 興趣愛好
                     "favorite_foods": villager_foods,   # 喜歡的食物
@@ -371,24 +369,21 @@ class GameState:
         
         # 生成 4 隻初始羊
         for i in range(4):
-            # 隨機位置（牧場內）
             x = pasture["x"] + random.randint(1, pasture["width"] - 2)
             y = pasture["y"] + random.randint(1, pasture["height"] - 2)
             
-            sheep = {
-                "id": f"sheep_{self.next_sheep_id}",
-                "x": x,
-                "y": y,
-                "age_days": random.randint(5, 20),  # 隨機年齡
-                "is_adult": True,                    # 初始都是成羊
-                "wool_ready": random.choice([True, False]),  # 隨機是否可剪毛
-                "owner_id": owner_id,
-                "pasture_id": pasture["id"],
-                "last_move_time": 0,
-                "last_breed_check": 0
-            }
+            sheep = Sheep(
+                id=f"sheep_{self.next_sheep_id}",
+                x=x,
+                y=y,
+                age_days=random.randint(5, 20),
+                is_adult=True,
+                wool_ready=random.choice([True, False]),
+                owner_id=owner_id,
+                pasture_id=pasture["id"]
+            )
             
-            self.sheep[sheep["id"]] = sheep
+            self.sheep[sheep.id] = sheep.to_dict()
             self.next_sheep_id += 1
         
         print(f"🐑 生成了 {len(self.sheep)} 隻羊")
@@ -408,22 +403,21 @@ class GameState:
         x = pasture["x"] + random.randint(1, pasture["width"] - 2)
         y = pasture["y"] + random.randint(1, pasture["height"] - 2)
         
-        sheep = {
-            "id": f"sheep_{self.next_sheep_id}",
-            "x": x,
-            "y": y,
-            "age_days": 0 if not is_adult else 5,
-            "is_adult": is_adult,
-            "wool_ready": False,
-            "owner_id": owner_id,
-            "pasture_id": pasture_id,
-            "last_move_time": 0,
-            "last_breed_check": 0
-        }
+        sheep = Sheep(
+            id=f"sheep_{self.next_sheep_id}",
+            x=x,
+            y=y,
+            age_days=0 if not is_adult else 5,
+            is_adult=is_adult,
+            wool_ready=False,
+            owner_id=owner_id,
+            pasture_id=pasture_id
+        )
         
-        self.sheep[sheep["id"]] = sheep
+        sheep_dict = sheep.to_dict()
+        self.sheep[sheep.id] = sheep_dict
         self.next_sheep_id += 1
-        return sheep
+        return sheep_dict
     
     def remove_sheep(self, sheep_id: str) -> Optional[dict]:
         """移除一隻羊"""
@@ -451,24 +445,11 @@ class GameState:
     
     def update_time(self, delta_time: float):
         """更新遊戲時間"""
-        game_seconds = delta_time * self.time_scale
-        self.minute += game_seconds / 60
-        
-        while self.minute >= 60:
-            self.minute -= 60
-            self.hour += 1
-        
-        while self.hour >= 24:
-            self.hour -= 24
-            self.day += 1
+        self.game_time.update(delta_time)
     
     def get_time(self) -> dict:
         """取得當前時間"""
-        return {
-            "day": self.day,
-            "hour": int(self.hour),
-            "minute": int(self.minute)
-        }
+        return self.game_time.to_dict()
     
     def get_villager(self, villager_id: str) -> Optional[dict]:
         """取得村民資料"""
@@ -642,15 +623,13 @@ class GameState:
             json.dump({
                 "save_id": save_id,
                 "timestamp": datetime.now().isoformat(),
-                "day": self.day,
+                "day": self.game_time.day,
                 "seed": self.seed
             }, f, ensure_ascii=False, indent=2)
         
         with open(save_path / "game_state.json", "w", encoding="utf-8") as f:
             json.dump({
-                "day": self.day,
-                "hour": self.hour,
-                "minute": self.minute,
+                "time": self.game_time.to_dict(),
                 "seed": self.seed,
                 "player": self.player,
                 "villagers": self.villagers
@@ -672,9 +651,15 @@ class GameState:
         try:
             with open(save_path / "game_state.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
-                self.day = data["day"]
-                self.hour = data["hour"]
-                self.minute = data["minute"]
+                if "time" in data:
+                    self.game_time = GameTime.from_dict(data["time"])
+                else:
+                    # 相容舊存檔格式
+                    self.game_time = GameTime(
+                        day=data.get("day", 1),
+                        hour=data.get("hour", 8),
+                        minute=data.get("minute", 0)
+                    )
                 self.seed = data["seed"]
                 self.player = data["player"]
                 self.villagers = data["villagers"]
