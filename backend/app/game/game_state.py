@@ -199,8 +199,8 @@ class GameState:
         collision = [[0] * width for _ in range(height)]
         terrain = [[0] * width for _ in range(height)]
         
-        # 不需要圍牆的建築類型（戶外工作場所）
-        open_buildings = ["farm", "mine", "lumber_camp", "pasture"]
+        # 不需要圍牆的建築類型（戶外開放空間）
+        open_buildings = ["farm", "mine", "lumber_camp", "pasture", "market"]
         
         # 標記建築區域
         for b in buildings:
@@ -222,6 +222,8 @@ class GameState:
                         terrain[y][x] = 6  # 伐木場（森林地面）
                     elif b["type"] == "pasture":
                         terrain[y][x] = 7  # 牧場（草地）
+                    elif b["type"] == "market":
+                        terrain[y][x] = 8  # 市集廣場（石板地）
                     else:
                         terrain[y][x] = 3  # 一般地板
                     

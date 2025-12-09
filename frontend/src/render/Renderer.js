@@ -25,7 +25,9 @@ export class Renderer {
       lumber: '#5d4e37',         // 6 - 伐木場（森林地面）
       lumber_dark: '#4d3e27',
       pasture: '#6b9c4a',        // 7 - 牧場（草地）
-      pasture_dark: '#5a8b3a'
+      pasture_dark: '#5a8b3a',
+      plaza: '#a0937d',          // 8 - 市集廣場（石板地）
+      plaza_dark: '#8f8270'
     };
     
     // 建築物顏色（13 種職業建築）
@@ -152,6 +154,11 @@ export class Renderer {
           ? this.terrainColors.pasture 
           : this.terrainColors.pasture_dark;
         break;
+      case 8: // 市集廣場（石板地）
+        color = (tileX + tileY) % 2 === 0 
+          ? this.terrainColors.plaza 
+          : this.terrainColors.plaza_dark;
+        break;
     }
     
     this.ctx.fillStyle = color;
@@ -168,7 +175,7 @@ export class Renderer {
     const height = building.height * this.tileSize;
     
     // 開放式建築（戶外工作場所）不畫牆壁
-    const openBuildings = ['farm', 'mine', 'lumber_camp', 'pasture'];
+    const openBuildings = ['farm', 'mine', 'lumber_camp', 'pasture', 'market'];
     if (openBuildings.includes(building.type)) {
       // 只顯示名稱
       this.ctx.fillStyle = '#fff';
