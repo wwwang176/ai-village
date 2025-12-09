@@ -24,15 +24,15 @@ OCCUPATIONS = {
         id="miller", name="磨坊主", tier=2, chain="food",
         building="mill", work_start=7, work_end=16,
         required_tool=None,
-        input_materials=[("grain", 2)],
-        output_product="flour", output_quantity=2, work_time=2,
+        input_materials=[("grain", 1)],
+        output_product="flour", output_quantity=1, work_time=2,
     ),
     "butcher": OccupationType(
         id="butcher", name="屠夫", tier=2, chain="food",
         building="butcher_shop", work_start=6, work_end=15,
         required_tool="cleaver",
         input_materials=[("livestock", 1)],
-        output_product="meat_raw", output_quantity=4, work_time=2,
+        output_product="meat_raw", output_quantity=2, work_time=2,
     ),
     
     # ========== 食物鏈 L3 ==========
@@ -40,8 +40,8 @@ OCCUPATIONS = {
         id="baker", name="麵包師", tier=3, chain="food",
         building="bakery", work_start=4, work_end=13,
         required_tool=None,
-        input_materials=[("flour", 2)],
-        output_product="bread", output_quantity=4, work_time=2,
+        input_materials=[("flour", 1)],
+        output_product="bread", output_quantity=2, work_time=2,
     ),
     
     # ========== 器具鏈 L1 ==========
@@ -65,14 +65,14 @@ OCCUPATIONS = {
         id="blacksmith", name="鐵匠", tier=2, chain="tool",
         building="blacksmith", work_start=8, work_end=17,
         required_tool="hammer",
-        input_materials=[("ore", 2)],
-        output_product="iron", output_quantity=2, work_time=3,
+        input_materials=[("ore", 1)],
+        output_product="iron", output_quantity=1, work_time=3,
     ),
     "carpenter": OccupationType(
         id="carpenter", name="木匠", tier=2, chain="tool",
         building="carpentry", work_start=8, work_end=17,
         required_tool="saw",
-        input_materials=[("wood", 2), ("iron", 1)],
+        input_materials=[("wood", 1), ("iron", 1)],
         output_product="furniture", output_quantity=1, work_time=4,
     ),
     
@@ -90,15 +90,15 @@ OCCUPATIONS = {
         id="weaver", name="織工", tier=2, chain="clothing",
         building="weaver_shop", work_start=8, work_end=17,
         required_tool=None,
-        input_materials=[("wool", 2)],
-        output_product="cloth", output_quantity=2, work_time=3,
+        input_materials=[("wool", 1)],
+        output_product="cloth", output_quantity=1, work_time=3,
     ),
     "tanner": OccupationType(
         id="tanner", name="皮革匠", tier=2, chain="clothing",
         building="tannery", work_start=8, work_end=17,
         required_tool="scraper",
-        input_materials=[("hide", 2)],
-        output_product="leather", output_quantity=2, work_time=3,
+        input_materials=[("hide", 1)],
+        output_product="leather", output_quantity=1, work_time=3,
     ),
     
     # ========== 服飾鏈 L3 ==========
@@ -106,8 +106,8 @@ OCCUPATIONS = {
         id="tailor", name="裁縫", tier=3, chain="clothing",
         building="tailor_shop", work_start=9, work_end=18,
         required_tool="shears",
-        input_materials=[("cloth", 2), ("leather", 1)],
-        output_product="clothes", output_quantity=2, work_time=3,
+        input_materials=[("cloth", 1), ("leather", 1)],
+        output_product="clothes", output_quantity=1, work_time=3,
     ),
     
     # ========== 特殊 ==========

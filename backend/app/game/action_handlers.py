@@ -228,8 +228,8 @@ class GoWorkActionHandler(ActionHandler):
         return tasks
     
     def _check_missing_material(self, villager: dict, ctx: ActionContext) -> Optional[str]:
-        """檢查缺少的原料"""
-        from ..data.supply_chain import REQUIRED_MATERIALS, MATERIAL_QUANTITIES
+        """檢查缺少的原料（庫存 = 0 才觸發補貨）"""
+        from ..data.supply_chain import REQUIRED_MATERIALS
         
         occupation = villager.get("occupation", "")
         required_materials = REQUIRED_MATERIALS.get(occupation, [])
@@ -240,23 +240,35 @@ class GoWorkActionHandler(ActionHandler):
         inventory = villager.get("inventory", [None, None, None])
         
         for material in required_materials:
-            required_qty = MATERIAL_QUANTITIES.get(material, 1)
             owned_qty = ctx.inventory.count_item(inventory, material)
-            if owned_qty < required_qty:
+            if owned_qty == 0:  # 只有完全沒有才補貨
                 return material
         
         return None
     
     def _handle_missing_material(self, villager: dict, material: str, ctx: ActionContext) -> List[dict]:
-        """處理缺少原料的情況"""
-        from ..data.supply_chain import MATERIAL_PRODUCERS
+        """處理缺少原料的情況（補貨量 = 消耗 × 3）"""
+        from ..data.supply_chain import MATERIAL_PRODUCERS, MATERIAL_QUANTITIES, RESTOCK_MULTIPLIER
         
-        # 找出誰生產這個原料
+        # 1. 先檢查地上有沒有自己擁有的該原料
+        ground_item = self._find_owned_ground_item(villager, material, ctx)
+        if ground_item:
+            logger.info(f"📦 {villager['name']} 地上有自己的 {material}，去撿起來")
+            return [
+                Task(type="move", target=(ground_item["x"], ground_item["y"])).to_dict(),
+                Task(type="pickup", item_id=ground_item["id"], duration=1).to_dict()
+            ]
+        
+        # 2. 計算補貨量 = 消耗 × 倍數
+        consumption = MATERIAL_QUANTITIES.get(material, 1)
+        want_quantity = consumption * RESTOCK_MULTIPLIER
+        
+        # 3. 找出誰生產這個原料
         supplier_occupation = MATERIAL_PRODUCERS.get(material)
         if not supplier_occupation:
             return []
         
-        # 找到供應商村民
+        # 找到供應商村民（有庫存 >= 1 就算有貨）
         supplier = self._find_supplier_villager(supplier_occupation, material, ctx)
         if not supplier:
             logger.info(f"🔍 {villager['name']} 找不到 {material} 的供應商")
@@ -267,32 +279,51 @@ class GoWorkActionHandler(ActionHandler):
         from .models import PendingTrade
         villager["pending_trade"] = PendingTrade(
             material=material,
-            supplier_id=supplier["id"]
+            supplier_id=supplier["id"],
+            quantity=want_quantity
         ).to_dict()
         
-        logger.info(f"🛒 {villager['name']} 準備向 {supplier['name']} 購買 {material}")
+        logger.info(f"🛒 {villager['name']} 準備向 {supplier['name']} 購買 {material} x{want_quantity}")
         
-        # 創建移動到供應商並交易的任務
+        # 創建移動到供應商並交易的任務（帶上需求數量）
         return [
             Task(type="move_to_villager", target=(supplier["x"], supplier["y"]), target_villager_id=supplier["id"]).to_dict(),
-            Task(type="buy_material", supplier_id=supplier["id"], material=material, duration=2).to_dict()
+            Task(type="buy_material", supplier_id=supplier["id"], material=material, quantity=want_quantity, duration=2).to_dict()
         ]
     
+    def _find_owned_ground_item(self, villager: dict, item_id: str, ctx: ActionContext) -> Optional[dict]:
+        """找村民擁有的地上物品"""
+        owner_items = ctx.game_state.get_items_by_owner(villager["id"])
+        for item in owner_items:
+            if item.get("item_id") == item_id:
+                return item
+        return None
+    
     def _find_supplier_villager(self, occupation: str, material: str, ctx: ActionContext) -> Optional[dict]:
-        """找到有庫存的供應商"""
+        """找到有庫存的供應商（背包 + 地上物品，>= 1 就算有貨）"""
         candidates = []
         
         for v in ctx.game_state.villagers.values():
             if v.get("occupation") != occupation:
                 continue
             
-            # 檢查庫存
+            # 計算背包庫存
             inventory = v.get("inventory", [None, None, None])
+            bag_qty = 0
             for slot in inventory:
                 if slot and slot.get("item_id") == material:
-                    if slot.get("quantity", 0) >= 2:
-                        candidates.append(v)
-                        break
+                    bag_qty += slot.get("quantity", 0)
+            
+            # 計算地上庫存（該村民擁有的）
+            ground_qty = 0
+            owner_items = ctx.game_state.get_items_by_owner(v["id"])
+            for item in owner_items:
+                if item.get("item_id") == material:
+                    ground_qty += item.get("quantity", 0)
+            
+            # 總數 >= 1 就算有貨
+            if bag_qty + ground_qty >= 1:
+                candidates.append(v)
         
         if candidates:
             import random

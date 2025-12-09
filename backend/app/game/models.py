@@ -80,6 +80,8 @@ class Task:
     material: Optional[str] = None               # 原料名稱
     food_item: Optional[str] = None              # 食物名稱
     sheep_id: Optional[str] = None               # 羊 ID
+    item_id: Optional[str] = None                # 地上物品 ID（撿起用）
+    quantity: int = 1                            # 交易數量
     
     def to_dict(self) -> dict:
         result = {"type": self.type}
@@ -101,6 +103,10 @@ class Task:
             result["food_item"] = self.food_item
         if self.sheep_id:
             result["sheep_id"] = self.sheep_id
+        if self.item_id:
+            result["item_id"] = self.item_id
+        if self.quantity != 1:
+            result["quantity"] = self.quantity
         return result
     
     @classmethod
@@ -115,7 +121,9 @@ class Task:
             supplier_id=data.get("supplier_id"),
             material=data.get("material"),
             food_item=data.get("food_item"),
-            sheep_id=data.get("sheep_id")
+            sheep_id=data.get("sheep_id"),
+            item_id=data.get("item_id"),
+            quantity=data.get("quantity", 1)
         )
 
 

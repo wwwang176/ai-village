@@ -67,18 +67,21 @@ CONSUMER_SHOPS = {
 }
 
 
-# 生產配方中各原料需要的數量
+# 生產配方中各原料需要的數量（每次消耗）
 MATERIAL_QUANTITIES = {
-    "grain": 2,
-    "flour": 2,
-    "ore": 2,
-    "wood": 2,
-    "wool": 2,
-    "hide": 2,
+    "grain": 1,
+    "flour": 1,
+    "ore": 1,
+    "wood": 1,
+    "wool": 1,
+    "hide": 1,
     "iron": 1,
-    "cloth": 2,
+    "cloth": 1,
     "leather": 1
 }
+
+# 補貨倍數（庫存=0時，補充 消耗量 × 此倍數）
+RESTOCK_MULTIPLIER = 3
 
 
 # 食物賣家對應表（食物 → 生產者職業）

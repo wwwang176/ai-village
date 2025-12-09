@@ -280,13 +280,10 @@ class ProductionSystem:
         }
     
     def execute_material_trade(self, buyer: dict, task: dict) -> dict:
-        """執行原料交易"""
+        """執行原料交易（有多少買多少）"""
         supplier_id = task.get("supplier_id")
         material = task.get("material")
-        quantity = 2
-        
-        price_per_unit = MATERIAL_PRICES.get(material, 5)
-        total_price = price_per_unit * quantity
+        want_quantity = task.get("quantity", 3)  # 想買的數量
         
         seller = self.game_state.get_villager(supplier_id)
         if not seller:
@@ -294,36 +291,76 @@ class ProductionSystem:
         
         seller_name = seller.get("name", "未知")
         
+        # 計算賣家背包庫存
+        seller_inventory = seller.get("inventory", [None, None, None])
+        bag_qty = 0
+        for slot in seller_inventory:
+            if slot and slot.get("item_id") == material:
+                bag_qty += slot.get("quantity", 0)
+        
+        # 計算賣家地上庫存
+        ground_items = []
+        ground_qty = 0
+        for item in self.game_state.get_items_by_owner(seller["id"]):
+            if item.get("item_id") == material:
+                ground_items.append(item)
+                ground_qty += item.get("quantity", 0)
+        
+        total_available = bag_qty + ground_qty
+        if total_available == 0:
+            return {"success": False, "reason": f"賣家沒有 {material}", "seller_name": seller_name}
+        
+        # 有多少買多少（不超過想買的量）
+        quantity = min(want_quantity, total_available)
+        
+        price_per_unit = MATERIAL_PRICES.get(material, 5)
+        total_price = price_per_unit * quantity
+        
         # 檢查買家金錢
         buyer_money = buyer.get("money", 0)
         if buyer_money < total_price:
-            return {"success": False, "reason": f"錢不夠（需要 ${total_price}，擁有 ${buyer_money}）", "seller_name": seller_name}
+            # 買不起想要的量，看能買多少
+            affordable_qty = buyer_money // price_per_unit
+            if affordable_qty == 0:
+                return {"success": False, "reason": f"錢不夠（單價 ${price_per_unit}，擁有 ${buyer_money}）", "seller_name": seller_name}
+            quantity = min(quantity, affordable_qty)
+            total_price = price_per_unit * quantity
         
-        # 檢查賣家庫存
-        seller_inventory = seller.get("inventory", [None, None, None])
-        seller_slot_index = -1
-        seller_qty = 0
-        
-        for i, slot in enumerate(seller_inventory):
-            if slot and slot.get("item_id") == material:
-                seller_qty = slot.get("quantity", 0)
-                if seller_qty >= quantity:
-                    seller_slot_index = i
-                    break
-        
-        if seller_slot_index == -1:
-            return {"success": False, "reason": f"賣家沒有足夠的 {material}", "seller_name": seller_name}
-        
-        # 執行交易
+        # 執行交易 - 金錢轉移
         buyer["money"] = buyer_money - total_price
         seller["money"] = seller.get("money", 0) + total_price
         
-        seller_slot = seller_inventory[seller_slot_index]
-        if seller_slot["quantity"] <= quantity:
-            seller["inventory"][seller_slot_index] = None
-        else:
-            seller_slot["quantity"] -= quantity
+        # 從賣家扣除物品（優先從背包）
+        remaining = quantity
         
+        # 1. 先從背包扣
+        for i, slot in enumerate(seller_inventory):
+            if remaining <= 0:
+                break
+            if slot and slot.get("item_id") == material:
+                slot_qty = slot.get("quantity", 0)
+                deduct = min(slot_qty, remaining)
+                if slot_qty <= deduct:
+                    seller["inventory"][i] = None
+                else:
+                    slot["quantity"] = slot_qty - deduct
+                remaining -= deduct
+        
+        # 2. 不夠再從地上扣
+        for item in ground_items:
+            if remaining <= 0:
+                break
+            item_qty = item.get("quantity", 0)
+            deduct = min(item_qty, remaining)
+            if item_qty <= deduct:
+                # 整個移除
+                self.game_state.remove_world_item(item["id"])
+            else:
+                # 部分扣除（需要更新地上物品數量）
+                item["quantity"] = item_qty - deduct
+            remaining -= deduct
+        
+        # 給買家物品
         self.inventory_system.add_item(buyer, material, quantity)
         
         if "pending_trade" in buyer:

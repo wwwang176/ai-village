@@ -8,3 +8,4 @@ export { EntityRenderer } from './EntityRenderer.js';
 export { FurnitureRenderer } from './FurnitureRenderer.js';
 export { ObjectRenderer } from './ObjectRenderer.js';
 export { UIRenderer } from './UIRenderer.js';
+export { LightingRenderer } from './LightingRenderer.js';

@@ -569,6 +569,17 @@ export class Game {
     
     // 還原縮放
     this.ctx.restore();
+    
+    // 渲染光照層（晝夜效果）- 在縮放外渲染
+    this.renderer.renderLighting(
+      this.timeSystem,
+      this.map.buildings,
+      this.villagerManager.villagers,
+      this.furniture,
+      this.canvas.width,
+      this.canvas.height,
+      this.camera.zoom
+    );
   }
   
   /**

@@ -7,6 +7,7 @@ import { EntityRenderer } from './renderers/EntityRenderer.js';
 import { FurnitureRenderer } from './renderers/FurnitureRenderer.js';
 import { ObjectRenderer } from './renderers/ObjectRenderer.js';
 import { UIRenderer } from './renderers/UIRenderer.js';
+import { LightingRenderer } from './renderers/LightingRenderer.js';
 
 export class Renderer {
   constructor(ctx, camera, tileSize) {
@@ -21,6 +22,7 @@ export class Renderer {
     this.furniture = new FurnitureRenderer(ctx, camera, tileSize);
     this.object = new ObjectRenderer(ctx, camera, tileSize);
     this.ui = new UIRenderer(ctx, camera, tileSize);
+    this.lighting = new LightingRenderer(ctx, camera, tileSize);
   }
   
   /**
@@ -81,5 +83,12 @@ export class Renderer {
    */
   renderPlayer(player) {
     this.entity.renderPlayer(player);
+  }
+  
+  /**
+   * 渲染光照層（晝夜效果）
+   */
+  renderLighting(timeSystem, buildings, villagers, furniture, canvasWidth, canvasHeight, zoom) {
+    this.lighting.render(timeSystem, buildings, villagers, furniture, canvasWidth, canvasHeight, zoom);
   }
 }
