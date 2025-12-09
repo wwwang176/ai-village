@@ -7,6 +7,7 @@ import time
 import random
 import json
 import logging
+import os
 from typing import Dict, List, Optional, TYPE_CHECKING
 from dataclasses import dataclass, field
 
@@ -286,7 +287,7 @@ class ConversationSystem:
         try:
             async with ai_semaphore:
                 response = await self.villager_ai.client.chat.completions.create(
-                    model="gpt-4.1-nano",
+                    model=os.getenv("OPENAI_MODEL", "gpt-4.1-nano"),
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=100,
                     temperature=0.8
@@ -361,7 +362,7 @@ class ConversationSystem:
         try:
             async with ai_semaphore:
                 response = await self.villager_ai.client.chat.completions.create(
-                    model="gpt-4.1-nano",
+                    model=os.getenv("OPENAI_MODEL", "gpt-4.1-nano"),
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=50,
                     temperature=0.5
