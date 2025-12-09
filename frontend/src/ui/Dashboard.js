@@ -163,6 +163,14 @@ export class Dashboard {
         </div>
       </div>
       
+      <!-- 背包 -->
+      <div class="detail-section">
+        <div class="detail-title">🎒 背包 (💰 $${villager.money || 0})</div>
+        <div class="inventory-grid">
+          ${this.renderInventory(villager.inventory || [null, null, null])}
+        </div>
+      </div>
+      
       <!-- 任務隊列 -->
       <div class="detail-section">
         <div class="detail-title">📝 任務隊列</div>
@@ -239,6 +247,44 @@ export class Dashboard {
   }
   
   /**
+   * 渲染背包
+   */
+  renderInventory(inventory) {
+    // 物品圖示對應表
+    const itemIcons = {
+      'hoe': '⛏️', 'pickaxe': '⛏️', 'axe': '🪓', 'shears': '✂️',
+      'cleaver': '🔪', 'hammer': '🔨', 'saw': '🪚', 'scraper': '🔪',
+      'grain': '🌾', 'livestock': '🐄', 'ore': '🪨', 'wood': '🪵',
+      'wool': '🧶', 'hide': '🐑', 'flour': '🌫️', 'meat_raw': '🥩',
+      'iron': '🔩', 'plank': '📏', 'cloth': '🧵', 'leather': '🟤',
+      'bread': '🍞', 'meat': '🍖', 'clothes': '👕', 'furniture': '🪑'
+    };
+    
+    return inventory.map((slot, i) => {
+      if (!slot) {
+        return `<div class="inventory-slot empty">空</div>`;
+      }
+      
+      const icon = itemIcons[slot.item_id] || '📦';
+      const isTool = slot.durability !== undefined && slot.durability !== null;
+      
+      if (isTool) {
+        // 工具顯示耐久度
+        return `<div class="inventory-slot tool">
+          <span class="item-icon">${icon}</span>
+          <span class="item-durability">${slot.durability}%</span>
+        </div>`;
+      } else {
+        // 一般物品顯示數量
+        return `<div class="inventory-slot">
+          <span class="item-icon">${icon}</span>
+          <span class="item-quantity">x${slot.quantity}</span>
+        </div>`;
+      }
+    }).join('');
+  }
+  
+  /**
    * 根據 ID 取得村民名字
    */
   getVillagerNameById(id) {
@@ -252,19 +298,24 @@ export class Dashboard {
    */
   getOccupationText(occupation) {
     const occupationMap = {
-      'tavern': '酒保',
-      'church': '神父',
-      'market': '商人',
+      // 食物鏈
+      'farmer': '農夫',
+      'miller': '磨坊主',
+      'butcher': '屠夫',
+      'baker': '麵包師',
+      // 器具鏈
+      'miner': '礦工',
+      'lumberjack': '伐木工',
       'blacksmith': '鐵匠',
-      'bakery': '麵包師',
-      'butcher_shop': '屠夫',
-      'clinic': '醫師',
-      'barber_shop': '理髮師',
-      'weaver_shop': '織工',
-      'pottery': '陶匠',
-      'tannery': '皮革匠',
-      'farm': '農夫',
-      'dock': '漁夫',
+      'carpenter': '木匠',
+      // 服飾鏈
+      'shepherd': '牧羊人',
+      'weaver': '織工',
+      'tanner': '皮革匠',
+      'tailor': '裁縫',
+      // 特殊
+      'merchant': '商人',
+      // 其他
       'house': '無業'
     };
     return occupationMap[occupation] || occupation || '村民';

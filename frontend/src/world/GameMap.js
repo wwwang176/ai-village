@@ -12,6 +12,7 @@ export class GameMap {
     this.collision = mapData.collision;
     this.buildings = mapData.buildings;
     this.objects = mapData.objects;
+    this.worldItems = [];  // 地上物品（動態更新）
     
     // 建立物件查詢索引
     this.objectIndex = this.buildObjectIndex();

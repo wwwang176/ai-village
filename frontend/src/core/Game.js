@@ -331,6 +331,11 @@ export class Game {
       const selectedId = this.selectedVillager?.id || null;
       this.villagerManager.syncFromBackend(data.villagers, selectedId);
     }
+    
+    // 同步地上物品
+    if (data.world_items && this.map) {
+      this.map.worldItems = data.world_items;
+    }
   }
   
   /**

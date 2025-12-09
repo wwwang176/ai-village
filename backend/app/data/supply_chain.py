@@ -1,0 +1,87 @@
+"""
+供應鏈關係定義
+"""
+
+from typing import List, Optional
+
+
+# ============================================================
+# 供應鏈定義
+# ============================================================
+
+# 各職業的供應商（誰提供原料）
+SUPPLY_CHAIN = {
+    # 食物鏈
+    "miller": ["farmer"],               # 磨坊主 ← 農夫（穀物）
+    "butcher": ["farmer"],              # 屠夫 ← 農夫（牲畜）
+    "baker": ["miller"],                # 麵包師 ← 磨坊主（麵粉）
+    
+    # 器具鏈
+    "blacksmith": ["miner"],            # 鐵匠 ← 礦工（鐵礦）
+    "carpenter": ["lumberjack", "blacksmith"],  # 木匠 ← 伐木工（木材）+ 鐵匠（鐵錠）
+    
+    # 服飾鏈
+    "weaver": ["shepherd"],             # 織工 ← 牧羊人（羊毛）
+    "tanner": ["shepherd"],             # 皮革匠 ← 牧羊人（羊皮）
+    "tailor": ["weaver", "tanner"],     # 裁縫 ← 織工（布料）+ 皮革匠（皮革）
+}
+
+
+# 各職業需要的原料
+REQUIRED_MATERIALS = {
+    "miller": ["grain"],                # 磨坊主需要穀物
+    "butcher": ["livestock"],           # 屠夫需要牲畜
+    "baker": ["flour"],                 # 麵包師需要麵粉
+    "blacksmith": ["ore"],              # 鐵匠需要鐵礦
+    "carpenter": ["wood", "iron"],      # 木匠需要木材+鐵錠
+    "weaver": ["wool"],                 # 織工需要羊毛
+    "tanner": ["hide"],                 # 皮革匠需要羊皮
+    "tailor": ["cloth", "leather"],     # 裁縫需要布料+皮革
+}
+
+
+# 原料 → 生產者對應表
+MATERIAL_PRODUCERS = {
+    "grain": "farmer",          # 穀物 ← 農夫
+    "livestock": "farmer",      # 牲畜 ← 農夫
+    "ore": "miner",             # 鐵礦 ← 礦工
+    "wood": "lumberjack",       # 木材 ← 伐木工
+    "wool": "shepherd",         # 羊毛 ← 牧羊人
+    "hide": "shepherd",         # 羊皮 ← 牧羊人
+    "flour": "miller",          # 麵粉 ← 磨坊主
+    "meat_raw": "butcher",      # 生肉 ← 屠夫
+    "iron": "blacksmith",       # 鐵錠 ← 鐵匠
+    "plank": "carpenter",       # 木板 ← 木匠
+    "cloth": "weaver",          # 布料 ← 織工
+    "leather": "tanner",        # 皮革 ← 皮革匠
+}
+
+
+# 消費終點（村民可以購買的店家）
+CONSUMER_SHOPS = {
+    "food": ["baker", "butcher"],       # 食物 → 麵包師、屠夫
+    "tools": ["blacksmith"],            # 工具 → 鐵匠
+    "furniture": ["carpenter"],         # 家具 → 木匠
+    "clothing": ["tailor"],             # 衣服 → 裁縫
+    "misc": ["merchant"],               # 其他 → 商人
+}
+
+
+def get_supplier_occupation(material: str) -> Optional[str]:
+    """查詢誰生產這個原料"""
+    return MATERIAL_PRODUCERS.get(material)
+
+
+def get_suppliers_for_occupation(occupation: str) -> List[str]:
+    """取得某職業的供應商列表"""
+    return SUPPLY_CHAIN.get(occupation, [])
+
+
+def get_required_materials_for_occupation(occupation: str) -> List[str]:
+    """取得某職業需要的原料"""
+    return REQUIRED_MATERIALS.get(occupation, [])
+
+
+def get_shops_for_need(need_type: str) -> List[str]:
+    """取得滿足某需求的店家"""
+    return CONSUMER_SHOPS.get(need_type, [])

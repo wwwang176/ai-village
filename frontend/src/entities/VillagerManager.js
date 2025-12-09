@@ -313,6 +313,14 @@ export class VillagerManager {
         if (data.preferences) {
           villager.preferences = data.preferences;
         }
+        
+        // 同步經濟資料
+        if (data.inventory !== undefined) {
+          villager.inventory = data.inventory;
+        }
+        if (data.money !== undefined) {
+          villager.money = data.money;
+        }
       }
     }
   }

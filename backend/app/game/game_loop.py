@@ -170,9 +170,20 @@ class GameLoop:
     
     def process_task_queue(self, villager: dict, delta_time: float):
         """處理村民的任務隊列"""
-        # 如果正在對話或等待社交，不處理任務
-        if villager.get("state") in ["talking", "waiting_social"]:
+        # 如果正在對話，不處理任務
+        if villager.get("state") == "talking":
             return
+        
+        # 如果正在等待社交，檢查是否超時（10秒）
+        if villager.get("state") == "waiting_social":
+            wait_start = villager.get("waiting_since", 0)
+            if time.time() - wait_start > 10:
+                logger.info(f"⏰ {villager['name']} 等太久了，不等了")
+                villager["state"] = "idle"
+                villager.pop("waiting_for", None)
+                villager.pop("waiting_since", None)
+            else:
+                return
         
         task_queue = villager.get("task_queue", [])
         
@@ -318,6 +329,7 @@ class GameLoop:
         if dist < 8 and target_villager.get("state") not in ["talking", "waiting_social"]:
             target_villager["state"] = "waiting_social"
             target_villager["waiting_for"] = villager["id"]
+            target_villager["waiting_since"] = time.time()
             logger.info(f"👋 {target_villager['name']} 看到 {villager['name']} 走過來，停下等待")
         
         # 距離 < 3 格時，任務完成（準備開始對話）
@@ -334,6 +346,7 @@ class GameLoop:
             if target_villager.get("waiting_for") == villager["id"]:
                 target_villager["state"] = "idle"
                 target_villager.pop("waiting_for", None)
+                target_villager.pop("waiting_since", None)
             return True
         
         # 使用一般移動邏輯
@@ -353,6 +366,7 @@ class GameLoop:
         # 清除等待狀態
         if target_villager.get("waiting_for") == villager["id"]:
             target_villager.pop("waiting_for", None)
+            target_villager.pop("waiting_since", None)
         
         # 檢查距離是否足夠
         dx = target_villager["x"] - villager["x"]
@@ -363,6 +377,7 @@ class GameLoop:
             # 距離太遠，對話失敗
             logger.info(f"❌ {villager['name']} 想跟 {target_villager['name']} 聊天，但對方已經離開")
             target_villager["state"] = "idle"
+            target_villager.pop("waiting_since", None)
             return True
         
         # 直接發起對話（100% 成功）
@@ -431,7 +446,709 @@ class GameLoop:
             
         elif task_type == "work":
             stats["energy"] = max(0, stats.get("energy", 100) - 10)
-            logger.info(f"⚒️ {villager['name']} 工作了")
+            
+            # 檢查並消耗工具耐久度
+            tool_result = self.use_villager_tool(villager)
+            if tool_result == "no_tool":
+                logger.info(f"⚒️ {villager['name']} 沒有工具，無法工作")
+                return
+            
+            # 執行生產
+            production_result = self.produce_items(villager)
+            
+            if production_result["success"]:
+                product = production_result["product"]
+                quantity = production_result["quantity"]
+                location = production_result["location"]
+                
+                if tool_result == "broken":
+                    logger.info(f"⚒️ {villager['name']} 生產了 {product} x{quantity}（{location}），工具損壞！")
+                else:
+                    logger.info(f"⚒️ {villager['name']} 生產了 {product} x{quantity}（{location}），工具耐久度: {tool_result}%")
+            else:
+                reason = production_result.get("reason", "未知原因")
+                if tool_result == "broken":
+                    logger.info(f"⚒️ {villager['name']} 無法生產：{reason}，工具損壞！")
+                elif tool_result != "no_need":
+                    logger.info(f"⚒️ {villager['name']} 無法生產：{reason}（工具耐久度: {tool_result}%）")
+                else:
+                    logger.info(f"⚒️ {villager['name']} 無法生產：{reason}")
+        
+        elif task_type == "buy_tool":
+            # 購買工具
+            tool_info = self.buy_tool_for_villager(villager)
+            if tool_info:
+                logger.info(f"🔨 {villager['name']} 購買了 {tool_info['name']}！(花費 ${tool_info['price']})")
+            else:
+                logger.info(f"🔨 {villager['name']} 無法購買工具（錢不夠或不需要）")
+        
+        elif task_type == "buy_material":
+            # 購買原料
+            trade_info = self.execute_material_trade(villager, task)
+            if trade_info["success"]:
+                logger.info(f"💰 {villager['name']} 向 {trade_info['seller_name']} 購買了 {trade_info['material']} x{trade_info['quantity']}（花費 ${trade_info['price']}）")
+            else:
+                logger.info(f"💰 {villager['name']} 購買失敗：{trade_info['reason']}")
+        
+        elif task_type == "buy_food":
+            # 購買食物並吃掉
+            food_result = self.execute_food_purchase(villager, task)
+            if food_result["success"]:
+                logger.info(f"🍽️ {villager['name']} 向 {food_result['seller_name']} 購買並吃了 {food_result['food_name']}（花費 ${food_result['price']}，飽足度 +{food_result['hunger_restore']}）")
+            else:
+                # 購買失敗，直接在酒館吃
+                stats["hunger"] = max(0, stats.get("hunger", 50) - 40)
+                logger.info(f"🍽️ {villager['name']} 購買失敗：{food_result['reason']}，在酒館吃了東西")
+        
+        elif task_type == "drop_one_item":
+            # 放下背包中的一格物品（非工具）
+            dropped = self.drop_one_non_tool_item(villager)
+            if dropped:
+                logger.info(f"📦 {villager['name']} 在家門口放下了 {dropped['item_id']} x{dropped['quantity']}")
+            else:
+                logger.info(f"📦 {villager['name']} 沒有可以放下的物品")
+    
+    def use_villager_tool(self, villager: dict) -> str:
+        """使用村民的工具（消耗耐久度）
+        
+        返回:
+            - "no_tool": 沒有需要的工具
+            - "broken": 工具損壞
+            - 數字字串: 剩餘耐久度百分比
+            - "no_need": 此職業不需要工具
+        """
+        # 職業需要的工具
+        occupation_tools = {
+            "farmer": "hoe",
+            "miner": "pickaxe",
+            "lumberjack": "axe",
+            "shepherd": "shears",
+            "butcher": "cleaver",
+            "blacksmith": "hammer",
+            "carpenter": "saw",
+            "tanner": "scraper",
+            "tailor": "shears",
+        }
+        
+        occupation = villager.get("occupation", "")
+        required_tool = occupation_tools.get(occupation)
+        
+        # 此職業不需要工具
+        if not required_tool:
+            return "no_need"
+        
+        # 檢查背包是否有工具
+        inventory = villager.get("inventory", [None, None, None])
+        tool_slot = None
+        tool_index = -1
+        
+        for i, slot in enumerate(inventory):
+            if slot and slot.get("item_id") == required_tool:
+                tool_slot = slot
+                tool_index = i
+                break
+        
+        # 沒有工具
+        if not tool_slot:
+            return "no_tool"
+        
+        # 消耗耐久度（每次工作消耗 5 點）
+        durability = tool_slot.get("durability", 100)
+        durability -= 5
+        
+        if durability <= 0:
+            # 工具損壞，從背包移除
+            villager["inventory"][tool_index] = None
+            return "broken"
+        
+        # 更新耐久度
+        tool_slot["durability"] = durability
+        return str(durability)
+    
+    def villager_has_tool(self, villager: dict) -> bool:
+        """檢查村民是否有工作需要的工具"""
+        occupation_tools = {
+            "farmer": "hoe",
+            "miner": "pickaxe",
+            "lumberjack": "axe",
+            "shepherd": "shears",
+            "butcher": "cleaver",
+            "blacksmith": "hammer",
+            "carpenter": "saw",
+            "tanner": "scraper",
+            "tailor": "shears",
+        }
+        
+        occupation = villager.get("occupation", "")
+        required_tool = occupation_tools.get(occupation)
+        
+        # 此職業不需要工具
+        if not required_tool:
+            return True
+        
+        # 檢查背包
+        inventory = villager.get("inventory", [None, None, None])
+        for slot in inventory:
+            if slot and slot.get("item_id") == required_tool:
+                if slot.get("durability", 0) > 0:
+                    return True
+        
+        return False
+    
+    def produce_items(self, villager: dict) -> dict:
+        """執行生產，根據職業產出物品
+        
+        返回:
+            {"success": True/False, "product": "物品名", "quantity": 數量, "location": "背包/地上", "reason": "失敗原因"}
+        """
+        # 生產配方定義
+        # 某些職業有多種產品，會隨機選擇一種生產
+        import random
+        
+        PRODUCTION_RECIPES = {
+            # L1 職業：不需要原料
+            "farmer": [
+                {"output": "grain", "output_name": "穀物", "quantity": 2, "inputs": []},
+            ],
+            "miner": [
+                {"output": "ore", "output_name": "鐵礦", "quantity": 2, "inputs": []},
+            ],
+            "lumberjack": [
+                {"output": "wood", "output_name": "木材", "quantity": 2, "inputs": []},
+            ],
+            "shepherd": [
+                {"output": "wool", "output_name": "羊毛", "quantity": 2, "inputs": []},
+                {"output": "hide", "output_name": "羊皮", "quantity": 2, "inputs": []},  # 牧羊人也生產羊皮
+            ],
+            
+            # L2 職業：需要原料
+            "miller": [
+                {"output": "flour", "output_name": "麵粉", "quantity": 2, "inputs": [("grain", 2)]},
+            ],
+            "butcher": [
+                {"output": "meat_raw", "output_name": "生肉", "quantity": 2, "inputs": []},  # 簡化：屠夫直接生產生肉
+            ],
+            "blacksmith": [
+                {"output": "iron", "output_name": "鐵錠", "quantity": 2, "inputs": [("ore", 2)]},
+            ],
+            "weaver": [
+                {"output": "cloth", "output_name": "布料", "quantity": 2, "inputs": [("wool", 2)]},
+            ],
+            "tanner": [
+                {"output": "leather", "output_name": "皮革", "quantity": 2, "inputs": [("hide", 2)]},
+            ],
+            
+            # L3 職業：需要半成品
+            "baker": [
+                {"output": "bread", "output_name": "麵包", "quantity": 4, "inputs": [("flour", 2)]},
+            ],
+            "carpenter": [
+                {"output": "furniture", "output_name": "家具", "quantity": 1, "inputs": [("wood", 2), ("iron", 1)]},
+            ],
+            "tailor": [
+                {"output": "clothes", "output_name": "衣服", "quantity": 2, "inputs": [("cloth", 2), ("leather", 1)]},
+            ],
+            
+            # 特殊職業
+            "merchant": None,  # 商人不生產
+        }
+        
+        occupation = villager.get("occupation", "")
+        recipes = PRODUCTION_RECIPES.get(occupation)
+        
+        # 此職業不生產
+        if not recipes:
+            return {"success": False, "reason": "此職業不生產物品"}
+        
+        inventory = villager.get("inventory", [None, None, None])
+        
+        # 找出所有可以生產的配方（原料足夠）
+        viable_recipes = []
+        failed_reasons = []
+        
+        for recipe in recipes:
+            can_produce = True
+            for input_item, input_qty in recipe["inputs"]:
+                owned_qty = self.count_item_in_inventory(inventory, input_item)
+                if owned_qty < input_qty:
+                    can_produce = False
+                    failed_reasons.append(f"缺少原料 {input_item}（需要 {input_qty}，擁有 {owned_qty}）")
+                    break
+            
+            if can_produce:
+                viable_recipes.append(recipe)
+        
+        # 沒有可生產的配方
+        if not viable_recipes:
+            return {"success": False, "reason": failed_reasons[0] if failed_reasons else "沒有可生產的配方"}
+        
+        # 隨機選擇一個可生產的配方
+        recipe = random.choice(viable_recipes)
+        
+        # 消耗原料
+        for input_item, input_qty in recipe["inputs"]:
+            self.remove_item_from_inventory(villager, input_item, input_qty)
+        
+        # 產出物品
+        output_item = recipe["output"]
+        output_qty = recipe["quantity"]
+        
+        # 嘗試放入背包
+        location = self.add_item_to_villager(villager, output_item, output_qty)
+        
+        return {
+            "success": True,
+            "product": recipe["output_name"],
+            "quantity": output_qty,
+            "location": location
+        }
+    
+    def count_item_in_inventory(self, inventory: list, item_id: str) -> int:
+        """計算背包中某物品的數量"""
+        total = 0
+        for slot in inventory:
+            if slot and slot.get("item_id") == item_id:
+                total += slot.get("quantity", 0)
+        return total
+    
+    def remove_item_from_inventory(self, villager: dict, item_id: str, quantity: int):
+        """從背包移除物品"""
+        inventory = villager.get("inventory", [None, None, None])
+        remaining = quantity
+        
+        for i, slot in enumerate(inventory):
+            if remaining <= 0:
+                break
+            if slot and slot.get("item_id") == item_id:
+                slot_qty = slot.get("quantity", 0)
+                if slot_qty <= remaining:
+                    # 整個格子都移除
+                    remaining -= slot_qty
+                    villager["inventory"][i] = None
+                else:
+                    # 部分移除
+                    slot["quantity"] = slot_qty - remaining
+                    remaining = 0
+    
+    def add_item_to_villager(self, villager: dict, item_id: str, quantity: int) -> str:
+        """將物品加入村民背包，背包滿則放地上
+        
+        返回: "背包" 或 "地上"
+        """
+        inventory = villager.get("inventory", [None, None, None])
+        remaining = quantity
+        
+        # 先嘗試疊加到現有堆疊
+        for slot in inventory:
+            if remaining <= 0:
+                break
+            if slot and slot.get("item_id") == item_id:
+                current_qty = slot.get("quantity", 0)
+                max_stack = 10  # 最大堆疊數
+                can_add = max_stack - current_qty
+                if can_add > 0:
+                    add_qty = min(can_add, remaining)
+                    slot["quantity"] = current_qty + add_qty
+                    remaining -= add_qty
+        
+        # 再嘗試放入空格
+        for i, slot in enumerate(inventory):
+            if remaining <= 0:
+                break
+            if slot is None:
+                add_qty = min(10, remaining)
+                villager["inventory"][i] = {
+                    "item_id": item_id,
+                    "quantity": add_qty,
+                    "durability": None,
+                    "owner_id": villager["id"]
+                }
+                remaining -= add_qty
+        
+        # 還有剩餘，放到地上
+        if remaining > 0:
+            x = int(villager["x"])
+            y = int(villager["y"])
+            self.game_state.add_world_item(
+                item_id=item_id,
+                quantity=remaining,
+                x=x,
+                y=y,
+                owner_id=villager["id"]
+            )
+            return "地上" if quantity == remaining else "背包+地上"
+        
+        return "背包"
+    
+    def buy_tool_for_villager(self, villager: dict) -> Optional[dict]:
+        """為村民購買工具
+        
+        返回工具資訊（包含 name, price）或 None
+        """
+        # 職業需要的工具及資訊
+        occupation_tools = {
+            "farmer": {"id": "hoe", "name": "鋤頭", "price": 12, "durability": 100},
+            "miner": {"id": "pickaxe", "name": "鶴嘴鋤", "price": 15, "durability": 80},
+            "lumberjack": {"id": "axe", "name": "斧頭", "price": 14, "durability": 90},
+            "shepherd": {"id": "shears", "name": "剪刀", "price": 10, "durability": 120},
+            "butcher": {"id": "cleaver", "name": "屠刀", "price": 12, "durability": 100},
+            "blacksmith": {"id": "hammer", "name": "錘子", "price": 15, "durability": 100},
+            "carpenter": {"id": "saw", "name": "鋸子", "price": 14, "durability": 70},
+            "tanner": {"id": "scraper", "name": "刮刀", "price": 10, "durability": 80},
+            "tailor": {"id": "shears", "name": "剪刀", "price": 10, "durability": 120},
+        }
+        
+        occupation = villager.get("occupation", "")
+        tool_info = occupation_tools.get(occupation)
+        
+        # 此職業不需要工具
+        if not tool_info:
+            return None
+        
+        # 檢查錢是否足夠
+        money = villager.get("money", 0)
+        if money < tool_info["price"]:
+            return None
+        
+        # 檢查背包是否有空位
+        inventory = villager.get("inventory", [None, None, None])
+        empty_slot = -1
+        for i, slot in enumerate(inventory):
+            if slot is None:
+                empty_slot = i
+                break
+        
+        if empty_slot == -1:
+            return None  # 背包滿了
+        
+        # 扣錢
+        villager["money"] = money - tool_info["price"]
+        
+        # 加入工具到背包
+        villager["inventory"][empty_slot] = {
+            "item_id": tool_info["id"],
+            "quantity": 1,
+            "durability": tool_info["durability"],
+            "owner_id": villager["id"]
+        }
+        
+        return {"name": tool_info["name"], "price": tool_info["price"]}
+    
+    def drop_one_non_tool_item(self, villager: dict) -> Optional[dict]:
+        """放下背包中的一格非工具物品到地上
+        
+        返回被放下的物品資訊，或 None
+        """
+        inventory = villager.get("inventory", [None, None, None])
+        
+        # 工具列表
+        tools = ["hoe", "pickaxe", "axe", "shears", "cleaver", "hammer", "saw", "scraper"]
+        
+        # 找到第一個非工具的物品
+        for i, slot in enumerate(inventory):
+            if slot is None:
+                continue
+            item_id = slot.get("item_id")
+            if item_id not in tools:
+                # 放到地上
+                x, y = int(villager["x"]), int(villager["y"])
+                self.game_state.add_world_item(
+                    item_id=item_id,
+                    x=x, y=y,
+                    quantity=slot.get("quantity", 1),
+                    owner_id=villager["id"]  # 標記擁有者
+                )
+                
+                # 從背包移除
+                dropped_item = {"item_id": item_id, "quantity": slot.get("quantity", 1)}
+                villager["inventory"][i] = None
+                return dropped_item
+        
+        return None
+    
+    def execute_food_purchase(self, buyer: dict, task: dict) -> dict:
+        """執行食物購買並消費
+        
+        返回: {"success": bool, "food_name": str, "price": int, "hunger_restore": int, "seller_name": str, "reason": str}
+        """
+        seller_id = task.get("seller_id")
+        food_item = task.get("food_item")
+        quantity = 2
+        
+        # 食物資訊
+        FOOD_INFO = {
+            "bread": {"name": "麵包", "price": 3, "hunger_restore": 30},
+            "meat_raw": {"name": "生肉", "price": 5, "hunger_restore": 40},
+            "meat": {"name": "肉品", "price": 6, "hunger_restore": 50},
+        }
+        
+        food_info = FOOD_INFO.get(food_item, {"name": food_item, "price": 4, "hunger_restore": 30})
+        total_price = food_info["price"] * quantity
+        
+        # 找到賣家
+        seller = self.game_state.get_villager(seller_id)
+        if not seller:
+            return {"success": False, "reason": "找不到賣家"}
+        
+        seller_name = seller.get("name", "未知")
+        
+        # 檢查買家金錢
+        buyer_money = buyer.get("money", 0)
+        if buyer_money < total_price:
+            return {"success": False, "reason": f"錢不夠（需要 ${total_price}）", "seller_name": seller_name}
+        
+        # 檢查賣家庫存
+        seller_inventory = seller.get("inventory", [None, None, None])
+        seller_slot_index = -1
+        
+        for i, slot in enumerate(seller_inventory):
+            if slot and slot.get("item_id") == food_item:
+                if slot.get("quantity", 0) >= quantity:
+                    seller_slot_index = i
+                    break
+        
+        if seller_slot_index == -1:
+            return {"success": False, "reason": f"賣家沒有足夠的 {food_info['name']}", "seller_name": seller_name}
+        
+        # 執行交易
+        buyer["money"] = buyer_money - total_price
+        seller["money"] = seller.get("money", 0) + total_price
+        
+        # 從賣家移除食物
+        seller_slot = seller_inventory[seller_slot_index]
+        if seller_slot["quantity"] <= quantity:
+            seller["inventory"][seller_slot_index] = None
+        else:
+            seller_slot["quantity"] -= quantity
+        
+        # 買家吃掉食物，恢復飽足度
+        stats = buyer.get("stats", {})
+        hunger_restore = food_info["hunger_restore"] * quantity
+        stats["hunger"] = max(0, stats.get("hunger", 50) - hunger_restore)
+        
+        # 清除待處理交易
+        if "pending_food_trade" in buyer:
+            del buyer["pending_food_trade"]
+        
+        return {
+            "success": True,
+            "food_name": food_info["name"],
+            "price": total_price,
+            "hunger_restore": hunger_restore,
+            "seller_name": seller_name
+        }
+    
+    def execute_material_trade(self, buyer: dict, task: dict) -> dict:
+        """執行原料交易
+        
+        返回: {"success": bool, "material": str, "quantity": int, "price": int, "seller_name": str, "reason": str}
+        """
+        supplier_id = task.get("supplier_id")
+        material = task.get("material")
+        quantity = 2  # 固定購買 2 個
+        
+        # 原料價格表
+        MATERIAL_PRICES = {
+            "grain": 3, "livestock": 8, "flour": 6, "ore": 5,
+            "wood": 4, "wool": 4, "hide": 5, "iron": 10,
+            "cloth": 8, "leather": 8, "meat_raw": 6, "bread": 4
+        }
+        
+        price_per_unit = MATERIAL_PRICES.get(material, 5)
+        total_price = price_per_unit * quantity
+        
+        # 找到賣家
+        seller = self.game_state.get_villager(supplier_id)
+        if not seller:
+            return {"success": False, "reason": "找不到賣家"}
+        
+        seller_name = seller.get("name", "未知")
+        
+        # 檢查買家金錢
+        buyer_money = buyer.get("money", 0)
+        if buyer_money < total_price:
+            return {"success": False, "reason": f"錢不夠（需要 ${total_price}，擁有 ${buyer_money}）", "seller_name": seller_name}
+        
+        # 檢查賣家庫存
+        seller_inventory = seller.get("inventory", [None, None, None])
+        seller_slot_index = -1
+        seller_qty = 0
+        
+        for i, slot in enumerate(seller_inventory):
+            if slot and slot.get("item_id") == material:
+                seller_qty = slot.get("quantity", 0)
+                if seller_qty >= quantity:
+                    seller_slot_index = i
+                    break
+        
+        if seller_slot_index == -1:
+            return {"success": False, "reason": f"賣家沒有足夠的 {material}", "seller_name": seller_name}
+        
+        # 執行交易
+        # 1. 買家扣錢
+        buyer["money"] = buyer_money - total_price
+        
+        # 2. 賣家收錢
+        seller["money"] = seller.get("money", 0) + total_price
+        
+        # 3. 從賣家移除物品
+        seller_slot = seller_inventory[seller_slot_index]
+        if seller_slot["quantity"] <= quantity:
+            seller["inventory"][seller_slot_index] = None
+        else:
+            seller_slot["quantity"] -= quantity
+        
+        # 4. 加入買家背包
+        self.add_item_to_villager(buyer, material, quantity)
+        
+        # 清除待處理交易
+        if "pending_trade" in buyer:
+            del buyer["pending_trade"]
+        
+        return {
+            "success": True,
+            "material": material,
+            "quantity": quantity,
+            "price": total_price,
+            "seller_name": seller_name
+        }
+    
+    def check_missing_material(self, villager: dict) -> Optional[str]:
+        """檢查村民是否缺少生產所需的原料，返回第一個缺少的原料名"""
+        from ..data.supply_chain import REQUIRED_MATERIALS
+        
+        occupation = villager.get("occupation", "")
+        required_materials = REQUIRED_MATERIALS.get(occupation, [])
+        
+        if not required_materials:
+            return None  # L1 職業不需要原料
+        
+        inventory = villager.get("inventory", [None, None, None])
+        
+        # 生產配方中各原料需要的數量
+        MATERIAL_QUANTITIES = {
+            "grain": 2, "livestock": 1, "flour": 2, "ore": 2,
+            "wood": 2, "wool": 2, "hide": 2, "iron": 1,
+            "cloth": 2, "leather": 1
+        }
+        
+        for material in required_materials:
+            required_qty = MATERIAL_QUANTITIES.get(material, 1)
+            owned_qty = self.count_item_in_inventory(inventory, material)
+            if owned_qty < required_qty:
+                return material
+        
+        return None
+    
+    def create_buy_material_task(self, villager: dict, material: str) -> Optional[list]:
+        """創建購買原料的任務
+        
+        返回任務列表或 None（找不到供應商）
+        """
+        from ..data.supply_chain import MATERIAL_PRODUCERS
+        
+        # 找出誰生產這個原料
+        supplier_occupation = MATERIAL_PRODUCERS.get(material)
+        if not supplier_occupation:
+            return None
+        
+        # 找到供應商村民
+        supplier = self.find_supplier_villager(supplier_occupation, material)
+        if not supplier:
+            logger.info(f"🔍 {villager['name']} 找不到 {material} 的供應商")
+            return None
+        
+        # 記錄交易資訊
+        villager["pending_trade"] = {
+            "material": material,
+            "supplier_id": supplier["id"],
+            "quantity": 2  # 每次購買 2 個
+        }
+        
+        logger.info(f"🛒 {villager['name']} 準備向 {supplier['name']} 購買 {material}")
+        
+        # 創建移動到供應商並交易的任務
+        return [
+            {"type": "move_to_villager", "target": (supplier["x"], supplier["y"]), "target_villager_id": supplier["id"]},
+            {"type": "buy_material", "supplier_id": supplier["id"], "material": material, "duration": 2}
+        ]
+    
+    def create_buy_food_task(self, villager: dict) -> Optional[list]:
+        """創建購買食物的任務
+        
+        返回任務列表或 None（找不到賣食物的）
+        """
+        # 食物類型和對應的生產者
+        food_sellers = [
+            ("bread", "baker"),      # 麵包 → 麵包師
+            ("meat_raw", "butcher"), # 生肉 → 屠夫
+        ]
+        
+        # 尋找有食物賣的村民
+        for food_item, seller_occupation in food_sellers:
+            seller = self.find_food_seller(seller_occupation, food_item)
+            if seller:
+                # 記錄交易資訊
+                villager["pending_food_trade"] = {
+                    "food_item": food_item,
+                    "seller_id": seller["id"],
+                    "quantity": 2
+                }
+                
+                logger.info(f"🍽️ {villager['name']} 準備向 {seller['name']} 購買 {food_item}")
+                
+                return [
+                    {"type": "move_to_villager", "target": (seller["x"], seller["y"]), "target_villager_id": seller["id"]},
+                    {"type": "buy_food", "seller_id": seller["id"], "food_item": food_item, "duration": 2}
+                ]
+        
+        return None
+    
+    def find_food_seller(self, occupation: str, food_item: str) -> Optional[dict]:
+        """找到有食物賣的村民"""
+        candidates = []
+        
+        for v in self.game_state.villagers.values():
+            if v.get("occupation") != occupation:
+                continue
+            
+            # 檢查是否有食物庫存
+            inventory = v.get("inventory", [None, None, None])
+            for slot in inventory:
+                if slot and slot.get("item_id") == food_item:
+                    if slot.get("quantity", 0) >= 2:
+                        candidates.append((v, slot.get("quantity", 0)))
+                        break
+        
+        if not candidates:
+            return None
+        
+        # 返回庫存最多的
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        return candidates[0][0]
+    
+    def find_supplier_villager(self, supplier_occupation: str, material: str) -> Optional[dict]:
+        """找到擁有某原料的供應商村民"""
+        candidates = []
+        
+        for v in self.game_state.villagers.values():
+            if v.get("occupation") != supplier_occupation:
+                continue
+            
+            # 檢查是否有庫存
+            inventory = v.get("inventory", [None, None, None])
+            for slot in inventory:
+                if slot and slot.get("item_id") == material:
+                    if slot.get("quantity", 0) >= 2:
+                        candidates.append((v, slot.get("quantity", 0)))
+                        break
+        
+        if not candidates:
+            return None
+        
+        # 返回庫存最多的供應商
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        return candidates[0][0]
     
     def create_task_queue(self, villager: dict, action: str) -> list:
         """將 AI 決策轉換為任務排程"""
@@ -472,16 +1189,74 @@ class GameLoop:
                 tasks.append({"type": "move", "target": target})
         
         # 根據 action 類型添加動作任務
-        if action in ["eat", "go_tavern"]:
+        if action == "eat":
             tasks.append({"type": "eat", "duration": 3})
         elif action in ["rest", "go_home"]:
             tasks.append({"type": "rest", "duration": 15})
         elif action == "sleep":
             tasks.append({"type": "rest", "duration": 20})
-        elif action in ["go_market", "go_church"]:
+        elif action == "go_market":
             tasks.append({"type": "socialize", "duration": 4})
         elif action == "go_work":
+            # 檢查是否有工具
+            if not self.villager_has_tool(villager):
+                # 沒有工具，去鐵匠購買
+                # 但先檢查背包是否滿了
+                inventory = villager.get("inventory", [None, None, None])
+                has_empty_slot = any(slot is None for slot in inventory)
+                
+                if not has_empty_slot:
+                    # 背包滿了，先回家放一格物品
+                    logger.info(f"🎒 {villager['name']} 背包滿了，先回家放東西")
+                    home = self.game_state.get_building_by_id(villager.get("residence"))
+                    if home:
+                        home_target = (home["doorX"], home["doorY"] + 1)
+                        tasks.append({"type": "move", "target": home_target})
+                        tasks.append({"type": "drop_one_item", "duration": 1})
+                
+                logger.info(f"🔧 {villager['name']} 沒有工具，改去鐵匠購買")
+                blacksmith = self.game_state.get_building_by_type("blacksmith")
+                if blacksmith:
+                    blacksmith_target = (blacksmith["doorX"], blacksmith["doorY"] + 1)
+                    tasks.append({"type": "move", "target": blacksmith_target})
+                    tasks.append({"type": "buy_tool", "duration": 2})
+                return tasks
+            
+            # 檢查是否有原料（L2/L3 職業）
+            missing_material = self.check_missing_material(villager)
+            if missing_material:
+                # 缺原料，去找供應商購買
+                supplier_task = self.create_buy_material_task(villager, missing_material)
+                if supplier_task:
+                    tasks.extend(supplier_task)
+                    return tasks
+                else:
+                    # 找不到供應商，直接去工作（會失敗但消耗時間）
+                    logger.info(f"🔧 {villager['name']} 缺少 {missing_material}，但找不到供應商")
+            
+            # 有工具有原料，去工作
+            # 先移動到工作地點
+            work_target = self.game_state.resolve_action_target(villager, "go_work")
+            if work_target:
+                current = (villager["x"], villager["y"])
+                dx = work_target[0] - current[0]
+                dy = work_target[1] - current[1]
+                dist = (dx**2 + dy**2) ** 0.5
+                if dist > 1.5:
+                    tasks.append({"type": "move", "target": work_target})
             tasks.append({"type": "work", "duration": 8})
+        elif action == "buy_food":
+            # 購買食物
+            food_task = self.create_buy_food_task(villager)
+            if food_task:
+                tasks.extend(food_task)
+            else:
+                # 找不到賣食物的人，直接去酒館
+                logger.info(f"🍖 {villager['name']} 找不到賣食物的人，去酒館")
+                tavern = self.game_state.get_building_by_type("tavern")
+                if tavern:
+                    tasks.append({"type": "move", "target": (tavern["doorX"], tavern["doorY"] + 1)})
+                tasks.append({"type": "eat", "duration": 3})
         elif action == "wander":
             # 隨便走走
             if target:
@@ -925,12 +1700,15 @@ class GameLoop:
                         "state": v.get("state", "idle"),
                         "target": self.get_villager_target(v),
                         "stats": v.get("stats", {}),
+                        "inventory": v.get("inventory", [None, None, None]),  # 背包
+                        "money": v.get("money", 50),                          # 金錢
                         "tasks": [t.get("type") for t in v.get("task_queue", [])],
                         "memories": v.get("memories", [])[-5:],  # 只傳最近5條
                         "relationships": v.get("relationships", {})
                     }
                     for v in self.game_state.villagers.values()
-                ]
+                ],
+                "world_items": self.game_state.get_all_world_items()  # 地上物品
             }
         }
         

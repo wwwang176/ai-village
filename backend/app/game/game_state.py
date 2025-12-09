@@ -34,6 +34,10 @@ class GameState:
         # 村民
         self.villagers: Dict[str, dict] = {}
         
+        # 地上物品
+        self.world_items: List[dict] = []
+        self.next_item_id = 0
+        
         # 事件佇列
         self.events: List[dict] = []
         
@@ -90,23 +94,26 @@ class GameState:
         
         # 工作建築（13種職業對應的建築）
         work_buildings = [
-            # 中心區域
-            {"type": "tavern", "name": "酒館", "x": 18, "y": 22, "width": 8, "height": 7},
-            {"type": "church", "name": "教堂", "x": 34, "y": 20, "width": 10, "height": 8},
-            {"type": "market", "name": "市集", "x": 20, "y": 38, "width": 8, "height": 6},
-            {"type": "blacksmith", "name": "鐵匠鋪", "x": 36, "y": 38, "width": 7, "height": 6},
-            # 北區
-            {"type": "bakery", "name": "麵包坊", "x": 8, "y": 20, "width": 6, "height": 5},
-            {"type": "butcher_shop", "name": "肉鋪", "x": 48, "y": 20, "width": 6, "height": 5},
-            {"type": "clinic", "name": "診所", "x": 28, "y": 10, "width": 6, "height": 5},
-            # 南區
-            {"type": "barber_shop", "name": "理髮店", "x": 8, "y": 38, "width": 5, "height": 5},
-            {"type": "weaver_shop", "name": "織坊", "x": 48, "y": 38, "width": 6, "height": 5},
-            {"type": "pottery", "name": "陶坊", "x": 28, "y": 48, "width": 6, "height": 5},
-            {"type": "tannery", "name": "皮革坊", "x": 38, "y": 48, "width": 6, "height": 5},
-            # 外圍
-            {"type": "farm", "name": "農場", "x": 4, "y": 4, "width": 10, "height": 8},
-            {"type": "dock", "name": "碼頭", "x": 52, "y": 4, "width": 8, "height": 6},
+            # === 食物鏈 ===
+            {"type": "farm", "name": "農田", "x": 4, "y": 4, "width": 10, "height": 8},          # 農夫
+            {"type": "mill", "name": "磨坊", "x": 18, "y": 8, "width": 6, "height": 6},          # 磨坊主
+            {"type": "butcher_shop", "name": "肉舖", "x": 28, "y": 8, "width": 6, "height": 5},  # 屠夫
+            {"type": "bakery", "name": "麵包店", "x": 38, "y": 8, "width": 6, "height": 5},      # 麵包師
+            
+            # === 器具鏈 ===
+            {"type": "mine", "name": "礦場", "x": 52, "y": 4, "width": 8, "height": 6},          # 礦工
+            {"type": "lumber_camp", "name": "伐木場", "x": 4, "y": 48, "width": 8, "height": 6}, # 伐木工
+            {"type": "blacksmith", "name": "鐵匠舖", "x": 18, "y": 22, "width": 7, "height": 6}, # 鐵匠
+            {"type": "carpentry", "name": "木工坊", "x": 36, "y": 22, "width": 7, "height": 6},  # 木匠
+            
+            # === 服飾鏈 ===
+            {"type": "pasture", "name": "牧場", "x": 48, "y": 48, "width": 10, "height": 8},     # 牧羊人
+            {"type": "weaver_shop", "name": "織坊", "x": 18, "y": 38, "width": 6, "height": 5},  # 織工
+            {"type": "tannery", "name": "皮革坊", "x": 28, "y": 38, "width": 6, "height": 5},    # 皮革匠
+            {"type": "tailor_shop", "name": "裁縫店", "x": 38, "y": 38, "width": 6, "height": 5},# 裁縫
+            
+            # === 特殊 ===
+            {"type": "market", "name": "市集", "x": 26, "y": 22, "width": 8, "height": 6},       # 商人
         ]
         
         for i, b in enumerate(work_buildings):
@@ -138,8 +145,8 @@ class GameState:
         collision = [[0] * width for _ in range(height)]
         terrain = [[0] * width for _ in range(height)]
         
-        # 不需要圍牆的建築類型
-        open_buildings = ["farm", "dock"]
+        # 不需要圍牆的建築類型（戶外工作場所）
+        open_buildings = ["farm", "mine", "lumber_camp", "pasture"]
         
         # 標記建築區域
         for b in buildings:
@@ -155,8 +162,12 @@ class GameState:
                     # 根據建築類型設定地形
                     if b["type"] == "farm":
                         terrain[y][x] = 4  # 農田
-                    elif b["type"] == "dock":
-                        terrain[y][x] = 5  # 木板碼頭
+                    elif b["type"] == "mine":
+                        terrain[y][x] = 5  # 礦場（石頭地面）
+                    elif b["type"] == "lumber_camp":
+                        terrain[y][x] = 6  # 伐木場（森林地面）
+                    elif b["type"] == "pasture":
+                        terrain[y][x] = 7  # 牧場（草地）
                     else:
                         terrain[y][x] = 3  # 一般地板
                     
@@ -173,16 +184,6 @@ class GameState:
                     # 牆壁不可通行，門口可通行，內部可通行
                     if is_edge and not is_door:
                         collision[y][x] = 1
-        
-        # 碼頭旁邊的水域（在碼頭右側）
-        dock = next((b for b in buildings if b["type"] == "dock"), None)
-        if dock:
-            water_start_x = dock["x"] + dock["width"]
-            for wy in range(dock["y"] - 2, dock["y"] + dock["height"] + 3):
-                for wx in range(water_start_x, min(water_start_x + 8, width)):
-                    if 0 <= wy < height:
-                        terrain[wy][wx] = 2  # 水域
-                        collision[wy][wx] = 1  # 水不可通行
         
         # 道路
         center_y = 32
@@ -243,21 +244,25 @@ class GameState:
             "下雨天", "早起", "吵雜", "蟲子", "寒冷", "炎熱", "說謊的人", "懶惰的人"
         ]
         
-        # 13種職業（對應工作建築）
+        # 13種職業（對應工作建築）- 使用新的職業 ID
         occupations = [
-            "tavern",       # 酒館 - 酒保
-            "church",       # 教堂 - 神父/修女
-            "market",       # 市集 - 商人
-            "blacksmith",   # 鐵匠鋪 - 鐵匠
-            "bakery",       # 麵包坊 - 麵包師
-            "butcher_shop", # 肉鋪 - 屠夫
-            "clinic",       # 診所 - 醫師
-            "barber_shop",  # 理髮店 - 理髮師
-            "weaver_shop",  # 織坊 - 織工
-            "pottery",      # 陶坊 - 陶匠
-            "tannery",      # 皮革坊 - 皮革匠
-            "farm",         # 農場 - 農夫
-            "dock",         # 碼頭 - 漁夫
+            # 食物鏈
+            "farmer",       # 農田 - 農夫
+            "miller",       # 磨坊 - 磨坊主
+            "butcher",      # 肉舖 - 屠夫
+            "baker",        # 麵包店 - 麵包師
+            # 器具鏈
+            "miner",        # 礦場 - 礦工
+            "lumberjack",   # 伐木場 - 伐木工
+            "blacksmith",   # 鐵匠舖 - 鐵匠
+            "carpenter",    # 木工坊 - 木匠
+            # 服飾鏈
+            "shepherd",     # 牧場 - 牧羊人
+            "weaver",       # 織坊 - 織工
+            "tanner",       # 皮革坊 - 皮革匠
+            "tailor",       # 裁縫店 - 裁縫
+            # 特殊
+            "merchant",     # 市集 - 商人
         ]
         
         # 打亂名字順序，確保不重複
@@ -300,10 +305,28 @@ class GameState:
             # 分配職業和工作地點
             occupation = occupations[i % len(occupations)]
             
+            # 職業對應的建築類型
+            occupation_to_building = {
+                "farmer": "farm",
+                "miller": "mill",
+                "butcher": "butcher_shop",
+                "baker": "bakery",
+                "miner": "mine",
+                "lumberjack": "lumber_camp",
+                "blacksmith": "blacksmith",
+                "carpenter": "carpentry",
+                "shepherd": "pasture",
+                "weaver": "weaver_shop",
+                "tanner": "tannery",
+                "tailor": "tailor_shop",
+                "merchant": "market",
+            }
+            
             # 根據職業找對應的建築物作為工作地點
+            building_type = occupation_to_building.get(occupation, occupation)
             workplace = None
             for b in self.map_data["buildings"]:
-                if b["type"] == occupation:
+                if b["type"] == building_type:
                     workplace = b["id"]
                     break
             
@@ -323,6 +346,37 @@ class GameState:
             
             # 隨機討厭的事物（1-2個）
             villager_dislikes = random.sample(dislikes, random.randint(1, 2))
+            
+            # 根據職業決定初始工具
+            occupation_tools = {
+                "farmer": "hoe",
+                "miner": "pickaxe",
+                "lumberjack": "axe",
+                "shepherd": "shears",
+                "butcher": "cleaver",
+                "blacksmith": "hammer",
+                "carpenter": "saw",
+                "tanner": "scraper",
+                "tailor": "shears",
+            }
+            
+            # 初始化背包（3格）
+            inventory = [None, None, None]
+            
+            # 如果職業需要工具，給予初始工具
+            required_tool = occupation_tools.get(occupation)
+            if required_tool:
+                # 工具資料結構
+                tool_durability = {
+                    "hoe": 100, "pickaxe": 80, "axe": 90, "shears": 120,
+                    "cleaver": 100, "hammer": 100, "saw": 70, "scraper": 80
+                }
+                inventory[0] = {
+                    "item_id": required_tool,
+                    "quantity": 1,
+                    "durability": tool_durability.get(required_tool, 100),
+                    "owner_id": f"villager_{i}"
+                }
             
             villager = {
                 "id": f"villager_{i}",
@@ -347,6 +401,8 @@ class GameState:
                     "favorite_foods": villager_foods,   # 喜歡的食物
                     "dislikes": villager_dislikes       # 討厭的事物
                 },
+                "inventory": inventory,                 # 背包（3格）
+                "money": random.randint(30, 80),        # 初始金錢
                 "state": "idle",
                 "memories": [],
                 "relationships": {},
@@ -442,6 +498,59 @@ class GameState:
             }
             for v in self.villagers.values()
         ]
+    
+    # ========== 物品管理方法 ==========
+    
+    def add_world_item(self, item_id: str, quantity: int, x: int, y: int, 
+                       owner_id: str = None, durability: int = None) -> dict:
+        """在地上放置物品"""
+        item = {
+            "id": f"world_item_{self.next_item_id}",
+            "item_id": item_id,
+            "quantity": quantity,
+            "x": x,
+            "y": y,
+            "owner_id": owner_id,
+            "durability": durability
+        }
+        self.world_items.append(item)
+        self.next_item_id += 1
+        return item
+    
+    def remove_world_item(self, world_item_id: str) -> Optional[dict]:
+        """移除地上物品"""
+        for i, item in enumerate(self.world_items):
+            if item["id"] == world_item_id:
+                return self.world_items.pop(i)
+        return None
+    
+    def get_items_at(self, x: int, y: int) -> List[dict]:
+        """取得某位置的所有物品"""
+        return [item for item in self.world_items if item["x"] == x and item["y"] == y]
+    
+    def get_items_by_owner(self, owner_id: str) -> List[dict]:
+        """取得某村民擁有的所有地上物品"""
+        return [item for item in self.world_items if item["owner_id"] == owner_id]
+    
+    def get_pickable_items_for(self, villager_id: str, x: int, y: int) -> List[dict]:
+        """取得村民在某位置可以撿起的物品"""
+        return [
+            item for item in self.world_items
+            if item["x"] == x and item["y"] == y
+            and (item["owner_id"] is None or item["owner_id"] == villager_id)
+        ]
+    
+    def transfer_item_ownership(self, world_item_id: str, new_owner_id: str):
+        """轉移物品擁有權"""
+        for item in self.world_items:
+            if item["id"] == world_item_id:
+                item["owner_id"] = new_owner_id
+                return True
+        return False
+    
+    def get_all_world_items(self) -> List[dict]:
+        """取得所有地上物品"""
+        return self.world_items
     
     def get_villagers_needing_decision(self) -> List[dict]:
         """取得需要 AI 決策的村民（task_queue 為空且閒置超過 3 秒）"""
@@ -652,6 +761,13 @@ class GameState:
                 return building
         return None
     
+    def get_building_by_type(self, building_type: str) -> Optional[dict]:
+        """根據類型取得建築物（返回第一個符合的）"""
+        for building in self.map_data.get("buildings", []):
+            if building["type"] == building_type:
+                return building
+        return None
+    
     def get_building_door(self, building: dict) -> Tuple[int, int]:
         """取得建築物內部座標（讓村民進入建築物內）"""
         # 建築物內部範圍（排除牆壁）
@@ -693,8 +809,6 @@ class GameState:
         action_targets = {
             "go_work": lambda v: self._get_work_target(v),
             "go_home": lambda v: self._get_home_target(v),
-            "go_tavern": lambda v: self._get_building_target("tavern"),
-            "go_church": lambda v: self._get_building_target("church"),
             "go_market": lambda v: self._get_building_target("market"),
             "go_blacksmith": lambda v: self._get_building_target("blacksmith"),
             "eat": lambda v: self._get_eat_target(v),

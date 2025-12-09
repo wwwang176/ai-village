@@ -18,21 +18,41 @@ export class Renderer {
       water_dark: '#2980b9',
       floor: '#8b7355',
       wall: '#5d4e37',
-      farmland: '#8b6914',
+      farmland: '#8b6914',       // 4 - 農田
       farmland_dark: '#7a5c10',
-      dock: '#a0826d',
-      dock_dark: '#8b7355'
+      mine: '#6b6b6b',           // 5 - 礦場（石頭地面）
+      mine_dark: '#5a5a5a',
+      lumber: '#5d4e37',         // 6 - 伐木場（森林地面）
+      lumber_dark: '#4d3e27',
+      pasture: '#6b9c4a',        // 7 - 牧場（草地）
+      pasture_dark: '#5a8b3a'
     };
     
-    // 建築物顏色
+    // 建築物顏色（13 種職業建築）
     this.buildingColors = {
-      tavern: { wall: '#6b4423', roof: '#8b4513' },
-      church: { wall: '#d4c5a9', roof: '#696969' },
-      market: { wall: '#deb887', roof: '#cd853f' },
-      blacksmith: { wall: '#4a4a4a', roof: '#2f2f2f' },
-      house: { wall: '#c4a574', roof: '#8b4513' },
-      bakery: { wall: '#deb887', roof: '#d2691e' },
-      farm: { wall: '#9c8b6e', roof: '#8b7355' },
+      // 食物鏈
+      farm: { wall: '#9c8b6e', roof: '#8b7355' },           // 農田
+      mill: { wall: '#c4a574', roof: '#8b6914' },           // 磨坊
+      butcher_shop: { wall: '#a05050', roof: '#8b3030' },   // 肉舖
+      bakery: { wall: '#deb887', roof: '#d2691e' },         // 麵包店
+      
+      // 器具鏈
+      mine: { wall: '#6b6b6b', roof: '#4a4a4a' },           // 礦場
+      lumber_camp: { wall: '#5d4e37', roof: '#4d3e27' },    // 伐木場
+      blacksmith: { wall: '#4a4a4a', roof: '#2f2f2f' },     // 鐵匠舖
+      carpentry: { wall: '#8b7355', roof: '#6b5335' },      // 木工坊
+      
+      // 服飾鏈
+      pasture: { wall: '#6b9c4a', roof: '#5a8b3a' },        // 牧場
+      weaver_shop: { wall: '#9c8b9c', roof: '#7b6b7b' },    // 織坊
+      tannery: { wall: '#8b6b4a', roof: '#6b4b2a' },        // 皮革坊
+      tailor_shop: { wall: '#b08080', roof: '#906060' },    // 裁縫店
+      
+      // 特殊
+      market: { wall: '#deb887', roof: '#cd853f' },         // 市集
+      
+      // 其他
+      house: { wall: '#c4a574', roof: '#8b4513' },          // 民宅
       well: { wall: '#696969' }
     };
   }
@@ -65,6 +85,13 @@ export class Renderer {
     // 渲染物件
     for (const obj of map.objects) {
       this.renderObject(obj);
+    }
+    
+    // 渲染地上物品
+    if (map.worldItems) {
+      for (const item of map.worldItems) {
+        this.renderWorldItem(item);
+      }
     }
   }
   
@@ -103,10 +130,20 @@ export class Renderer {
           ? this.terrainColors.farmland 
           : this.terrainColors.farmland_dark;
         break;
-      case 5: // 碼頭木板
+      case 5: // 礦場（石頭地面）
         color = (tileX + tileY) % 2 === 0 
-          ? this.terrainColors.dock 
-          : this.terrainColors.dock_dark;
+          ? this.terrainColors.mine 
+          : this.terrainColors.mine_dark;
+        break;
+      case 6: // 伐木場（森林地面）
+        color = (tileX + tileY) % 2 === 0 
+          ? this.terrainColors.lumber 
+          : this.terrainColors.lumber_dark;
+        break;
+      case 7: // 牧場（草地）
+        color = (tileX + tileY) % 2 === 0 
+          ? this.terrainColors.pasture 
+          : this.terrainColors.pasture_dark;
         break;
     }
     
@@ -123,8 +160,8 @@ export class Renderer {
     const width = building.width * this.tileSize;
     const height = building.height * this.tileSize;
     
-    // 開放式建築（農場、碼頭）不畫牆壁
-    const openBuildings = ['farm', 'dock'];
+    // 開放式建築（戶外工作場所）不畫牆壁
+    const openBuildings = ['farm', 'mine', 'lumber_camp', 'pasture'];
     if (openBuildings.includes(building.type)) {
       // 只顯示名稱
       this.ctx.fillStyle = '#fff';
@@ -209,6 +246,55 @@ export class Renderer {
         
       default:
         this.ctx.fillRect(screenX + 2, screenY + 2, size - 4, size - 4);
+    }
+  }
+  
+  /**
+   * 渲染地上物品
+   */
+  renderWorldItem(item) {
+    const screenX = item.x * this.tileSize - this.camera.x + this.camera.offsetX;
+    const screenY = item.y * this.tileSize - this.camera.y + this.camera.offsetY;
+    const size = this.tileSize;
+    
+    // 物品圖示對應表
+    const itemIcons = {
+      'hoe': '⛏️', 'pickaxe': '⛏️', 'axe': '🪓', 'shears': '✂️',
+      'cleaver': '🔪', 'hammer': '🔨', 'saw': '🪚', 'scraper': '🔪',
+      'grain': '🌾', 'livestock': '🐄', 'ore': '🪨', 'wood': '🪵',
+      'wool': '🧶', 'hide': '🐑', 'flour': '🌫️', 'meat_raw': '🥩',
+      'iron': '🔩', 'plank': '📏', 'cloth': '🧵', 'leather': '🟤',
+      'bread': '🍞', 'meat': '🍖', 'clothes': '👕', 'furniture': '🪑'
+    };
+    
+    const icon = itemIcons[item.item_id] || '📦';
+    
+    // 繪製背景
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    this.ctx.beginPath();
+    this.ctx.roundRect(screenX + 2, screenY + 2, size - 4, size - 4, 4);
+    this.ctx.fill();
+    
+    // 繪製物品圖示
+    this.ctx.font = `${size * 0.6}px sans-serif`;
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText(icon, screenX + size / 2, screenY + size / 2 - 2);
+    
+    // 繪製數量（如果大於 1）
+    if (item.quantity > 1) {
+      this.ctx.font = 'bold 10px sans-serif';
+      this.ctx.fillStyle = '#fff';
+      this.ctx.textAlign = 'right';
+      this.ctx.fillText(`${item.quantity}`, screenX + size - 4, screenY + size - 4);
+    }
+    
+    // 如果有擁有者，繪製小標記
+    if (item.owner_id) {
+      this.ctx.fillStyle = '#ffd700';
+      this.ctx.beginPath();
+      this.ctx.arc(screenX + size - 6, screenY + 6, 3, 0, Math.PI * 2);
+      this.ctx.fill();
     }
   }
   
@@ -475,10 +561,10 @@ export class Renderer {
    */
   renderBuildingTops(map) {
     // 開放式建築不畫屋頂
-    const openBuildings = ['farm', 'dock'];
+    const openBuildings = ['farm', 'mine', 'lumber_camp', 'pasture'];
     
     for (const building of map.buildings) {
-      // 跳過農場和碼頭
+      // 跳過戶外工作場所
       if (openBuildings.includes(building.type)) continue;
       
       const colors = this.buildingColors[building.type] || this.buildingColors.house;
