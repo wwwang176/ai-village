@@ -625,6 +625,62 @@ export class Renderer {
   }
   
   /**
+   * 渲染家具（灶台、床）
+   */
+  renderFurniture(furniture) {
+    if (!furniture || furniture.length === 0) return;
+    
+    for (const item of furniture) {
+      const screenX = item.x * this.tileSize - this.camera.x + this.camera.offsetX;
+      const screenY = item.y * this.tileSize - this.camera.y + this.camera.offsetY;
+      const size = this.tileSize * 0.6;
+      const offset = (this.tileSize - size) / 2;
+      
+      if (item.type === 'stove') {
+        // 灶台 - 橘紅色方塊 + 火焰線條
+        this.ctx.fillStyle = '#8B4513';  // 棕色底座
+        this.ctx.fillRect(screenX + offset, screenY + offset, size, size);
+        
+        // 火焰
+        this.ctx.strokeStyle = '#FF4500';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        // 左火焰
+        this.ctx.moveTo(screenX + offset + size * 0.25, screenY + offset + size * 0.7);
+        this.ctx.lineTo(screenX + offset + size * 0.2, screenY + offset + size * 0.3);
+        this.ctx.lineTo(screenX + offset + size * 0.35, screenY + offset + size * 0.5);
+        // 中火焰
+        this.ctx.moveTo(screenX + offset + size * 0.5, screenY + offset + size * 0.7);
+        this.ctx.lineTo(screenX + offset + size * 0.5, screenY + offset + size * 0.2);
+        this.ctx.lineTo(screenX + offset + size * 0.6, screenY + offset + size * 0.45);
+        // 右火焰
+        this.ctx.moveTo(screenX + offset + size * 0.75, screenY + offset + size * 0.7);
+        this.ctx.lineTo(screenX + offset + size * 0.8, screenY + offset + size * 0.35);
+        this.ctx.lineTo(screenX + offset + size * 0.65, screenY + offset + size * 0.5);
+        this.ctx.stroke();
+        
+      } else if (item.type === 'bed') {
+        // 床 - 棕色床架 + 白色床單
+        this.ctx.fillStyle = '#654321';  // 深棕色床架
+        this.ctx.fillRect(screenX + offset, screenY + offset, size, size);
+        
+        // 白色床單
+        this.ctx.fillStyle = '#F5F5DC';
+        this.ctx.fillRect(screenX + offset + 2, screenY + offset + 2, size - 4, size * 0.6);
+        
+        // 枕頭
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.fillRect(screenX + offset + 3, screenY + offset + 3, size * 0.3, size * 0.25);
+        
+        // 床架線條
+        this.ctx.strokeStyle = '#4a3520';
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(screenX + offset, screenY + offset, size, size);
+      }
+    }
+  }
+  
+  /**
    * 渲染建築物頂部（遮擋效果）
    */
   renderBuildingTops(map) {

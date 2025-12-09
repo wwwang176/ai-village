@@ -40,13 +40,29 @@ class TaskEffect(ABC):
 # ==================== 基本任務效果 ====================
 
 class EatEffect(TaskEffect):
-    """吃東西效果"""
+    """吃東西效果 - 消耗背包裡的食物"""
     
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> None:
+        inventory = villager.get("inventory", [None, None, None])
         stats = villager.get("stats", {})
         old_hunger = stats.get("hunger", 0)
-        stats["hunger"] = max(0, old_hunger - 40)
-        logger.info(f"🍖 {villager['name']} 吃飽了 (飢餓: {old_hunger:.0f} → {stats['hunger']:.0f})")
+        
+        # 尋找背包裡的麵包
+        for i, slot in enumerate(inventory):
+            if slot and slot.get("item_id") == "bread":
+                # 消耗一個麵包
+                if slot.get("quantity", 1) > 1:
+                    slot["quantity"] -= 1
+                else:
+                    villager["inventory"][i] = None
+                
+                # 恢復飽足度（麵包恢復 30）
+                stats["hunger"] = max(0, old_hunger - 30)
+                logger.info(f"🍞 {villager['name']} 吃了麵包 (飢餓: {old_hunger:.0f} → {stats['hunger']:.0f})")
+                return
+        
+        # 沒有食物可吃
+        logger.info(f"😢 {villager['name']} 想吃東西但背包沒有食物")
 
 
 class RestEffect(TaskEffect):
@@ -76,7 +92,7 @@ class WorkEffect(TaskEffect):
     
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> None:
         stats = villager.get("stats", {})
-        stats["energy"] = max(0, stats.get("energy", 100) - 10)
+        stats["energy"] = max(0, stats.get("energy", 100) - 3)
         
         # 檢查並消耗工具耐久度
         tool_result = ctx.production.use_tool(villager)

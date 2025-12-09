@@ -156,8 +156,8 @@ class GameLoop:
         """更新村民狀態數值"""
         stats = villager.get("stats", {})
         
-        # 飢餓緩慢增加
-        stats["hunger"] = min(100, stats.get("hunger", 0) + delta_time * 0.5)
+        # 飢餓緩慢增加（0.25/秒，約 4.7 分鐘從 0 到 70%）
+        stats["hunger"] = min(100, stats.get("hunger", 0) + delta_time * 0.25)
         
         # 體力緩慢下降（非睡眠時）
         if villager.get("state") != "sleeping":

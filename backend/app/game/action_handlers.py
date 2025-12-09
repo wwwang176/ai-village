@@ -309,7 +309,26 @@ class BuyFoodActionHandler(ActionHandler):
         from ..data.supply_chain import FOOD_SELLERS
         from .models import PendingFoodTrade
         
-        # 尋找有食物賣的村民
+        inventory = villager.get("inventory", [None, None, None])
+        
+        # 1. 先檢查背包有沒有可以直接吃的食物（麵包）
+        for slot in inventory:
+            if slot and slot.get("item_id") == "bread":
+                logger.info(f"🍞 {villager['name']} 背包有麵包，原地吃")
+                return [Task(type="eat", duration=2).to_dict()]
+        
+        # 2. 檢查背包有沒有生肉，有的話回家煮
+        for slot in inventory:
+            if slot and slot.get("item_id") == "meat_raw":
+                logger.info(f"🥩 {villager['name']} 背包有生肉，回家煮")
+                stove = ctx.game_state.get_stove_by_residence(villager["id"])
+                if stove:
+                    return [
+                        Task(type="move", target=(stove["x"], stove["y"])).to_dict(),
+                        Task(type="cook", duration=3).to_dict()
+                    ]
+        
+        # 3. 背包沒食物，尋找有食物賣的村民
         for food_item, seller_occupation in FOOD_SELLERS:
             seller = self._find_food_seller(seller_occupation, food_item, ctx)
             if seller:

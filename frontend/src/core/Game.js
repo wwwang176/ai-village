@@ -50,6 +50,7 @@ export class Game {
     this.player = null;
     this.inputHandler = null;
     this.uiManager = null;
+    this.furniture = [];  // 家具（灶台、床）
   }
   
   /**
@@ -287,7 +288,7 @@ export class Game {
    * 處理初始化訊息
    */
   handleInit(data) {
-    const { map: mapData, player, villagers, time } = data;
+    const { map: mapData, player, villagers, furniture, time } = data;
     
     // 使用後端的地圖資料
     this.map = new GameMap(mapData, this.config.tileSize);
@@ -305,6 +306,10 @@ export class Game {
     this.villagerManager = new VillagerManager(this.map);
     this.villagerManager.loadFromBackend(villagers);
     console.log(`✅ 載入 ${this.villagerManager.villagers.length} 位村民`);
+    
+    // 家具
+    this.furniture = furniture || [];
+    console.log(`✅ 載入 ${this.furniture.length} 件家具`);
     
     // 玩家
     this.player = new Player({
@@ -547,6 +552,9 @@ export class Game {
     
     // 渲染地圖
     this.renderer.renderMap(this.map);
+    
+    // 渲染家具（灶台、床）
+    this.renderer.renderFurniture(this.furniture);
     
     // 渲染選中村民的路徑
     if (this.selectedVillager) {

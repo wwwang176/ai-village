@@ -119,6 +119,7 @@ async def websocket_endpoint(websocket: WebSocket):
             "map": game_state.map_data,
             "player": game_state.player,
             "villagers": game_state.get_villagers_summary(),
+            "furniture": list(game_state.furniture.values()),
             "time": game_state.get_time()
         }
     })

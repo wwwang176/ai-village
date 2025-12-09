@@ -276,6 +276,14 @@ class GameState:
                     "owner_id": f"villager_{i}"
                 }
             
+            # 給予初始麵包（讓村民在供應鏈建立前不會餓死）
+            bread_slot = 1 if inventory[0] else 0
+            inventory[bread_slot] = {
+                "item_id": "bread",
+                "quantity": 10,
+                "owner_id": f"villager_{i}"
+            }
+            
             villager = {
                 "id": f"villager_{i}",
                 "name": name,
