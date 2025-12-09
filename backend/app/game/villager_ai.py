@@ -316,9 +316,25 @@ class VillagerAI:
         if stats["hunger"] > 70:
             return {"action": "eat", "target": None, "reason": "肚子餓了", "mood": "hungry"}
         
-        # 工作時間
-        if 8 <= hour < 12 or 14 <= hour < 18:
-            if villager["occupation"] != "house":
+        # 工作時間（根據職業不同）
+        occupation = villager.get("occupation", "")
+        
+        # 各職業的工作時間
+        work_schedules = {
+            "tavern": (12, 23),       # 酒保：12:00-23:00
+            "barber_shop": (12, 20),  # 理髮師：12:00-20:00
+            "bakery": (4, 13),        # 麵包師：04:00-13:00
+            "dock": (4, 12),          # 漁夫：04:00-12:00
+            "farm": (5, 14),          # 農夫：05:00-14:00
+        }
+        
+        # 預設工作時間：08:00-12:00, 14:00-18:00
+        if occupation in work_schedules:
+            start, end = work_schedules[occupation]
+            if start <= hour < end:
+                return {"action": "go_work", "target": None, "reason": "該工作了", "mood": "neutral"}
+        elif occupation and occupation != "house":
+            if 8 <= hour < 12 or 14 <= hour < 18:
                 return {"action": "go_work", "target": None, "reason": "該工作了", "mood": "neutral"}
         
         # 社交需求 - 主動找人聊天
