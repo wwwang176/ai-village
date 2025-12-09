@@ -13,6 +13,7 @@ export class GameMap {
     this.buildings = mapData.buildings;
     this.objects = mapData.objects;
     this.worldItems = [];  // 地上物品（動態更新）
+    this.sheep = [];       // 羊群（動態更新）
     
     // 建立物件查詢索引
     this.objectIndex = this.buildObjectIndex();

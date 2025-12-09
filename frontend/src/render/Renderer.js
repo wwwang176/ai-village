@@ -93,6 +93,13 @@ export class Renderer {
         this.renderWorldItem(item);
       }
     }
+    
+    // 渲染羊群
+    if (map.sheep) {
+      for (const sheep of map.sheep) {
+        this.renderSheep(sheep);
+      }
+    }
   }
   
   /**
@@ -295,6 +302,60 @@ export class Renderer {
       this.ctx.beginPath();
       this.ctx.arc(screenX + size - 6, screenY + 6, 3, 0, Math.PI * 2);
       this.ctx.fill();
+    }
+  }
+  
+  /**
+   * 渲染羊
+   */
+  renderSheep(sheep) {
+    const screenX = sheep.x * this.tileSize - this.camera.x + this.camera.offsetX;
+    const screenY = sheep.y * this.tileSize - this.camera.y + this.camera.offsetY;
+    const size = this.tileSize;
+    
+    // 羊的顏色
+    const bodyColor = sheep.is_adult ? '#f5f5dc' : '#fffacd';  // 成羊米白色，小羊淺黃色
+    const headColor = '#2f2f2f';
+    
+    // 繪製羊身體（橢圓）
+    this.ctx.fillStyle = bodyColor;
+    this.ctx.beginPath();
+    const bodyW = sheep.is_adult ? size * 0.7 : size * 0.5;
+    const bodyH = sheep.is_adult ? size * 0.5 : size * 0.35;
+    this.ctx.ellipse(
+      screenX + size / 2, 
+      screenY + size / 2 + 2,
+      bodyW / 2, bodyH / 2,
+      0, 0, Math.PI * 2
+    );
+    this.ctx.fill();
+    
+    // 繪製羊頭（小圓）
+    this.ctx.fillStyle = headColor;
+    this.ctx.beginPath();
+    const headSize = sheep.is_adult ? size * 0.2 : size * 0.15;
+    this.ctx.arc(
+      screenX + size / 2 - bodyW / 3,
+      screenY + size / 2,
+      headSize,
+      0, Math.PI * 2
+    );
+    this.ctx.fill();
+    
+    // 如果羊毛可以剪，顯示綠色標記
+    if (sheep.wool_ready) {
+      this.ctx.fillStyle = '#4CAF50';
+      this.ctx.beginPath();
+      this.ctx.arc(screenX + size - 4, screenY + 4, 3, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+    
+    // 小羊顯示年齡標記
+    if (!sheep.is_adult) {
+      this.ctx.font = '8px sans-serif';
+      this.ctx.fillStyle = '#ff9800';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText('小', screenX + size / 2, screenY + size - 2);
     }
   }
   

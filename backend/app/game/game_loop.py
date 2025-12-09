@@ -113,6 +113,9 @@ class GameLoop:
         # 2. 更新村民狀態
         self.update_villagers(delta_time)
         
+        # 2.5. 更新羊群狀態
+        self.update_sheep(delta_time, current_time)
+        
         # 3. 處理 AI 決策（背景執行，不阻塞主循環）
         if current_time - self.last_ai_tick >= self.ai_tick_interval:
             self.last_ai_tick = current_time
@@ -167,6 +170,81 @@ class GameLoop:
         
         # 社交需求下降
         stats["social"] = max(0, stats.get("social", 50) - delta_time * 0.1)
+    
+    def update_sheep(self, delta_time: float, current_time: float):
+        """更新所有羊的狀態"""
+        game_time = self.game_state.get_time()
+        
+        for sheep in list(self.game_state.sheep.values()):
+            # 1. 羊在牧場內隨機移動（每 5 秒移動一次）
+            if current_time - sheep.get("last_move_time", 0) > 5:
+                sheep["last_move_time"] = current_time
+                self.move_sheep_randomly(sheep)
+            
+            # 2. 小羊成長（每遊戲天檢查一次）
+            if not sheep["is_adult"]:
+                # 簡化：每 60 秒遊戲時間 = 1 天
+                sheep["age_days"] += delta_time / 60
+                if sheep["age_days"] >= 5:
+                    sheep["is_adult"] = True
+                    logger.info(f"🐑 小羊 {sheep['id']} 長大成成羊了！")
+            
+            # 3. 成羊長毛（每 3 天可以剪一次）
+            if sheep["is_adult"] and not sheep["wool_ready"]:
+                # 簡化：每 180 秒遊戲時間 = 可以剪毛
+                sheep["wool_grow_time"] = sheep.get("wool_grow_time", 0) + delta_time
+                if sheep["wool_grow_time"] >= 180:
+                    sheep["wool_ready"] = True
+                    sheep["wool_grow_time"] = 0
+                    logger.info(f"🧶 羊 {sheep['id']} 的毛長好了，可以剪毛")
+            
+            # 4. 繁殖檢查（每 30 秒檢查一次）
+            if current_time - sheep.get("last_breed_check", 0) > 30:
+                sheep["last_breed_check"] = current_time
+                self.check_sheep_breeding(sheep)
+    
+    def move_sheep_randomly(self, sheep: dict):
+        """讓羊在牧場內隨機移動"""
+        pasture = self.game_state.get_building_by_id(sheep["pasture_id"])
+        if not pasture:
+            return
+        
+        # 隨機移動 1-2 格
+        dx = random.randint(-2, 2)
+        dy = random.randint(-2, 2)
+        
+        new_x = sheep["x"] + dx
+        new_y = sheep["y"] + dy
+        
+        # 確保在牧場範圍內
+        min_x = pasture["x"] + 1
+        max_x = pasture["x"] + pasture["width"] - 2
+        min_y = pasture["y"] + 1
+        max_y = pasture["y"] + pasture["height"] - 2
+        
+        sheep["x"] = max(min_x, min(max_x, new_x))
+        sheep["y"] = max(min_y, min(max_y, new_y))
+    
+    def check_sheep_breeding(self, sheep: dict):
+        """檢查羊是否可以繁殖"""
+        if not sheep["is_adult"]:
+            return
+        
+        # 取得同牧場的成羊數量
+        pasture_sheep = self.game_state.get_sheep_in_pasture(sheep["pasture_id"])
+        adult_sheep = [s for s in pasture_sheep if s["is_adult"]]
+        
+        # 需要至少 2 隻成羊，且數量未達上限（8隻）
+        if len(adult_sheep) >= 2 and len(pasture_sheep) < 8:
+            # 10% 機率生小羊
+            if random.random() < 0.1:
+                new_sheep = self.game_state.add_sheep(
+                    pasture_id=sheep["pasture_id"],
+                    owner_id=sheep["owner_id"],
+                    is_adult=False
+                )
+                if new_sheep:
+                    logger.info(f"🐑 新生了一隻小羊！牧場現有 {len(pasture_sheep) + 1} 隻羊")
     
     def process_task_queue(self, villager: dict, delta_time: float):
         """處理村民的任務隊列"""
@@ -507,6 +585,33 @@ class GameLoop:
                 logger.info(f"📦 {villager['name']} 在家門口放下了 {dropped['item_id']} x{dropped['quantity']}")
             else:
                 logger.info(f"📦 {villager['name']} 沒有可以放下的物品")
+        
+        elif task_type == "shear_sheep":
+            # 剪羊毛
+            sheep_id = task.get("sheep_id")
+            result = self.execute_shear_sheep(villager, sheep_id)
+            if result["success"]:
+                logger.info(f"🧶 {villager['name']} 剪了羊 {sheep_id} 的毛，獲得羊毛 x{result['quantity']}（{result['location']}）")
+            else:
+                logger.info(f"🧶 {villager['name']} 剪毛失敗：{result['reason']}")
+        
+        elif task_type == "buy_sheep":
+            # 購買活羊
+            seller_id = task.get("seller_id")
+            result = self.execute_buy_sheep(villager, seller_id)
+            if result["success"]:
+                logger.info(f"🐑 {villager['name']} 向 {result['seller_name']} 購買了一隻活羊（花費 ${result['price']}）")
+            else:
+                logger.info(f"🐑 {villager['name']} 買羊失敗：{result['reason']}")
+        
+        elif task_type == "slaughter_sheep":
+            # 宰殺羊
+            sheep_id = task.get("sheep_id")
+            result = self.execute_slaughter_sheep(villager, sheep_id)
+            if result["success"]:
+                logger.info(f"🔪 {villager['name']} 宰殺了羊 {sheep_id}，獲得生肉 x{result['meat_qty']}、羊皮 x{result['hide_qty']}（{result['location']}）")
+            else:
+                logger.info(f"🔪 {villager['name']} 宰殺失敗：{result['reason']}")
     
     def use_villager_tool(self, villager: dict) -> str:
         """使用村民的工具（消耗耐久度）
@@ -865,6 +970,227 @@ class GameLoop:
                 return dropped_item
         
         return None
+    
+    def create_shepherd_work_tasks(self, villager: dict) -> List[dict]:
+        """建立牧羊人的工作任務（剪毛）"""
+        tasks = []
+        
+        # 找到可以剪毛的羊
+        sheep_ready = self.game_state.get_sheep_ready_for_shearing(villager["id"])
+        
+        if not sheep_ready:
+            return tasks
+        
+        # 選擇最近的一隻羊
+        sheep = min(sheep_ready, key=lambda s: 
+            (s["x"] - villager["x"])**2 + (s["y"] - villager["y"])**2
+        )
+        
+        # 移動到羊的位置
+        sheep_pos = (sheep["x"], sheep["y"])
+        current = (villager["x"], villager["y"])
+        dx = sheep_pos[0] - current[0]
+        dy = sheep_pos[1] - current[1]
+        dist = (dx**2 + dy**2) ** 0.5
+        
+        if dist > 1.5:
+            tasks.append({"type": "move", "target": sheep_pos})
+        
+        # 剪毛任務
+        tasks.append({
+            "type": "shear_sheep",
+            "sheep_id": sheep["id"],
+            "duration": 5
+        })
+        
+        logger.info(f"🐑 {villager['name']} 準備去剪羊 {sheep['id']} 的毛")
+        return tasks
+    
+    def create_butcher_work_tasks(self, villager: dict) -> List[dict]:
+        """建立屠夫的工作任務（買羊、殺羊）"""
+        tasks = []
+        
+        # 檢查屠夫是否已經擁有羊（買過但還沒殺）
+        owned_sheep = self.game_state.get_sheep_by_owner(villager["id"])
+        
+        if owned_sheep:
+            # 有羊，去殺羊
+            sheep = owned_sheep[0]
+            sheep_pos = (sheep["x"], sheep["y"])
+            current = (villager["x"], villager["y"])
+            dx = sheep_pos[0] - current[0]
+            dy = sheep_pos[1] - current[1]
+            dist = (dx**2 + dy**2) ** 0.5
+            
+            if dist > 1.5:
+                tasks.append({"type": "move", "target": sheep_pos})
+            
+            tasks.append({
+                "type": "slaughter_sheep",
+                "sheep_id": sheep["id"],
+                "duration": 6
+            })
+            logger.info(f"🔪 {villager['name']} 準備去宰殺羊 {sheep['id']}")
+        else:
+            # 沒有羊，去找牧羊人買羊
+            buy_task = self.create_buy_sheep_task(villager)
+            if buy_task:
+                tasks.extend(buy_task)
+        
+        return tasks
+    
+    def create_buy_sheep_task(self, buyer: dict) -> List[dict]:
+        """建立購買活羊的任務"""
+        tasks = []
+        
+        # 找牧羊人
+        shepherd = None
+        for v in self.game_state.villagers.values():
+            if v.get("occupation") == "shepherd" and v["id"] != buyer["id"]:
+                shepherd = v
+                break
+        
+        if not shepherd:
+            return tasks
+        
+        # 檢查牧羊人是否有可賣的成羊（至少留 2 隻用於繁殖）
+        shepherd_sheep = self.game_state.get_sheep_by_owner(shepherd["id"])
+        adult_sheep = [s for s in shepherd_sheep if s["is_adult"]]
+        
+        if len(adult_sheep) <= 2:
+            logger.info(f"🐑 牧羊人 {shepherd['name']} 羊不夠，無法出售")
+            return tasks
+        
+        # 走到牧羊人位置
+        shepherd_pos = (shepherd["x"], shepherd["y"])
+        current = (buyer["x"], buyer["y"])
+        dx = shepherd_pos[0] - current[0]
+        dy = shepherd_pos[1] - current[1]
+        dist = (dx**2 + dy**2) ** 0.5
+        
+        if dist > 2:
+            tasks.append({"type": "move", "target": shepherd_pos})
+        
+        # 購買活羊任務
+        tasks.append({
+            "type": "buy_sheep",
+            "seller_id": shepherd["id"],
+            "duration": 3
+        })
+        
+        logger.info(f"🐑 {buyer['name']} 準備向 {shepherd['name']} 購買活羊")
+        return tasks
+    
+    def execute_shear_sheep(self, villager: dict, sheep_id: str) -> dict:
+        """執行剪羊毛
+        
+        返回: {"success": bool, "quantity": int, "location": str, "reason": str}
+        """
+        sheep = self.game_state.sheep.get(sheep_id)
+        
+        if not sheep:
+            return {"success": False, "reason": "找不到這隻羊"}
+        
+        if not sheep["wool_ready"]:
+            return {"success": False, "reason": "這隻羊還沒長好毛"}
+        
+        if sheep["owner_id"] != villager["id"]:
+            return {"success": False, "reason": "這不是你的羊"}
+        
+        # 消耗工具耐久度
+        tool_result = self.use_villager_tool(villager)
+        if tool_result == "no_tool":
+            return {"success": False, "reason": "沒有剪刀"}
+        
+        # 剪毛成功，羊毛狀態重置
+        sheep["wool_ready"] = False
+        sheep["wool_grow_time"] = 0
+        
+        # 產出羊毛
+        wool_qty = 2
+        location = self.add_item_to_villager(villager, "wool", wool_qty)
+        
+        # 牧羊人獲得收入
+        villager["money"] = villager.get("money", 0) + 3
+        
+        return {"success": True, "quantity": wool_qty, "location": location}
+    
+    def execute_buy_sheep(self, buyer: dict, seller_id: str) -> dict:
+        """執行購買活羊
+        
+        返回: {"success": bool, "price": int, "seller_name": str, "reason": str}
+        """
+        seller = self.game_state.get_villager(seller_id)
+        if not seller:
+            return {"success": False, "reason": "找不到賣家"}
+        
+        SHEEP_PRICE = 15
+        
+        # 檢查買家錢夠不夠
+        if buyer.get("money", 0) < SHEEP_PRICE:
+            return {"success": False, "reason": "錢不夠"}
+        
+        # 檢查賣家（牧羊人）有沒有羊可賣
+        seller_sheep = self.game_state.get_sheep_by_owner(seller_id)
+        adult_sheep = [s for s in seller_sheep if s["is_adult"]]
+        
+        if len(adult_sheep) <= 2:
+            return {"success": False, "reason": "賣家羊不夠"}
+        
+        # 選一隻羊轉移給買家
+        sheep_to_sell = adult_sheep[0]
+        sheep_to_sell["owner_id"] = buyer["id"]
+        
+        # 交易金錢
+        buyer["money"] -= SHEEP_PRICE
+        seller["money"] = seller.get("money", 0) + SHEEP_PRICE
+        
+        return {
+            "success": True,
+            "price": SHEEP_PRICE,
+            "seller_name": seller["name"],
+            "sheep_id": sheep_to_sell["id"]
+        }
+    
+    def execute_slaughter_sheep(self, villager: dict, sheep_id: str) -> dict:
+        """執行宰殺羊
+        
+        返回: {"success": bool, "meat_qty": int, "hide_qty": int, "location": str, "reason": str}
+        """
+        sheep = self.game_state.sheep.get(sheep_id)
+        
+        if not sheep:
+            return {"success": False, "reason": "找不到這隻羊"}
+        
+        if sheep["owner_id"] != villager["id"]:
+            return {"success": False, "reason": "這不是你的羊"}
+        
+        if not sheep["is_adult"]:
+            return {"success": False, "reason": "不能殺小羊"}
+        
+        # 消耗工具耐久度
+        tool_result = self.use_villager_tool(villager)
+        if tool_result == "no_tool":
+            return {"success": False, "reason": "沒有屠刀"}
+        
+        # 移除羊
+        self.game_state.remove_sheep(sheep_id)
+        
+        # 產出生肉和羊皮
+        meat_qty = 3
+        hide_qty = 1
+        
+        loc1 = self.add_item_to_villager(villager, "meat_raw", meat_qty)
+        loc2 = self.add_item_to_villager(villager, "hide", hide_qty)
+        
+        location = f"肉:{loc1}, 皮:{loc2}"
+        
+        return {
+            "success": True,
+            "meat_qty": meat_qty,
+            "hide_qty": hide_qty,
+            "location": location
+        }
     
     def execute_food_purchase(self, buyer: dict, task: dict) -> dict:
         """執行食物購買並消費
@@ -1231,11 +1557,34 @@ class GameLoop:
                     tasks.extend(supplier_task)
                     return tasks
                 else:
-                    # 找不到供應商，直接去工作（會失敗但消耗時間）
-                    logger.info(f"🔧 {villager['name']} 缺少 {missing_material}，但找不到供應商")
+                    # 找不到供應商，無法工作，改成閒逛
+                    logger.info(f"🔧 {villager['name']} 缺少 {missing_material}，但找不到供應商，無法工作")
+                    return tasks  # 返回空任務，讓 AI 重新決策
             
             # 有工具有原料，去工作
-            # 先移動到工作地點
+            occupation = villager.get("occupation")
+            
+            # 牧羊人特殊處理：走到羊旁邊剪毛
+            if occupation == "shepherd":
+                sheep_tasks = self.create_shepherd_work_tasks(villager)
+                if sheep_tasks:
+                    tasks.extend(sheep_tasks)
+                    return tasks
+                else:
+                    logger.info(f"🐑 {villager['name']} 沒有可以剪毛的羊")
+                    return tasks
+            
+            # 屠夫特殊處理：殺羊
+            if occupation == "butcher":
+                butcher_tasks = self.create_butcher_work_tasks(villager)
+                if butcher_tasks:
+                    tasks.extend(butcher_tasks)
+                    return tasks
+                else:
+                    logger.info(f"🔪 {villager['name']} 沒有可以宰殺的羊")
+                    return tasks
+            
+            # 一般職業：移動到工作地點
             work_target = self.game_state.resolve_action_target(villager, "go_work")
             if work_target:
                 current = (villager["x"], villager["y"])
@@ -1708,7 +2057,18 @@ class GameLoop:
                     }
                     for v in self.game_state.villagers.values()
                 ],
-                "world_items": self.game_state.get_all_world_items()  # 地上物品
+                "world_items": self.game_state.get_all_world_items(),  # 地上物品
+                "sheep": [
+                    {
+                        "id": s["id"],
+                        "x": s["x"],
+                        "y": s["y"],
+                        "is_adult": s["is_adult"],
+                        "wool_ready": s["wool_ready"],
+                        "owner_id": s["owner_id"]
+                    }
+                    for s in self.game_state.sheep.values()
+                ]
             }
         }
         

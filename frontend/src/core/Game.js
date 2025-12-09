@@ -336,6 +336,11 @@ export class Game {
     if (data.world_items && this.map) {
       this.map.worldItems = data.world_items;
     }
+    
+    // 同步羊群
+    if (data.sheep && this.map) {
+      this.map.sheep = data.sheep;
+    }
   }
   
   /**

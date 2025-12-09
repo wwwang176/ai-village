@@ -38,6 +38,10 @@ class GameState:
         self.world_items: List[dict] = []
         self.next_item_id = 0
         
+        # 羊群
+        self.sheep: Dict[str, dict] = {}
+        self.next_sheep_id = 0
+        
         # 事件佇列
         self.events: List[dict] = []
         
@@ -81,39 +85,47 @@ class GameState:
         # 生成村民（13種職業各1人）
         self._generate_villagers(13)
         
+        # 生成羊群（牧場初始 4 隻羊）
+        self._generate_sheep()
+        
         self.initialized = True
         print(f"🎮 遊戲初始化完成 (種子: {self.seed})")
     
     def _generate_map(self) -> dict:
         """生成地圖"""
-        width = 64
-        height = 64
+        width = 96
+        height = 96
         
-        # 建築物定義（加大尺寸，門口2格寬）
+        # 建築物定義（重新規劃位置，避免重疊）
         buildings = []
         
-        # 工作建築（13種職業對應的建築）
+        # 工作建築（13種職業對應的建築）- 分區規劃
         work_buildings = [
-            # === 食物鏈 ===
-            {"type": "farm", "name": "農田", "x": 4, "y": 4, "width": 10, "height": 8},          # 農夫
-            {"type": "mill", "name": "磨坊", "x": 18, "y": 8, "width": 6, "height": 6},          # 磨坊主
-            {"type": "butcher_shop", "name": "肉舖", "x": 28, "y": 8, "width": 6, "height": 5},  # 屠夫
-            {"type": "bakery", "name": "麵包店", "x": 38, "y": 8, "width": 6, "height": 5},      # 麵包師
+            # === 左上區：食物生產 ===
+            {"type": "farm", "name": "農田", "x": 4, "y": 4, "width": 12, "height": 10},          # 農夫
+            {"type": "mill", "name": "磨坊", "x": 20, "y": 4, "width": 7, "height": 6},           # 磨坊主
+            {"type": "bakery", "name": "麵包店", "x": 30, "y": 4, "width": 7, "height": 6},       # 麵包師
             
-            # === 器具鏈 ===
-            {"type": "mine", "name": "礦場", "x": 52, "y": 4, "width": 8, "height": 6},          # 礦工
-            {"type": "lumber_camp", "name": "伐木場", "x": 4, "y": 48, "width": 8, "height": 6}, # 伐木工
-            {"type": "blacksmith", "name": "鐵匠舖", "x": 18, "y": 22, "width": 7, "height": 6}, # 鐵匠
-            {"type": "carpentry", "name": "木工坊", "x": 36, "y": 22, "width": 7, "height": 6},  # 木匠
+            # === 右上區：礦業 ===
+            {"type": "mine", "name": "礦場", "x": 76, "y": 4, "width": 12, "height": 8},          # 礦工
+            {"type": "blacksmith", "name": "鐵匠舖", "x": 60, "y": 4, "width": 8, "height": 7},   # 鐵匠
             
-            # === 服飾鏈 ===
-            {"type": "pasture", "name": "牧場", "x": 48, "y": 48, "width": 10, "height": 8},     # 牧羊人
-            {"type": "weaver_shop", "name": "織坊", "x": 18, "y": 38, "width": 6, "height": 5},  # 織工
-            {"type": "tannery", "name": "皮革坊", "x": 28, "y": 38, "width": 6, "height": 5},    # 皮革匠
-            {"type": "tailor_shop", "name": "裁縫店", "x": 38, "y": 38, "width": 6, "height": 5},# 裁縫
+            # === 中央區：商業 ===
+            {"type": "market", "name": "市集", "x": 40, "y": 40, "width": 16, "height": 10},      # 商人
+            {"type": "tavern", "name": "酒館", "x": 40, "y": 54, "width": 10, "height": 7},       # 公共場所
             
-            # === 特殊 ===
-            {"type": "market", "name": "市集", "x": 26, "y": 22, "width": 8, "height": 6},       # 商人
+            # === 左下區：木材 ===
+            {"type": "lumber_camp", "name": "伐木場", "x": 4, "y": 76, "width": 12, "height": 10},# 伐木工
+            {"type": "carpentry", "name": "木工坊", "x": 20, "y": 80, "width": 8, "height": 7},   # 木匠
+            
+            # === 右下區：畜牧 ===
+            {"type": "pasture", "name": "牧場", "x": 72, "y": 72, "width": 16, "height": 12},     # 牧羊人
+            {"type": "butcher_shop", "name": "肉舖", "x": 56, "y": 80, "width": 8, "height": 7},  # 屠夫
+            
+            # === 右中區：服飾 ===
+            {"type": "weaver_shop", "name": "織坊", "x": 76, "y": 40, "width": 8, "height": 6},   # 織工
+            {"type": "tannery", "name": "皮革坊", "x": 76, "y": 50, "width": 8, "height": 6},     # 皮革匠
+            {"type": "tailor_shop", "name": "裁縫店", "x": 76, "y": 60, "width": 8, "height": 6}, # 裁縫
         ]
         
         for i, b in enumerate(work_buildings):
@@ -124,22 +136,64 @@ class GameState:
             b["doorWidth"] = 2  # 門口寬度
             buildings.append(b)
         
-        # 民宅（純住所，不是工作地點）
-        house_positions = [
-            (8, 12), (48, 12), (8, 52), (48, 52), (18, 8),
-            (42, 8), (4, 30), (56, 30), (18, 52), (42, 52)
-        ]
-        for i, (x, y) in enumerate(house_positions):
-            buildings.append({
-                "id": f"building_{len(buildings)}",
-                "type": "house",
-                "name": f"民宅 {i+1}",
-                "x": x, "y": y,
-                "width": 6, "height": 5,
-                "doorX": x + 3,
-                "doorY": y + 4,
-                "doorWidth": 2
-            })
+        # 民宅（13間，每個村民一間）- 隨機散落
+        # 先建立已佔用區域
+        occupied = [[False] * width for _ in range(height)]
+        margin = 3  # 建築物間距
+        
+        for b in buildings:
+            for dy in range(-margin, b["height"] + margin):
+                for dx in range(-margin, b["width"] + margin):
+                    nx, ny = b["x"] + dx, b["y"] + dy
+                    if 0 <= nx < width and 0 <= ny < height:
+                        occupied[ny][nx] = True
+        
+        # 隨機生成 13 間房屋
+        house_count = 0
+        max_attempts = 500
+        attempts = 0
+        house_w, house_h = 6, 5
+        
+        while house_count < 13 and attempts < max_attempts:
+            attempts += 1
+            
+            # 隨機位置（避開邊緣）
+            x = random.randint(8, width - house_w - 8)
+            y = random.randint(8, height - house_h - 8)
+            
+            # 檢查是否可以放置
+            can_place = True
+            for dy in range(-margin, house_h + margin):
+                for dx in range(-margin, house_w + margin):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < width and 0 <= ny < height:
+                        if occupied[ny][nx]:
+                            can_place = False
+                            break
+                if not can_place:
+                    break
+            
+            if can_place:
+                # 標記為已佔用
+                for dy in range(-margin, house_h + margin):
+                    for dx in range(-margin, house_w + margin):
+                        nx, ny = x + dx, y + dy
+                        if 0 <= nx < width and 0 <= ny < height:
+                            occupied[ny][nx] = True
+                
+                buildings.append({
+                    "id": f"building_{len(buildings)}",
+                    "type": "house",
+                    "name": f"民宅 {house_count + 1}",
+                    "x": x, "y": y,
+                    "width": house_w, "height": house_h,
+                    "doorX": x + 3,
+                    "doorY": y + house_h - 1,
+                    "doorWidth": 2
+                })
+                house_count += 1
+        
+        print(f"🏠 生成了 {house_count} 間民宅")
         
         # 生成碰撞地圖
         collision = [[0] * width for _ in range(height)]
@@ -458,6 +512,103 @@ class GameState:
                     print(f"💕 {villager['name']} {rel_type['type']} {target['name']}")
                 elif rel_type["type"] in ["討厭", "競爭對手"]:
                     print(f"💢 {villager['name']} {rel_type['type']} {target['name']}")
+    
+    def _generate_sheep(self):
+        """生成羊群（每個牧場初始 4 隻羊）"""
+        # 找到牧場
+        pasture = self.get_building_by_type("pasture")
+        if not pasture:
+            print("⚠️ 找不到牧場，無法生成羊群")
+            return
+        
+        # 找到牧羊人（羊的擁有者）
+        shepherd = None
+        for v in self.villagers.values():
+            if v.get("occupation") == "shepherd":
+                shepherd = v
+                break
+        
+        owner_id = shepherd["id"] if shepherd else None
+        
+        # 生成 4 隻初始羊
+        for i in range(4):
+            # 隨機位置（牧場內）
+            x = pasture["x"] + random.randint(1, pasture["width"] - 2)
+            y = pasture["y"] + random.randint(1, pasture["height"] - 2)
+            
+            sheep = {
+                "id": f"sheep_{self.next_sheep_id}",
+                "x": x,
+                "y": y,
+                "age_days": random.randint(5, 20),  # 隨機年齡
+                "is_adult": True,                    # 初始都是成羊
+                "wool_ready": random.choice([True, False]),  # 隨機是否可剪毛
+                "owner_id": owner_id,
+                "pasture_id": pasture["id"],
+                "last_move_time": 0,
+                "last_breed_check": 0
+            }
+            
+            self.sheep[sheep["id"]] = sheep
+            self.next_sheep_id += 1
+        
+        print(f"🐑 生成了 {len(self.sheep)} 隻羊")
+    
+    def add_sheep(self, pasture_id: str, owner_id: str, is_adult: bool = False) -> Optional[dict]:
+        """新增一隻羊"""
+        pasture = self.get_building_by_id(pasture_id)
+        if not pasture:
+            return None
+        
+        # 檢查牧場羊數上限（8隻）
+        sheep_in_pasture = [s for s in self.sheep.values() if s["pasture_id"] == pasture_id]
+        if len(sheep_in_pasture) >= 8:
+            return None
+        
+        # 隨機位置（牧場內）
+        x = pasture["x"] + random.randint(1, pasture["width"] - 2)
+        y = pasture["y"] + random.randint(1, pasture["height"] - 2)
+        
+        sheep = {
+            "id": f"sheep_{self.next_sheep_id}",
+            "x": x,
+            "y": y,
+            "age_days": 0 if not is_adult else 5,
+            "is_adult": is_adult,
+            "wool_ready": False,
+            "owner_id": owner_id,
+            "pasture_id": pasture_id,
+            "last_move_time": 0,
+            "last_breed_check": 0
+        }
+        
+        self.sheep[sheep["id"]] = sheep
+        self.next_sheep_id += 1
+        return sheep
+    
+    def remove_sheep(self, sheep_id: str) -> Optional[dict]:
+        """移除一隻羊"""
+        if sheep_id in self.sheep:
+            return self.sheep.pop(sheep_id)
+        return None
+    
+    def get_sheep_by_owner(self, owner_id: str) -> List[dict]:
+        """取得某人擁有的所有羊"""
+        return [s for s in self.sheep.values() if s["owner_id"] == owner_id]
+    
+    def get_sheep_in_pasture(self, pasture_id: str) -> List[dict]:
+        """取得牧場內的所有羊"""
+        return [s for s in self.sheep.values() if s["pasture_id"] == pasture_id]
+    
+    def get_sheep_ready_for_shearing(self, owner_id: str) -> List[dict]:
+        """取得可以剪毛的羊"""
+        return [s for s in self.sheep.values() 
+                if s["owner_id"] == owner_id and s["is_adult"] and s["wool_ready"]]
+    
+    def get_adult_sheep_for_sale(self, owner_id: str) -> List[dict]:
+        """取得可以賣的成羊"""
+        return [s for s in self.sheep.values() 
+                if s["owner_id"] == owner_id and s["is_adult"]]
     
     def update_time(self, delta_time: float):
         """更新遊戲時間"""
