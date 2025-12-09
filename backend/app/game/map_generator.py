@@ -19,7 +19,6 @@ WORK_BUILDINGS = [
     
     # === 中央區：商業 ===
     {"type": "market", "name": "市集", "x": 40, "y": 40, "width": 16, "height": 10},
-    {"type": "tavern", "name": "酒館", "x": 40, "y": 54, "width": 10, "height": 7},
     
     # === 左下區：木材 ===
     {"type": "lumber_camp", "name": "伐木場", "x": 4, "y": 76, "width": 12, "height": 10},

@@ -11,7 +11,7 @@ from datetime import datetime
 from .pathfinding import PathFinding
 from .map_generator import generate_map
 from .target_resolver import TargetResolver
-from .models import GameTime, VillagerStats, Sheep
+from .models import GameTime, VillagerStats, Sheep, Furniture
 
 
 class GameState:
@@ -41,6 +41,10 @@ class GameState:
         # 羊群
         self.sheep: Dict[str, dict] = {}
         self.next_sheep_id = 0
+        
+        # 家具（灶台、床等）
+        self.furniture: Dict[str, dict] = {}
+        self.next_furniture_id = 0
         
         # 事件佇列
         self.events: List[dict] = []
@@ -87,6 +91,9 @@ class GameState:
         
         # 生成羊群（牧場初始 4 隻羊）
         self._generate_sheep()
+        
+        # 生成房屋家具（灶台、床）
+        self._generate_furniture()
         
         # 初始化目標解析器
         self.target_resolver = TargetResolver(self)
@@ -388,6 +395,45 @@ class GameState:
         
         print(f"🐑 生成了 {len(self.sheep)} 隻羊")
     
+    def _generate_furniture(self):
+        """為每個住宅生成灶台和床"""
+        buildings = self.map_data.get("buildings", [])
+        
+        for building in buildings:
+            # 只為住宅類建築生成家具
+            if building.get("type") not in ["house", "cottage"]:
+                continue
+            
+            building_id = building.get("id")
+            bx = building.get("x", 0)
+            by = building.get("y", 0)
+            bw = building.get("width", 3)
+            bh = building.get("height", 3)
+            
+            # 在建築內部放置灶台（左下角）
+            stove = Furniture(
+                id=f"furniture_{self.next_furniture_id}",
+                type="stove",
+                x=bx + 1,
+                y=by + bh - 2,
+                building_id=building_id
+            )
+            self.furniture[stove.id] = stove.to_dict()
+            self.next_furniture_id += 1
+            
+            # 在建築內部放置床（右上角）
+            bed = Furniture(
+                id=f"furniture_{self.next_furniture_id}",
+                type="bed",
+                x=bx + bw - 2,
+                y=by + 1,
+                building_id=building_id
+            )
+            self.furniture[bed.id] = bed.to_dict()
+            self.next_furniture_id += 1
+        
+        print(f"🏠 生成了 {len(self.furniture)} 件家具")
+    
     def add_sheep(self, pasture_id: str, owner_id: str, is_adult: bool = False) -> Optional[dict]:
         """新增一隻羊"""
         pasture = self.get_building_by_id(pasture_id)
@@ -442,6 +488,59 @@ class GameState:
         """取得可以賣的成羊"""
         return [s for s in self.sheep.values() 
                 if s["owner_id"] == owner_id and s["is_adult"]]
+    
+    # ==================== 家具相關方法 ====================
+    
+    def get_furniture_by_building(self, building_id: str) -> List[dict]:
+        """取得建築內的所有家具"""
+        return [f for f in self.furniture.values() if f["building_id"] == building_id]
+    
+    def get_furniture_by_type(self, building_id: str, furniture_type: str) -> Optional[dict]:
+        """取得建築內特定類型的家具"""
+        for f in self.furniture.values():
+            if f["building_id"] == building_id and f["type"] == furniture_type:
+                return f
+        return None
+    
+    def get_stove_by_residence(self, villager_id: str) -> Optional[dict]:
+        """取得村民住所的灶台"""
+        villager = self.villagers.get(villager_id)
+        if not villager:
+            return None
+        residence_id = villager.get("residence")
+        if not residence_id:
+            return None
+        return self.get_furniture_by_type(residence_id, "stove")
+    
+    def get_bed_by_residence(self, villager_id: str) -> Optional[dict]:
+        """取得村民住所的床"""
+        villager = self.villagers.get(villager_id)
+        if not villager:
+            return None
+        residence_id = villager.get("residence")
+        if not residence_id:
+            return None
+        return self.get_furniture_by_type(residence_id, "bed")
+    
+    def use_furniture(self, furniture_id: str, user_id: str) -> bool:
+        """使用家具"""
+        if furniture_id not in self.furniture:
+            return False
+        furniture = self.furniture[furniture_id]
+        if furniture["in_use"]:
+            return False  # 已被使用
+        furniture["in_use"] = True
+        furniture["user_id"] = user_id
+        return True
+    
+    def release_furniture(self, furniture_id: str) -> bool:
+        """釋放家具"""
+        if furniture_id not in self.furniture:
+            return False
+        furniture = self.furniture[furniture_id]
+        furniture["in_use"] = False
+        furniture["user_id"] = None
+        return True
     
     def update_time(self, delta_time: float):
         """更新遊戲時間"""

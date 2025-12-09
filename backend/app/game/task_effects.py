@@ -136,12 +136,15 @@ class BuyFoodEffect(TaskEffect):
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> None:
         food_result = ctx.production.execute_food_purchase(villager, task)
         if food_result["success"]:
-            logger.info(f"🍽️ {villager['name']} 向 {food_result['seller_name']} 購買並吃了 {food_result['food_name']}（花費 ${food_result['price']}，飽足度 +{food_result['hunger_restore']}）")
+            if food_result.get("need_cook"):
+                # 生肉放到背包，等回家煮
+                logger.info(f"🥩 {villager['name']} 向 {food_result['seller_name']} 購買了 {food_result['food_name']}（花費 ${food_result['price']}，放入{food_result['location']}）")
+            else:
+                # 其他食物直接吃
+                logger.info(f"🍽️ {villager['name']} 向 {food_result['seller_name']} 購買並吃了 {food_result['food_name']}（花費 ${food_result['price']}，飽足度 +{food_result['hunger_restore']}）")
         else:
-            # 購買失敗，直接在酒館吃
-            stats = villager.get("stats", {})
-            stats["hunger"] = max(0, stats.get("hunger", 50) - 40)
-            logger.info(f"🍽️ {villager['name']} 購買失敗：{food_result['reason']}，在酒館吃了東西")
+            # 購買失敗
+            logger.info(f"🍽️ {villager['name']} 購買失敗：{food_result['reason']}")
 
 
 # ==================== 物品相關效果 ====================
@@ -198,6 +201,41 @@ class SlaughterSheepEffect(TaskEffect):
             logger.info(f"🔪 {villager['name']} 宰殺失敗：{result['reason']}")
 
 
+# ==================== 煮飯相關效果 ====================
+
+class CookEffect(TaskEffect):
+    """煮飯效果 - 使用灶台把生肉煮成熟肉並吃掉"""
+    
+    def execute(self, villager: dict, task: dict, ctx: TaskContext) -> None:
+        # 檢查是否有生肉
+        inventory = villager.get("inventory", [None, None, None])
+        meat_slot = None
+        meat_index = -1
+        
+        for i, slot in enumerate(inventory):
+            if slot and slot.get("item_id") == "meat_raw":
+                meat_slot = slot
+                meat_index = i
+                break
+        
+        if not meat_slot:
+            logger.info(f"🍳 {villager['name']} 沒有生肉可以煮")
+            return
+        
+        # 消耗一個生肉
+        if meat_slot.get("quantity", 1) > 1:
+            meat_slot["quantity"] -= 1
+        else:
+            villager["inventory"][meat_index] = None
+        
+        # 煮熟並吃掉，恢復飽足度
+        stats = villager.get("stats", {})
+        old_hunger = stats.get("hunger", 0)
+        stats["hunger"] = max(0, old_hunger - 50)  # 熟肉比麵包更飽
+        
+        logger.info(f"🍳 {villager['name']} 用灶台煮了生肉吃 (飢餓: {old_hunger:.0f} → {stats['hunger']:.0f})")
+
+
 # ==================== 效果註冊表 ====================
 
 TASK_EFFECTS: Dict[str, TaskEffect] = {
@@ -212,6 +250,7 @@ TASK_EFFECTS: Dict[str, TaskEffect] = {
     "shear_sheep": ShearSheepEffect(),
     "buy_sheep": BuySheepEffect(),
     "slaughter_sheep": SlaughterSheepEffect(),
+    "cook": CookEffect(),
 }
 
 

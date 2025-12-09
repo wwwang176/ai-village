@@ -208,6 +208,43 @@ class Sheep:
         )
 
 
+# ==================== 家具/可交互物件 ====================
+
+@dataclass
+class Furniture:
+    """家具/可交互地圖物件"""
+    id: str
+    type: str              # "stove", "bed"
+    x: float
+    y: float
+    building_id: str       # 所屬建築 ID
+    in_use: bool = False   # 是否正在使用
+    user_id: Optional[str] = None  # 誰在使用
+    
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "type": self.type,
+            "x": self.x,
+            "y": self.y,
+            "building_id": self.building_id,
+            "in_use": self.in_use,
+            "user_id": self.user_id
+        }
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> "Furniture":
+        return cls(
+            id=data["id"],
+            type=data["type"],
+            x=data["x"],
+            y=data["y"],
+            building_id=data["building_id"],
+            in_use=data.get("in_use", False),
+            user_id=data.get("user_id")
+        )
+
+
 # ==================== 交易相關 ====================
 
 @dataclass

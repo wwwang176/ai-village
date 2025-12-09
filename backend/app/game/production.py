@@ -246,7 +246,23 @@ class ProductionSystem:
         else:
             seller_slot["quantity"] -= quantity
         
-        # 買家吃掉食物
+        # 生肉需要回家煮，先放到背包
+        if food_item == "meat_raw":
+            # 放到買家背包
+            location = self.inventory_system.add_item(buyer, food_item, quantity)
+            if "pending_food_trade" in buyer:
+                del buyer["pending_food_trade"]
+            return {
+                "success": True,
+                "food_name": food_info["name"],
+                "price": total_price,
+                "hunger_restore": 0,  # 還沒吃
+                "seller_name": seller_name,
+                "need_cook": True,
+                "location": location
+            }
+        
+        # 其他食物（如麵包）直接吃掉
         stats = buyer.get("stats", {})
         hunger_restore = food_info["hunger_restore"] * quantity
         stats["hunger"] = max(0, stats.get("hunger", 50) - hunger_restore)
@@ -259,7 +275,8 @@ class ProductionSystem:
             "food_name": food_info["name"],
             "price": total_price,
             "hunger_restore": hunger_restore,
-            "seller_name": seller_name
+            "seller_name": seller_name,
+            "need_cook": False
         }
     
     def execute_material_trade(self, buyer: dict, task: dict) -> dict:

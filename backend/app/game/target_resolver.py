@@ -78,10 +78,11 @@ class TargetResolver:
         return None
     
     def _get_eat_target(self, villager: dict) -> Optional[Tuple[int, int]]:
-        """取得吃東西的地點（酒館或家）"""
-        target = self._get_building_target("tavern")
-        if target:
-            return target
+        """取得吃東西的地點（家裡灶台）"""
+        # 取得村民家裡的灶台位置
+        stove = self.game_state.get_stove_by_residence(villager.get("id"))
+        if stove:
+            return (int(stove["x"]), int(stove["y"]))
         return self._get_home_target(villager)
     
     def _get_social_target(self, villager: dict) -> Tuple[Optional[Tuple[int, int]], Optional[str]]:

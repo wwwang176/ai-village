@@ -321,18 +321,39 @@ class BuyFoodActionHandler(ActionHandler):
                 
                 logger.info(f"🍽️ {villager['name']} 準備向 {seller['name']} 購買 {food_item}")
                 
-                return [
+                tasks = [
                     Task(type="move_to_villager", target=(seller["x"], seller["y"]), target_villager_id=seller["id"]).to_dict(),
                     Task(type="buy_food", seller_id=seller["id"], food_item=food_item, duration=2).to_dict()
                 ]
+                
+                # 如果是生肉，需要回家用灶台煮
+                if food_item == "meat_raw":
+                    home = ctx.get_building_by_id(villager.get("residence"))
+                    if home:
+                        # 取得灶台位置
+                        stove = ctx.game_state.get_stove_by_residence(villager["id"])
+                        if stove:
+                            tasks.append(Task(type="move", target=(stove["x"], stove["y"])).to_dict())
+                            tasks.append(Task(type="cook", duration=3).to_dict())
+                            logger.info(f"🍳 {villager['name']} 買完肉會回家煮")
+                
+                return tasks
         
-        # 找不到賣食物的人，直接去酒館
-        logger.info(f"🍖 {villager['name']} 找不到賣食物的人，去酒館")
+        # 找不到賣食物的人，回家自己煮（如果有生肉的話）
+        logger.info(f"🍖 {villager['name']} 找不到賣食物的人，回家煮飯")
         tasks = []
-        tavern = ctx.get_building("tavern")
-        if tavern:
-            tasks.append(Task(type="move", target=(tavern["doorX"], tavern["doorY"] + 1)).to_dict())
-        tasks.append(Task(type="eat", duration=3).to_dict())
+        
+        # 回家
+        home = ctx.get_building_by_id(villager.get("residence"))
+        if home:
+            stove = ctx.game_state.get_stove_by_residence(villager["id"])
+            if stove:
+                tasks.append(Task(type="move", target=(stove["x"], stove["y"])).to_dict())
+                tasks.append(Task(type="cook", duration=3).to_dict())
+                return tasks
+        
+        # 沒有家或沒有灶台，只能挨餓
+        logger.info(f"😢 {villager['name']} 沒有地方煮飯，只能挨餓")
         return tasks
     
     def _find_food_seller(self, occupation: str, food_item: str, ctx: ActionContext) -> Optional[dict]:
