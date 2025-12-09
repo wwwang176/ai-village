@@ -169,7 +169,7 @@ export class Dashboard {
       <div class="detail-section">
         <div class="detail-title">🎒 背包 (💰 $${villager.money || 0})</div>
         <div class="inventory-grid">
-          ${this.renderInventory(villager.inventory || [null, null, null])}
+          ${this.renderInventory(villager.inventory || [null, null, null, null, null])}
         </div>
       </div>
       

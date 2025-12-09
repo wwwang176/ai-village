@@ -237,7 +237,7 @@ class GoWorkActionHandler(ActionHandler):
         tasks = []
         
         # 檢查背包是否滿了
-        inventory = villager.get("inventory", [None, None, None])
+        inventory = villager.get("inventory", [None] * 5)
         has_empty_slot = any(slot is None for slot in inventory)
         
         if not has_empty_slot:
@@ -267,7 +267,7 @@ class GoWorkActionHandler(ActionHandler):
         if not occupation or not occupation.input_materials:
             return None
         
-        inventory = villager.get("inventory", [None, None, None])
+        inventory = villager.get("inventory", [None] * 5)
         
         # 檢查每種原料是否足夠（從 occupations.py 讀取需求量）
         for material, required_qty in occupation.input_materials:
@@ -327,7 +327,7 @@ class GoWorkActionHandler(ActionHandler):
                 continue
             
             # 計算背包庫存
-            inventory = v.get("inventory", [None, None, None])
+            inventory = v.get("inventory", [None] * 5)
             bag_qty = 0
             for slot in inventory:
                 if slot and slot.get("item_id") == material:
@@ -359,7 +359,7 @@ class BuyFoodActionHandler(ActionHandler):
         from ..data.supply_chain import FOOD_SELLERS
         from .models import PendingFoodTrade
         
-        inventory = villager.get("inventory", [None, None, None])
+        inventory = villager.get("inventory", [None] * 5)
         
         # 1. 先檢查背包有沒有可以直接吃的食物（麵包）
         for slot in inventory:
@@ -476,7 +476,7 @@ class BuyFoodActionHandler(ActionHandler):
                 continue
             
             # 檢查是否有食物庫存
-            inventory = v.get("inventory", [None, None, None])
+            inventory = v.get("inventory", [None] * 5)
             for slot in inventory:
                 if slot and slot.get("item_id") == food_item:
                     if slot.get("quantity", 0) >= 2:

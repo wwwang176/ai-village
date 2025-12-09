@@ -62,7 +62,7 @@ class ProductionSystem:
         if not required_tool:
             return "no_need"
         
-        inventory = villager.get("inventory", [None, None, None])
+        inventory = villager.get("inventory", [None] * 5)
         tool_slot = None
         tool_index = -1
         
@@ -94,7 +94,7 @@ class ProductionSystem:
         if not required_tool:
             return True
         
-        inventory = villager.get("inventory", [None, None, None])
+        inventory = villager.get("inventory", [None] * 5)
         for slot in inventory:
             if slot and slot.get("item_id") == required_tool:
                 if slot.get("durability", 0) > 0:
@@ -116,7 +116,7 @@ class ProductionSystem:
         if not occupation or not occupation.output_product:
             return {"success": False, "reason": "此職業不生產物品"}
         
-        inventory = villager.get("inventory", [None, None, None])
+        inventory = villager.get("inventory", [None] * 5)
         
         # 檢查原料是否足夠（從 occupation.input_materials 讀取）
         for input_item, input_qty in occupation.input_materials:
@@ -161,7 +161,7 @@ class ProductionSystem:
             return {"success": False, "reason": f"錢不夠（需要 ${total_price}）", "seller_name": seller_name}
         
         # 檢查賣家庫存
-        seller_inventory = seller.get("inventory", [None, None, None])
+        seller_inventory = seller.get("inventory", [None] * 5)
         seller_slot_index = -1
         
         for i, slot in enumerate(seller_inventory):
@@ -229,7 +229,7 @@ class ProductionSystem:
         seller_name = seller.get("name", "未知")
         
         # 計算賣家背包庫存
-        seller_inventory = seller.get("inventory", [None, None, None])
+        seller_inventory = seller.get("inventory", [None] * 5)
         bag_qty = 0
         for slot in seller_inventory:
             if slot and slot.get("item_id") == material:

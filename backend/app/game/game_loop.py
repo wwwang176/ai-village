@@ -495,7 +495,7 @@ class GameLoop:
                         "state": v.get("state", "idle"),
                         "target": self.get_villager_target(v),
                         "stats": v.get("stats", {}),
-                        "inventory": v.get("inventory", [None, None, None]),  # 背包
+                        "inventory": v.get("inventory", [None] * 5),  # 背包（5格）
                         "money": v.get("money", 50),                          # 金錢
                         "tasks": [t.get("type") for t in v.get("task_queue", [])],
                         "memories": v.get("memories", [])[-5:],  # 只傳最近5條

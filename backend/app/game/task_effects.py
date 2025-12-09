@@ -43,7 +43,7 @@ class EatEffect(TaskEffect):
     """吃東西效果 - 消耗背包裡的食物"""
     
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
-        inventory = villager.get("inventory", [None, None, None])
+        inventory = villager.get("inventory", [None] * 5)
         stats = villager.get("stats", {})
         old_hunger = stats.get("hunger", 0)
         
@@ -255,7 +255,7 @@ class CookEffect(TaskEffect):
     
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
         # 檢查是否有生肉
-        inventory = villager.get("inventory", [None, None, None])
+        inventory = villager.get("inventory", [None] * 5)
         meat_slot = None
         meat_index = -1
         
@@ -297,7 +297,7 @@ class PickupEffect(TaskEffect):
         game_state = ctx.production.game_state
         
         # 檢查背包是否滿了，如果滿了先丟一個優先級低的物品
-        inventory = villager.get("inventory", [None, None, None])
+        inventory = villager.get("inventory", [None] * 5)
         has_empty_slot = any(slot is None for slot in inventory)
         
         if not has_empty_slot:

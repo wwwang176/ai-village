@@ -258,8 +258,8 @@ class GameState:
                 "tailor": "shears",
             }
             
-            # 初始化背包（3格）
-            inventory = [None, None, None]
+            # 初始化背包（5格）
+            inventory = [None] * 5
             
             # 如果職業需要工具，給予初始工具
             required_tool = occupation_tools.get(occupation)
