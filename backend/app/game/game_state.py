@@ -317,6 +317,21 @@ class GameState:
             }
             
             self.villagers[villager["id"]] = villager
+            
+            # 在村民家裡放三組麵包（每組10個）
+            home = self.get_building_by_id(residence)
+            if home:
+                # 在家裡地板上放麵包（避開門口）
+                bread_x = home["x"] + 2
+                bread_y = home["y"] + 1
+                for j in range(3):
+                    self.add_world_item(
+                        item_id="bread",
+                        quantity=10,
+                        x=bread_x + j,
+                        y=bread_y,
+                        owner_id=f"villager_{i}"
+                    )
         
         # 生成村民後，建立初始關係
         self._generate_initial_relationships()

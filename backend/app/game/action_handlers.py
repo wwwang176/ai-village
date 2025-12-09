@@ -328,7 +328,17 @@ class BuyFoodActionHandler(ActionHandler):
                         Task(type="cook", duration=3).to_dict()
                     ]
         
-        # 3. 背包沒食物，尋找有食物賣的村民
+        # 3. 檢查家裡地上有沒有自己的麵包可以撿
+        home_bread = self._find_home_bread(villager, ctx)
+        if home_bread:
+            logger.info(f"🍞 {villager['name']} 家裡有麵包，回家撿")
+            return [
+                Task(type="move", target=(home_bread["x"], home_bread["y"])).to_dict(),
+                Task(type="pickup", item_id=home_bread["id"], duration=1).to_dict(),
+                Task(type="eat", duration=2).to_dict()
+            ]
+        
+        # 4. 背包沒食物，尋找有食物賣的村民
         for food_item, seller_occupation in FOOD_SELLERS:
             seller = self._find_food_seller(seller_occupation, food_item, ctx)
             if seller:
@@ -374,6 +384,14 @@ class BuyFoodActionHandler(ActionHandler):
         # 沒有家或沒有灶台，只能挨餓
         logger.info(f"😢 {villager['name']} 沒有地方煮飯，只能挨餓")
         return tasks
+    
+    def _find_home_bread(self, villager: dict, ctx: ActionContext) -> Optional[dict]:
+        """找村民家裡地上的麵包"""
+        owner_items = ctx.game_state.get_items_by_owner(villager["id"])
+        for item in owner_items:
+            if item.get("item_id") == "bread":
+                return item
+        return None
     
     def _find_food_seller(self, occupation: str, food_item: str, ctx: ActionContext) -> Optional[dict]:
         """找到有食物賣的村民"""

@@ -296,7 +296,14 @@ class GameLoop:
         # 檢查是否完成
         if elapsed >= duration:
             # 執行效果
-            self.apply_task_effect(villager, task)
+            success = self.apply_task_effect(villager, task)
+            
+            # 如果任務失敗，清空後續任務
+            if not success:
+                logger.info(f"❌ {villager['name']} 任務 {task_type} 失敗，清空後續任務")
+                villager["task_queue"] = []
+                villager["state"] = "idle"
+            
             return True
         
         return False
@@ -383,9 +390,9 @@ class GameLoop:
         
         return True
     
-    def apply_task_effect(self, villager: dict, task: dict):
-        """執行任務效果（委託給 TaskEffectExecutor）"""
-        self.task_executor.execute(villager, task)
+    def apply_task_effect(self, villager: dict, task: dict) -> bool:
+        """執行任務效果（委託給 TaskEffectExecutor），返回是否成功"""
+        return self.task_executor.execute(villager, task)
     
     def create_task_queue(self, villager: dict, action: str) -> list:
         """將 AI 決策轉換為任務排程（委託給 ActionHandlerExecutor）"""

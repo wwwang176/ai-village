@@ -5,6 +5,8 @@
 import os
 import json
 import logging
+import asyncio
+import time
 from typing import Optional, List, Dict, Any
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
@@ -25,6 +27,10 @@ class VillagerAI:
         self.client = AsyncOpenAI(api_key=api_key) if api_key else None
         self.model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
         
+        # 每個村民的上次 API 呼叫時間（避免 rate limit）
+        self._last_api_call: Dict[str, float] = {}
+        self._api_interval = 1.0  # 每村民至少間隔 1 秒
+        
         if not self.client:
             logger.warning("⚠️ OpenAI API Key 未設定，使用規則系統")
         else:
@@ -36,6 +42,17 @@ class VillagerAI:
         # 如果沒有 API Key，使用規則系統
         if not self.client:
             return self._rule_based_decision(villager, game_state)
+        
+        # 檢查此村民的 API 呼叫間隔
+        villager_id = villager.get("id", "unknown")
+        now = time.time()
+        last_call = self._last_api_call.get(villager_id, 0)
+        wait_time = self._api_interval - (now - last_call)
+        
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+        
+        self._last_api_call[villager_id] = time.time()
         
         try:
             # 建構提示詞
