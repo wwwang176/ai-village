@@ -67,24 +67,23 @@ class EatEffect(TaskEffect):
 
 
 class RestEffect(TaskEffect):
-    """休息效果"""
+    """休息效果（睡覺恢復滿體力）"""
     
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
         stats = villager.get("stats", {})
         old_energy = stats.get("energy", 100)
-        stats["energy"] = 90
+        stats["energy"] = 100
         logger.info(f"💤 {villager['name']} 休息了 (體力: {old_energy:.0f} → {stats['energy']:.0f})")
         return True
 
 
 class SocializeEffect(TaskEffect):
-    """社交效果"""
+    """社交效果（社交值在對話結束時才增加）"""
     
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
-        stats = villager.get("stats", {})
-        old_social = stats.get("social", 50)
-        stats["social"] = min(100, old_social + 25)
-        logger.info(f"💬 {villager['name']} 社交了 (社交: {old_social:.0f} → {stats['social']:.0f})")
+        # 社交值在對話系統的 finish_conversation 中增加
+        # 這裡只標記村民正在等待社交
+        logger.info(f"💬 {villager['name']} 正在等待與人交流")
         return True
 
 

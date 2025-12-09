@@ -121,14 +121,15 @@ class SleepActionHandler(ActionHandler):
 
 
 class GoMarketActionHandler(ActionHandler):
-    """去市集行為"""
+    """去市集行為（等待遇人）"""
     
     def create_tasks(self, villager: dict, ctx: ActionContext) -> List[dict]:
         tasks = []
         target = ctx.resolve_target(villager, "go_market")
         if ctx.need_move(villager, target):
             tasks.append(Task(type="move", target=target).to_dict())
-        tasks.append(Task(type="socialize", duration=4).to_dict())
+        # 在市集等待，等對話系統檢測到相遇後會自動開始對話
+        tasks.append(Task(type="wait", duration=8).to_dict())
         return tasks
 
 
@@ -257,20 +258,21 @@ class GoWorkActionHandler(ActionHandler):
         return tasks
     
     def _check_missing_material(self, villager: dict, ctx: ActionContext) -> Optional[str]:
-        """檢查缺少的原料（庫存 = 0 才觸發補貨）"""
-        from ..data.supply_chain import REQUIRED_MATERIALS
+        """檢查缺少的原料（庫存 < 需求量 就觸發補貨）"""
+        from ..data.occupations import OCCUPATIONS
         
-        occupation = villager.get("occupation", "")
-        required_materials = REQUIRED_MATERIALS.get(occupation, [])
+        occupation_id = villager.get("occupation", "")
+        occupation = OCCUPATIONS.get(occupation_id)
         
-        if not required_materials:
+        if not occupation or not occupation.input_materials:
             return None
         
         inventory = villager.get("inventory", [None, None, None])
         
-        for material in required_materials:
+        # 檢查每種原料是否足夠（從 occupations.py 讀取需求量）
+        for material, required_qty in occupation.input_materials:
             owned_qty = ctx.inventory.count_item(inventory, material)
-            if owned_qty == 0:  # 只有完全沒有才補貨
+            if owned_qty < required_qty:  # 低於需求量就補貨
                 return material
         
         return None

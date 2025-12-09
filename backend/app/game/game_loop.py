@@ -102,8 +102,9 @@ class GameLoop:
     async def tick(self, delta_time: float, current_time: float):
         """單次遊戲更新"""
         
-        # 1. 更新遊戲時間
-        self.game_state.update_time(delta_time)
+        # 1. 更新遊戲時間（所有村民休息時加速 2 倍）
+        time_scale = self._get_time_scale()
+        self.game_state.update_time(delta_time * time_scale)
         
         # 2. 更新村民狀態
         self.update_villagers(delta_time)
@@ -131,6 +132,20 @@ class GameLoop:
         if current_time - self.last_broadcast >= self.broadcast_interval:
             self.last_broadcast = current_time
             await self.broadcast_state()
+    
+    def _get_time_scale(self) -> float:
+        """計算時間倍率（所有村民休息時加速）"""
+        villagers = list(self.game_state.villagers.values())
+        if not villagers:
+            return 1.0
+        
+        # 檢查是否所有村民都在休息
+        all_resting = all(
+            v.get("state") in ("rest", "sleep", "idle")
+            for v in villagers
+        )
+        
+        return 2.0 if all_resting else 1.0
     
     def update_villagers(self, delta_time: float):
         """更新所有村民位置和狀態"""

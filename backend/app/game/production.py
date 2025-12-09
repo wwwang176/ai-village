@@ -25,55 +25,6 @@ OCCUPATION_TOOLS = {
     "tailor": "shears",
 }
 
-# 生產配方定義
-PRODUCTION_RECIPES = {
-    # L1 職業：不需要原料
-    "farmer": [
-        {"output": "grain", "output_name": "穀物", "quantity": 2, "inputs": []},
-    ],
-    "miner": [
-        {"output": "ore", "output_name": "鐵礦", "quantity": 2, "inputs": []},
-    ],
-    "lumberjack": [
-        {"output": "wood", "output_name": "木材", "quantity": 2, "inputs": []},
-    ],
-    "shepherd": [
-        {"output": "wool", "output_name": "羊毛", "quantity": 2, "inputs": []},
-    ],
-    
-    # L2 職業：需要原料
-    "miller": [
-        {"output": "flour", "output_name": "麵粉", "quantity": 2, "inputs": [("grain", 2)]},
-    ],
-    "butcher": [
-        {"output": "meat_raw", "output_name": "生肉", "quantity": 2, "inputs": []},
-        {"output": "hide", "output_name": "羊皮", "quantity": 1, "inputs": []},
-    ],
-    "blacksmith": [
-        {"output": "iron", "output_name": "鐵錠", "quantity": 2, "inputs": [("ore", 2)]},
-    ],
-    "weaver": [
-        {"output": "cloth", "output_name": "布料", "quantity": 2, "inputs": [("wool", 2)]},
-    ],
-    "tanner": [
-        {"output": "leather", "output_name": "皮革", "quantity": 2, "inputs": [("hide", 2)]},
-    ],
-    
-    # L3 職業：需要半成品
-    "baker": [
-        {"output": "bread", "output_name": "麵包", "quantity": 4, "inputs": [("flour", 2)]},
-    ],
-    "carpenter": [
-        {"output": "furniture", "output_name": "家具", "quantity": 1, "inputs": [("wood", 2), ("iron", 1)]},
-    ],
-    "tailor": [
-        {"output": "clothes", "output_name": "衣服", "quantity": 2, "inputs": [("cloth", 2), ("leather", 1)]},
-    ],
-    
-    # 特殊職業
-    "merchant": None,
-}
-
 # 原料價格表
 MATERIAL_PRICES = {
     "grain": 3, "livestock": 8, "flour": 6, "ore": 5,
@@ -152,53 +103,39 @@ class ProductionSystem:
         return False
     
     def produce(self, villager: dict) -> dict:
-        """執行生產，根據職業產出物品
+        """執行生產，根據職業產出物品（從 occupations.py 讀取配方）
         
         返回:
             {"success": True/False, "product": "物品名", "quantity": 數量, "location": "背包/地上", "reason": "失敗原因"}
         """
-        occupation = villager.get("occupation", "")
-        recipes = PRODUCTION_RECIPES.get(occupation)
+        from ..data.occupations import OCCUPATIONS
         
-        if not recipes:
+        occupation_id = villager.get("occupation", "")
+        occupation = OCCUPATIONS.get(occupation_id)
+        
+        if not occupation or not occupation.output_product:
             return {"success": False, "reason": "此職業不生產物品"}
         
         inventory = villager.get("inventory", [None, None, None])
         
-        # 找出所有可以生產的配方
-        viable_recipes = []
-        failed_reasons = []
-        
-        for recipe in recipes:
-            can_produce = True
-            for input_item, input_qty in recipe["inputs"]:
-                owned_qty = self.inventory_system.count_item(inventory, input_item)
-                if owned_qty < input_qty:
-                    can_produce = False
-                    failed_reasons.append(f"缺少原料 {input_item}（需要 {input_qty}，擁有 {owned_qty}）")
-                    break
-            
-            if can_produce:
-                viable_recipes.append(recipe)
-        
-        if not viable_recipes:
-            return {"success": False, "reason": failed_reasons[0] if failed_reasons else "沒有可生產的配方"}
-        
-        # 隨機選擇一個可生產的配方
-        recipe = random.choice(viable_recipes)
+        # 檢查原料是否足夠（從 occupation.input_materials 讀取）
+        for input_item, input_qty in occupation.input_materials:
+            owned_qty = self.inventory_system.count_item(inventory, input_item)
+            if owned_qty < input_qty:
+                return {"success": False, "reason": f"缺少原料 {input_item}（需要 {input_qty}，擁有 {owned_qty}）"}
         
         # 消耗原料
-        for input_item, input_qty in recipe["inputs"]:
+        for input_item, input_qty in occupation.input_materials:
             self.inventory_system.remove_item(villager, input_item, input_qty)
         
-        # 產出物品
-        output_item = recipe["output"]
-        output_qty = recipe["quantity"]
+        # 產出物品（從 occupation 讀取）
+        output_item = occupation.output_product
+        output_qty = occupation.output_quantity
         location = self.inventory_system.add_item(villager, output_item, output_qty)
         
         return {
             "success": True,
-            "product": recipe["output_name"],
+            "product": occupation.name + "產品",
             "quantity": output_qty,
             "location": location
         }
