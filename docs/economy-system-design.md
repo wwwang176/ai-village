@@ -952,6 +952,255 @@ def generate_trade_dialogue(buyer, seller, item, quantity, price, phase):
 
 ---
 
+## 12. 物件導向設計
+
+### 12.1 設計原則
+
+使用 Python `dataclass` 將物品、職業、村民定義為類別，好處：
+- ✅ 型別提示、IDE 自動補全
+- ✅ 方法封裝、邏輯集中
+- ✅ 易於維護和擴展
+
+### 12.2 物品類別
+
+```python
+from dataclasses import dataclass
+from typing import Optional, List
+
+@dataclass
+class ItemType:
+    """物品類型定義"""
+    id: str                    # grain, bread, hoe...
+    name: str                  # 穀物, 麵包, 鋤頭...
+    icon: str                  # 🌾, 🍞, ⛏️...
+    category: str              # material, food, tool
+    stack_max: int = 10        # 最大堆疊數
+    durability_max: Optional[int] = None  # 工具才有
+    price: int = 0             # 價格
+    hunger_restore: int = 0    # 食物恢復飢餓值
+
+
+@dataclass
+class ItemStack:
+    """物品堆疊（背包/地上的一格）"""
+    item_type: ItemType        # 物品類型
+    quantity: int              # 數量
+    durability: Optional[int]  # 當前耐久度（工具）
+    owner_id: Optional[str]    # 擁有者 ID
+    x: Optional[int] = None    # 地上位置 X
+    y: Optional[int] = None    # 地上位置 Y
+    
+    def is_tool(self) -> bool:
+        return self.item_type.category == "tool"
+    
+    def is_owned_by(self, villager_id: str) -> bool:
+        return self.owner_id == villager_id or self.owner_id is None
+    
+    def use_durability(self, amount: int = 5) -> bool:
+        """消耗耐久度，返回是否損壞"""
+        if self.durability is not None:
+            self.durability -= amount
+            return self.durability <= 0
+        return False
+```
+
+### 12.3 職業類別
+
+```python
+@dataclass
+class OccupationType:
+    """職業類型定義"""
+    id: str                    # farmer, miller, baker...
+    name: str                  # 農夫, 磨坊主, 麵包師...
+    tier: int                  # 層級 1, 2, 3
+    chain: str                 # 產業鏈: food, tool, clothing
+    building: str              # 工作建築 ID
+    
+    # 工作時間
+    work_start: int = 8
+    work_end: int = 17
+    
+    # 工具需求
+    required_tool: Optional[str] = None
+    
+    # 生產配方
+    input_materials: List[tuple] = None   # [(item_id, quantity), ...]
+    output_product: str = ""
+    output_quantity: int = 0
+    work_time: int = 2
+```
+
+### 12.4 職業定義範例
+
+```python
+OCCUPATIONS = {
+    # === 食物鏈 L1 ===
+    "farmer": OccupationType(
+        id="farmer", name="農夫", tier=1, chain="food",
+        building="farm", work_start=5, work_end=14,
+        required_tool="hoe",
+        input_materials=[],
+        output_product="grain", output_quantity=2, work_time=2,
+    ),
+    
+    # === 食物鏈 L2 ===
+    "miller": OccupationType(
+        id="miller", name="磨坊主", tier=2, chain="food",
+        building="mill", work_start=7, work_end=16,
+        required_tool=None,
+        input_materials=[("grain", 2)],
+        output_product="flour", output_quantity=2, work_time=2,
+    ),
+    
+    # === 食物鏈 L3 ===
+    "baker": OccupationType(
+        id="baker", name="麵包師", tier=3, chain="food",
+        building="bakery", work_start=4, work_end=13,
+        required_tool=None,
+        input_materials=[("flour", 2)],
+        output_product="bread", output_quantity=4, work_time=2,
+    ),
+    
+    # ... 其他職業
+}
+```
+
+### 12.5 物品定義範例
+
+```python
+ITEM_TYPES = {
+    # === 原料 ===
+    "grain": ItemType(
+        id="grain", name="穀物", icon="🌾",
+        category="material", stack_max=10, price=2
+    ),
+    "ore": ItemType(
+        id="ore", name="鐵礦", icon="🪨",
+        category="material", stack_max=10, price=3
+    ),
+    "wood": ItemType(
+        id="wood", name="木材", icon="🪵",
+        category="material", stack_max=10, price=2
+    ),
+    "wool": ItemType(
+        id="wool", name="羊毛", icon="🧶",
+        category="material", stack_max=10, price=3
+    ),
+    
+    # === 工具 ===
+    "hoe": ItemType(
+        id="hoe", name="鋤頭", icon="⛏️",
+        category="tool", stack_max=1, durability_max=100, price=12
+    ),
+    "pickaxe": ItemType(
+        id="pickaxe", name="鶴嘴鋤", icon="⛏️",
+        category="tool", stack_max=1, durability_max=80, price=15
+    ),
+    
+    # === 食物 ===
+    "bread": ItemType(
+        id="bread", name="麵包", icon="🍞",
+        category="food", stack_max=10, price=3, hunger_restore=30
+    ),
+    "meat": ItemType(
+        id="meat", name="肉品", icon="🍖",
+        category="food", stack_max=10, price=6, hunger_restore=50
+    ),
+}
+```
+
+### 12.6 村民類別
+
+```python
+@dataclass
+class Villager:
+    """村民"""
+    id: str
+    name: str
+    occupation: OccupationType
+    
+    # 背包（3 格）
+    inventory: List[Optional[ItemStack]] = None
+    
+    # 數值
+    money: int = 50
+    hunger: int = 0
+    energy: int = 100
+    
+    # 位置與狀態
+    x: float = 0
+    y: float = 0
+    state: str = "idle"
+    
+    def __post_init__(self):
+        if self.inventory is None:
+            self.inventory = [None, None, None]
+    
+    def has_tool(self) -> bool:
+        """檢查是否有工作需要的工具"""
+        if not self.occupation.required_tool:
+            return True
+        return self.has_item(self.occupation.required_tool)
+    
+    def has_item(self, item_id: str, quantity: int = 1) -> bool:
+        """檢查是否有足夠的物品"""
+        total = sum(
+            slot.quantity for slot in self.inventory
+            if slot and slot.item_type.id == item_id
+        )
+        return total >= quantity
+    
+    def get_tool(self) -> Optional[ItemStack]:
+        """取得工作工具"""
+        tool_id = self.occupation.required_tool
+        if not tool_id:
+            return None
+        for slot in self.inventory:
+            if slot and slot.item_type.id == tool_id:
+                return slot
+        return None
+    
+    def add_item(self, item_stack: ItemStack) -> bool:
+        """添加物品到背包"""
+        # 先嘗試疊加到現有堆疊
+        for i, slot in enumerate(self.inventory):
+            if slot and slot.item_type.id == item_stack.item_type.id:
+                if slot.quantity + item_stack.quantity <= slot.item_type.stack_max:
+                    slot.quantity += item_stack.quantity
+                    return True
+        
+        # 找空格
+        for i, slot in enumerate(self.inventory):
+            if slot is None:
+                self.inventory[i] = item_stack
+                return True
+        
+        return False  # 背包滿了
+```
+
+### 12.7 檔案結構
+
+```
+backend/app/
+├── models/
+│   ├── __init__.py
+│   ├── item.py          # ItemType, ItemStack
+│   ├── occupation.py    # OccupationType
+│   └── villager.py      # Villager
+│
+├── data/
+│   ├── __init__.py
+│   ├── items.py         # ITEM_TYPES 定義
+│   ├── occupations.py   # OCCUPATIONS 定義
+│   └── supply_chain.py  # 供應鏈關係
+│
+└── game/
+    ├── economy.py       # 經濟系統邏輯
+    └── ...
+```
+
+---
+
 ## 附錄：建築物對應
 
 | 職業 | 建築物 | 英文 ID |
