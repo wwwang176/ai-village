@@ -469,7 +469,16 @@ class GameLoop:
         """取得村民的目標位置"""
         task_queue = villager.get("task_queue", [])
         for task in task_queue:
-            if task.get("type") == "move":
+            task_type = task.get("type")
+            # move 和 move_to_villager 都需要顯示路徑
+            if task_type in ["move", "move_to_villager"]:
+                # move_to_villager 需要動態取得目標村民位置
+                if task_type == "move_to_villager":
+                    target_id = task.get("target_villager_id")
+                    if target_id:
+                        target_v = self.game_state.villagers.get(target_id)
+                        if target_v:
+                            return (target_v["x"], target_v["y"])
                 return task.get("target")
         return None
     
