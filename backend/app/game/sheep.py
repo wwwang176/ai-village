@@ -255,7 +255,7 @@ class SheepSystem:
         if not seller:
             return {"success": False, "reason": "找不到賣家"}
         
-        SHEEP_PRICE = 15
+        SHEEP_PRICE = 10  # 平衡後：屠夫 L2 → $100/分
         
         # 檢查買家錢夠不夠
         if buyer.get("money", 0) < SHEEP_PRICE:

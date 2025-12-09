@@ -25,16 +25,20 @@ OCCUPATION_TOOLS = {
     "tailor": "shears",
 }
 
-# 原料價格表
+# 原料價格表（平衡後：L1=$80/分, L2=$100/分, L3=$120/分）
 MATERIAL_PRICES = {
-    "grain": 3, "livestock": 8, "flour": 6, "ore": 5,
-    "wood": 4, "wool": 4, "hide": 5, "iron": 10,
-    "cloth": 8, "leather": 8, "meat_raw": 6, "bread": 4
+    # L1 產出
+    "grain": 2, "ore": 3, "wood": 2, "wool": 2,
+    # L2 產出
+    "flour": 5, "iron": 8, "cloth": 7, "leather": 10,
+    "hide": 4, "meat_raw": 5,
+    # L3 產出（麵包師 $80/分，因為食物是生存必需）
+    "bread": 4,
 }
 
 # 食物資訊
 FOOD_INFO = {
-    "bread": {"name": "麵包", "price": 3, "hunger_restore": 30},
+    "bread": {"name": "麵包", "price": 4, "hunger_restore": 30},
     "meat_raw": {"name": "生肉", "price": 5, "hunger_restore": 40},
     "meat": {"name": "肉品", "price": 6, "hunger_restore": 50},
 }

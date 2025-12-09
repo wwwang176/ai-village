@@ -187,6 +187,8 @@ class VillagerAI:
         """根據村民狀態動態生成系統提示詞"""
         # 檢查是否有可賣產品
         sell_action = self._get_sell_action(villager)
+        # 檢查是否需要變賣物品換錢
+        sell_excess_action = self._get_sell_excess_action(villager)
         # 檢查是否可以工作（有原料或有供應商可以買）
         can_work = self._can_work(villager, game_state)
         
@@ -206,15 +208,20 @@ class VillagerAI:
             "- wander: 隨意閒逛",
         ])
         
-        # 動態加入賣東西選項
+        # 動態加入賣東西選項（成品）
         if sell_action:
             action_list.append(f"- sell_goods: {sell_action} ← 【最優先！必須先做這個】")
+        
+        # 動態加入變賣物品選項（沒錢時）
+        if sell_excess_action:
+            action_list.append(f"- sell_excess: {sell_excess_action} ← 【緊急！沒錢買食物】")
         
         actions = "可用的行為類型：\n" + "\n".join(action_list)
         
         # 動態生成優先順序說明
         priorities = [
             "1. 【有產品要賣】→ 必須先賣東西 (sell_goods)" if sell_action else None,
+            "1. 【沒錢買食物】→ 必須變賣物品 (sell_excess)" if sell_excess_action else None,
             "2. 飽足度 < 30% → 必須去買食物 (buy_food)",
             "3. 體力 < 30% → 必須回家休息 (go_home) 或睡覺 (sleep)",
             "4. 工作時間內 → 應該去工作 (go_work)" if can_work else None,
@@ -257,6 +264,28 @@ class VillagerAI:
                 qty = slot.get("quantity", 1)
                 item_name = {"furniture": "家具", "clothes": "衣服"}.get(sellable_item, sellable_item)
                 return f"賣{item_name}給商人（背包有 {qty} 個）"
+        
+        return ""
+    
+    def _get_sell_excess_action(self, villager: dict) -> str:
+        """檢查村民是否需要變賣物品換錢（money < 12 且肚子餓）"""
+        from ..data.item_categories import TOOLS
+        
+        money = villager.get("money", 0)
+        hunger = villager.get("hunger", 100)
+        
+        # 錢夠或不餓就不需要變賣
+        if money >= 12 or hunger >= 50:
+            return ""
+        
+        # 檢查背包是否有非工具物品可賣
+        inventory = villager.get("inventory", [])
+        for slot in inventory:
+            if slot:
+                item_id = slot.get("item_id")
+                if item_id and item_id not in TOOLS:
+                    qty = slot.get("quantity", 1)
+                    return f"變賣物品換錢（現金 ${money}，飽足度 {hunger}%）"
         
         return ""
     

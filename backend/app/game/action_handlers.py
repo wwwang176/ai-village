@@ -557,6 +557,62 @@ class SellGoodsActionHandler(ActionHandler):
         return None
 
 
+# ==================== 變賣物品行為處理器 ====================
+
+class SellExcessActionHandler(ActionHandler):
+    """沒錢時變賣背包物品給商人（原價）"""
+    
+    def create_tasks(self, villager: dict, ctx: ActionContext) -> List[dict]:
+        from ..data.item_categories import TOOLS
+        from ..game.production import MATERIAL_PRICES
+        
+        # 檢查背包是否有非工具物品可賣
+        inventory = villager.get("inventory", [None] * 5)
+        sell_item = None
+        for slot in inventory:
+            if slot:
+                item_id = slot.get("item_id")
+                if item_id and item_id not in TOOLS and item_id in MATERIAL_PRICES:
+                    sell_item = item_id
+                    break
+        
+        if not sell_item:
+            logger.info(f"💸 {villager['name']} 沒有可變賣的物品")
+            return []
+        
+        # 找商人
+        merchant = self._find_merchant(ctx)
+        if not merchant:
+            logger.info(f"💸 {villager['name']} 找不到商人")
+            return []
+        
+        # 記錄交易資訊
+        villager["pending_sell"] = {
+            "item": sell_item,
+            "merchant_id": merchant["id"],
+            "is_excess": True  # 標記為變賣（原價）
+        }
+        
+        logger.info(f"💸 {villager['name']} 準備變賣 {sell_item} 給商人換錢")
+        
+        tasks = []
+        # 移動到商人位置
+        if ctx.need_move(villager, (merchant["x"], merchant["y"])):
+            tasks.append(Task(type="move_to_villager", target=(merchant["x"], merchant["y"]), target_villager_id=merchant["id"]).to_dict())
+        
+        # 執行販賣（使用 sell_excess 任務）
+        tasks.append(Task(type="sell_excess", merchant_id=merchant["id"], item=sell_item, duration=2).to_dict())
+        
+        return tasks
+    
+    def _find_merchant(self, ctx: ActionContext) -> Optional[dict]:
+        """找到商人"""
+        for v in ctx.game_state.villagers.values():
+            if v.get("occupation") == "merchant":
+                return v
+        return None
+
+
 # ==================== 行為註冊表 ====================
 
 ACTION_HANDLERS: Dict[str, ActionHandler] = {
@@ -569,6 +625,7 @@ ACTION_HANDLERS: Dict[str, ActionHandler] = {
     "go_work": GoWorkActionHandler(),
     "buy_food": BuyFoodActionHandler(),
     "sell_goods": SellGoodsActionHandler(),
+    "sell_excess": SellExcessActionHandler(),
     "wander": WanderActionHandler(),
 }
 
