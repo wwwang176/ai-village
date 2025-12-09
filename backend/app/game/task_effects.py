@@ -296,6 +296,19 @@ class PickupEffect(TaskEffect):
         # 從 game_state 取得物品（透過 production 存取）
         game_state = ctx.production.game_state
         
+        # 檢查背包是否滿了，如果滿了先丟一個優先級低的物品
+        inventory = villager.get("inventory", [None, None, None])
+        has_empty_slot = any(slot is None for slot in inventory)
+        
+        if not has_empty_slot:
+            # 背包滿了，嘗試丟一個非工具、非食物的物品
+            dropped = ctx.inventory.drop_one_for_pickup(villager)
+            if dropped:
+                logger.info(f"📦 {villager['name']} 背包滿了，丟下 {dropped['item_id']} x{dropped.get('quantity', 1)}")
+            else:
+                logger.info(f"📦 {villager['name']} 背包滿了且沒有可丟的物品，無法撿取")
+                return False
+        
         # 找到並移除地上的物品
         item = game_state.remove_world_item(item_id)
         if not item:

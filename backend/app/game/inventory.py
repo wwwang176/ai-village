@@ -59,6 +59,9 @@ class InventorySystem:
                     # 部分移除
                     slot["quantity"] = slot_qty - remaining
                     remaining = 0
+        
+        # 整理背包
+        self.organize_inventory(villager)
     
     def add_item(self, villager: dict, item_id: str, quantity: int) -> str:
         """將物品加入村民背包，背包滿則放地上
@@ -108,7 +111,63 @@ class InventorySystem:
             )
             return "地上" if quantity == remaining else "背包+地上"
         
+        # 整理背包
+        self.organize_inventory(villager)
         return "背包"
+    
+    def organize_inventory(self, villager: dict):
+        """整理背包：合併相同物品"""
+        inventory = villager.get("inventory", [None, None, None])
+        
+        # 收集所有物品
+        items = {}  # {item_id: {"quantity": N, "durability": D, "owner_id": O}}
+        tools = []  # 工具單獨處理（有耐久度）
+        
+        for slot in inventory:
+            if slot is None:
+                continue
+            item_id = slot.get("item_id")
+            durability = slot.get("durability")
+            
+            # 工具有耐久度，不合併
+            if durability is not None:
+                tools.append(slot)
+            else:
+                if item_id in items:
+                    items[item_id]["quantity"] += slot.get("quantity", 1)
+                else:
+                    items[item_id] = {
+                        "item_id": item_id,
+                        "quantity": slot.get("quantity", 1),
+                        "durability": None,
+                        "owner_id": slot.get("owner_id", villager["id"])
+                    }
+        
+        # 重建背包
+        new_inventory = [None, None, None]
+        slot_index = 0
+        
+        # 先放工具
+        for tool in tools:
+            if slot_index < 3:
+                new_inventory[slot_index] = tool
+                slot_index += 1
+        
+        # 再放其他物品（可能需要分成多格，每格最多 10）
+        for item_id, item_data in items.items():
+            remaining = item_data["quantity"]
+            while remaining > 0 and slot_index < 3:
+                add_qty = min(10, remaining)
+                new_inventory[slot_index] = {
+                    "item_id": item_id,
+                    "quantity": add_qty,
+                    "durability": None,
+                    "owner_id": item_data["owner_id"]
+                }
+                remaining -= add_qty
+                slot_index += 1
+        
+        villager["inventory"] = new_inventory
     
     def buy_tool(self, villager: dict) -> Optional[dict]:
         """為村民購買工具
@@ -203,6 +262,32 @@ class InventorySystem:
             if item_id in TOOLS:
                 return self._drop_slot(villager, i)
         
+        return None
+    
+    def drop_one_for_pickup(self, villager: dict) -> Optional[dict]:
+        """為了撿東西而丟東西（優先丟原料，其次食物，不丟工具）
+        
+        返回被放下的物品資訊，或 None
+        """
+        inventory = villager.get("inventory", [None, None, None])
+        
+        # 優先丟原料（非食物、非工具）
+        for i, slot in enumerate(inventory):
+            if slot is None:
+                continue
+            item_id = slot.get("item_id")
+            if item_id not in FOODS and item_id not in TOOLS:
+                return self._drop_slot(villager, i)
+        
+        # 其次丟食物
+        for i, slot in enumerate(inventory):
+            if slot is None:
+                continue
+            item_id = slot.get("item_id")
+            if item_id in FOODS:
+                return self._drop_slot(villager, i)
+        
+        # 不丟工具
         return None
     
     def _drop_slot(self, villager: dict, slot_index: int) -> Optional[dict]:
