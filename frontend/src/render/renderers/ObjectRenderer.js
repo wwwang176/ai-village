@@ -16,6 +16,16 @@ export class ObjectRenderer extends BaseRenderer {
       'iron': '🔩', 'plank': '📏', 'cloth': '🧵', 'leather': '🟤',
       'bread': '🍞', 'meat': '🍖', 'clothes': '👕', 'furniture': '🪑'
     };
+    
+    // 物品名稱對應表
+    this.itemNames = {
+      'hoe': '鋤頭', 'pickaxe': '鎬', 'axe': '斧頭', 'shears': '剪刀',
+      'cleaver': '剁刀', 'hammer': '鐵鎚', 'saw': '鋸子', 'scraper': '刮刀',
+      'grain': '穀物', 'livestock': '牲畜', 'ore': '礦石', 'wood': '木材',
+      'wool': '羊毛', 'hide': '獸皮', 'flour': '麵粉', 'meat_raw': '生肉',
+      'iron': '鐵錠', 'plank': '木板', 'cloth': '布料', 'leather': '皮革',
+      'bread': '麵包', 'meat': '熟肉', 'clothes': '衣服', 'furniture': '傢俱'
+    };
   }
   
   /**
@@ -111,33 +121,39 @@ export class ObjectRenderer extends BaseRenderer {
     const size = this.tileSize;
     
     const icon = this.itemIcons[item.item_id] || '📦';
+    const itemName = this.itemNames[item.item_id] || '物品';
     
-    // 背景
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    // 陰影
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
     this.ctx.beginPath();
-    this.ctx.roundRect(screenX + 2, screenY + 2, size - 4, size - 4, 4);
+    this.ctx.ellipse(screenX + size / 2, screenY + size - 4, size * 0.3, size * 0.12, 0, 0, Math.PI * 2);
     this.ctx.fill();
     
-    // 物品圖示
-    this.ctx.font = `${size * 0.6}px sans-serif`;
+    // 物品圖示（不透明）
+    this.ctx.font = `${size * 0.7}px sans-serif`;
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
-    this.ctx.fillText(icon, screenX + size / 2, screenY + size / 2 - 2);
+    this.ctx.fillText(icon, screenX + size / 2, screenY + size / 2 - 4);
     
-    // 數量
+    // 數量（右下角）
     if (item.quantity > 1) {
-      this.ctx.font = 'bold 10px sans-serif';
+      this.ctx.font = 'bold 9px sans-serif';
       this.ctx.fillStyle = '#fff';
+      this.ctx.strokeStyle = '#000';
+      this.ctx.lineWidth = 2;
       this.ctx.textAlign = 'right';
-      this.ctx.fillText(`${item.quantity}`, screenX + size - 4, screenY + size - 4);
+      this.ctx.strokeText(`x${item.quantity}`, screenX + size - 2, screenY + size - 6);
+      this.ctx.fillText(`x${item.quantity}`, screenX + size - 2, screenY + size - 6);
     }
     
-    // 擁有者標記
-    if (item.owner_id) {
-      this.ctx.fillStyle = '#ffd700';
-      this.ctx.beginPath();
-      this.ctx.arc(screenX + size - 6, screenY + 6, 3, 0, Math.PI * 2);
-      this.ctx.fill();
-    }
+    // 物品標籤（下方顯示「XXX的XX」）
+    const label = item.owner_name ? `${item.owner_name}的${itemName}` : itemName;
+    this.ctx.font = '8px sans-serif';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillStyle = '#fff';
+    this.ctx.strokeStyle = '#000';
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeText(label, screenX + size / 2, screenY + size + 8);
+    this.ctx.fillText(label, screenX + size / 2, screenY + size + 8);
   }
 }

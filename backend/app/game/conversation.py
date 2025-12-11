@@ -249,6 +249,18 @@ class ConversationSystem:
             return "普通"
         
         my_mood = get_mood(my_stats)
+        
+        def get_affection_desc(aff):
+            if aff <= -60: return "仇視"
+            if aff <= -30: return "厭惡"
+            if aff <= -10: return "略有嫌隙"
+            if aff <= 10: return "普通"
+            if aff <= 30: return "有好感"
+            if aff <= 60: return "友好"
+            return "非常親近"
+        
+        affection_text = f"{affection}/100（{get_affection_desc(affection)}）"
+        
         my_prefs = villager.get("preferences", {})
         other_prefs = other.get("preferences", {})
         
@@ -268,7 +280,7 @@ class ConversationSystem:
 
 【你們的關係】
 - 熟悉度：{familiarity}（0=陌生人，100=老朋友）
-- 好感度：{affection}
+- 好感度：{affection_text}
 
 【你對 {other['name']} 的記憶】
 {memories_text}
@@ -320,21 +332,29 @@ class ConversationSystem:
         if villager_b.get("state") == "talking":
             villager_b["state"] = "idle"
         
-        # 更新關係
-        self.game_state.update_relationship(villager_a["id"], villager_b["id"], {"familiarity": 2, "affection": 1})
-        self.game_state.update_relationship(villager_b["id"], villager_a["id"], {"familiarity": 2, "affection": 1})
-        
         # 增加社交值
         villager_a.get("stats", {})["social"] = min(100, villager_a.get("stats", {}).get("social", 50) + 25)
         villager_b.get("stats", {})["social"] = min(100, villager_b.get("stats", {}).get("social", 50) + 25)
         logger.info(f"💬 {villager_a['name']} 和 {villager_b['name']} 社交值 +25")
         
-        # 生成總結並存入記憶
+        # 生成總結並存入記憶，同時判斷好感變化
         if len(conv.history) >= 2:
-            summary = await self.generate_summary(conv, ai_semaphore)
-            if summary:
+            result = await self.generate_summary(conv, ai_semaphore)
+            if result:
+                summary = result.get("summary", "")
+                affection_change = result.get("affection_change", 1)
+                
                 self.add_memory(villager_a, villager_b["name"], summary)
                 self.add_memory(villager_b, villager_a["name"], summary)
+                
+                # 根據對話內容更新好感度
+                self.game_state.update_relationship(villager_a["id"], villager_b["id"], {"familiarity": 2, "affection": affection_change})
+                self.game_state.update_relationship(villager_b["id"], villager_a["id"], {"familiarity": 2, "affection": affection_change})
+                logger.info(f"💕 {villager_a['name']} 和 {villager_b['name']} 好感度 {'+' if affection_change >= 0 else ''}{affection_change}")
+        else:
+            # 對話太短，只更新熟悉度
+            self.game_state.update_relationship(villager_a["id"], villager_b["id"], {"familiarity": 1})
+            self.game_state.update_relationship(villager_b["id"], villager_a["id"], {"familiarity": 1})
         
         # 廣播對話結束
         await self.manager.broadcast({
@@ -349,27 +369,44 @@ class ConversationSystem:
         logger.info(f"💬 對話結束: {villager_a['name']} 和 {villager_b['name']}")
         del self.active_conversations[conv_id]
     
-    async def generate_summary(self, conv: Conversation, ai_semaphore: asyncio.Semaphore) -> Optional[str]:
-        """生成對話總結（最多50字）"""
+    async def generate_summary(self, conv: Conversation, ai_semaphore: asyncio.Semaphore) -> Optional[dict]:
+        """生成對話總結與好感變化判斷"""
         history_text = conv.get_history_text()
         
-        prompt = f"""請用一句話總結以下對話（最多30字，用繁體中文）：
+        prompt = f"""請分析以下對話，並回傳 JSON：
 
 {history_text}
 
-只回傳總結內容，不要加引號或其他格式。"""
+請判斷：
+1. 用一句話總結對話內容（最多30字）
+2. 這次對話讓雙方好感度如何變化？（-3到+3之間的整數）
+   - +3: 非常愉快、深入交流
+   - +1~+2: 普通友好對話
+   - 0: 中性、無特別感受
+   - -1~-2: 有些不愉快、意見不合
+   - -3: 吵架、嚴重衝突
+
+回傳格式：{{"summary": "總結內容", "affection_change": 數字}}"""
 
         try:
             async with ai_semaphore:
                 response = await self.villager_ai.client.chat.completions.create(
                     model=os.getenv("OPENAI_MODEL", "gpt-4.1-nano"),
                     messages=[{"role": "user", "content": prompt}],
-                    max_tokens=50,
+                    max_tokens=100,
                     temperature=0.5
                 )
             
-            summary = response.choices[0].message.content.strip()
-            return summary[:50]
+            content = response.choices[0].message.content.strip()
+            
+            if "{" in content:
+                json_str = content[content.find("{"):content.rfind("}")+1]
+                result = json.loads(json_str)
+                result["summary"] = result.get("summary", "")[:50]
+                result["affection_change"] = max(-3, min(3, result.get("affection_change", 1)))
+                return result
+            else:
+                return {"summary": content[:50], "affection_change": 1}
             
         except Exception as e:
             logger.error(f"生成總結失敗: {e}")

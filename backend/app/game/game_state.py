@@ -628,8 +628,17 @@ class GameState:
         return False
     
     def get_all_world_items(self) -> List[dict]:
-        """取得所有地上物品"""
-        return self.world_items
+        """取得所有地上物品（含擁有者名稱）"""
+        result = []
+        for item in self.world_items:
+            item_copy = item.copy()
+            if item.get("owner_id"):
+                owner = self.villagers.get(item["owner_id"])
+                item_copy["owner_name"] = owner["name"] if owner else None
+            else:
+                item_copy["owner_name"] = None
+            result.append(item_copy)
+        return result
     
     def get_villagers_needing_decision(self) -> List[dict]:
         """取得需要 AI 決策的村民（task_queue 為空且閒置超過 3 秒）"""

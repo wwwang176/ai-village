@@ -29,7 +29,7 @@ class VillagerAI:
         
         # 每個村民的上次 API 呼叫時間（避免 rate limit）
         self._last_api_call: Dict[str, float] = {}
-        self._api_interval = 1.0  # 每村民至少間隔 1 秒
+        self._api_interval = 3.0  # 每村民至少間隔 3 秒
         
         if not self.client:
             logger.warning("⚠️ OpenAI API Key 未設定，使用規則系統")
