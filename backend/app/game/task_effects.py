@@ -391,9 +391,10 @@ class SellToMerchantEffect(TaskEffect):
         merchant["money"] = merchant_money - total_price
         
         # 3. 物品消失（視為出口）- 商人不保留物品
-        # 4. 商人獲得出口利潤（20%）
-        export_profit = int(total_price * 0.2)
-        merchant["money"] += export_profit
+        # 4. 商人從出口獲得賣價（收購價 × 1.2），淨賺 20%
+        export_sell_price = int(total_price * 1.2)
+        merchant["money"] += export_sell_price
+        export_profit = export_sell_price - total_price
         
         # 清除交易資訊
         if "pending_sell" in villager:
