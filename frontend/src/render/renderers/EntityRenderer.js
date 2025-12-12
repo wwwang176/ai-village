@@ -120,23 +120,52 @@ export class EntityRenderer extends BaseRenderer {
    * 渲染單一羊
    */
   renderSingleSheep(sheep) {
-    const { x: screenX, y: screenY } = this.toScreen(sheep.x, sheep.y);
+    // 使用 displayX/displayY 做插值動畫
+    const posX = sheep.displayX ?? sheep.x;
+    const posY = sheep.displayY ?? sheep.y;
+    const { x: screenX, y: screenY } = this.toScreen(posX, posY);
     const size = this.tileSize;
     
-    const bodyColor = sheep.is_adult ? '#f5f5dc' : '#fffacd';
     const headColor = '#2f2f2f';
+    
+    // 根據羊毛狀態決定顏色和大小
+    let bodyColor, bodyScale;
+    if (sheep.wool_ready) {
+      // 有羊毛：較白、較蓬鬆
+      bodyColor = '#ffffff';
+      bodyScale = 1.15;
+    } else {
+      // 剪過羊毛：偏灰、較瘦
+      bodyColor = sheep.is_adult ? '#d0d0d0' : '#e0e0e0';
+      bodyScale = 1.0;
+    }
+    
+    const baseBodyW = sheep.is_adult ? size * 0.7 : size * 0.5;
+    const baseBodyH = sheep.is_adult ? size * 0.5 : size * 0.35;
+    const bodyW = baseBodyW * bodyScale;
+    const bodyH = baseBodyH * bodyScale;
+    
+    const centerX = screenX + size / 2;
+    const centerY = screenY + size / 2 + 2;
+    
+    // 有羊毛時：畫毛茸茸的波浪邊緣
+    if (sheep.wool_ready) {
+      this.ctx.fillStyle = '#f8f8f8';
+      const fluffCount = 8;
+      for (let i = 0; i < fluffCount; i++) {
+        const angle = (i / fluffCount) * Math.PI * 2;
+        const fluffX = centerX + Math.cos(angle) * (bodyW / 2) * 0.9;
+        const fluffY = centerY + Math.sin(angle) * (bodyH / 2) * 0.9;
+        this.ctx.beginPath();
+        this.ctx.arc(fluffX, fluffY, size * 0.12, 0, Math.PI * 2);
+        this.ctx.fill();
+      }
+    }
     
     // 羊身體（橢圓）
     this.ctx.fillStyle = bodyColor;
     this.ctx.beginPath();
-    const bodyW = sheep.is_adult ? size * 0.7 : size * 0.5;
-    const bodyH = sheep.is_adult ? size * 0.5 : size * 0.35;
-    this.ctx.ellipse(
-      screenX + size / 2, 
-      screenY + size / 2 + 2,
-      bodyW / 2, bodyH / 2,
-      0, 0, Math.PI * 2
-    );
+    this.ctx.ellipse(centerX, centerY, bodyW / 2, bodyH / 2, 0, 0, Math.PI * 2);
     this.ctx.fill();
     
     // 羊頭
@@ -144,28 +173,12 @@ export class EntityRenderer extends BaseRenderer {
     this.ctx.beginPath();
     const headSize = sheep.is_adult ? size * 0.2 : size * 0.15;
     this.ctx.arc(
-      screenX + size / 2 - bodyW / 3,
-      screenY + size / 2,
+      centerX - bodyW / 3,
+      centerY,
       headSize,
       0, Math.PI * 2
     );
     this.ctx.fill();
-    
-    // 羊毛可剪標記
-    if (sheep.wool_ready) {
-      this.ctx.fillStyle = '#4CAF50';
-      this.ctx.beginPath();
-      this.ctx.arc(screenX + size - 4, screenY + 4, 3, 0, Math.PI * 2);
-      this.ctx.fill();
-    }
-    
-    // 小羊年齡標記
-    if (!sheep.is_adult) {
-      this.ctx.font = '8px sans-serif';
-      this.ctx.fillStyle = '#ff9800';
-      this.ctx.textAlign = 'center';
-      this.ctx.fillText('小', screenX + size / 2, screenY + size - 2);
-    }
   }
   
   // ==================== 玩家 ====================

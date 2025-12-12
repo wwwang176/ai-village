@@ -347,9 +347,9 @@ export class Game {
       this.map.worldItems = data.world_items;
     }
     
-    // 同步羊群
+    // 同步羊群（帶位置插值）
     if (data.sheep && this.map) {
-      this.map.sheep = data.sheep;
+      this.syncSheep(data.sheep);
     }
   }
   
@@ -442,6 +442,79 @@ export class Game {
   }
   
   /**
+   * 同步羊群（帶位置插值）
+   */
+  syncSheep(newSheepData) {
+    if (!this.map.sheep) {
+      this.map.sheep = [];
+    }
+    
+    // 建立舊羊的查找表
+    const oldSheepMap = {};
+    for (const sheep of this.map.sheep) {
+      oldSheepMap[sheep.id] = sheep;
+    }
+    
+    // 更新羊資料，保留插值狀態
+    const updatedSheep = [];
+    for (const newSheep of newSheepData) {
+      const oldSheep = oldSheepMap[newSheep.id];
+      
+      if (oldSheep) {
+        // 舊羊：設定目標位置，保留當前顯示位置
+        const displayX = oldSheep.displayX ?? oldSheep.x;
+        const displayY = oldSheep.displayY ?? oldSheep.y;
+        
+        updatedSheep.push({
+          ...newSheep,
+          displayX: displayX,
+          displayY: displayY,
+          targetX: newSheep.x,
+          targetY: newSheep.y
+        });
+      } else {
+        // 新羊：直接設定位置
+        updatedSheep.push({
+          ...newSheep,
+          displayX: newSheep.x,
+          displayY: newSheep.y,
+          targetX: newSheep.x,
+          targetY: newSheep.y
+        });
+      }
+    }
+    
+    this.map.sheep = updatedSheep;
+  }
+  
+  /**
+   * 更新羊的位置插值
+   */
+  updateSheepAnimation(deltaTime) {
+    if (!this.map?.sheep) return;
+    
+    const speed = 4; // 每秒移動的格數
+    
+    for (const sheep of this.map.sheep) {
+      if (sheep.displayX === undefined) sheep.displayX = sheep.x;
+      if (sheep.displayY === undefined) sheep.displayY = sheep.y;
+      
+      const dx = sheep.targetX - sheep.displayX;
+      const dy = sheep.targetY - sheep.displayY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist > 0.05) {
+        const move = Math.min(speed * deltaTime, dist);
+        sheep.displayX += (dx / dist) * move;
+        sheep.displayY += (dy / dist) * move;
+      } else {
+        sheep.displayX = sheep.targetX;
+        sheep.displayY = sheep.targetY;
+      }
+    }
+  }
+  
+  /**
    * 同步後端狀態
    */
   syncFromServer(state) {
@@ -526,6 +599,9 @@ export class Game {
     
     // 更新飛行物品動畫
     this.updateFlyingItems(deltaTime);
+    
+    // 更新羊的位置插值
+    this.updateSheepAnimation(deltaTime);
   }
   
   /**
