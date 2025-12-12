@@ -148,6 +148,29 @@ class BuyToolEffect(TaskEffect):
         tool_info = ctx.inventory.buy_tool(villager)
         if tool_info:
             logger.info(f"🔨 {villager['name']} 購買了 {tool_info['name']}！(花費 ${tool_info['price']})")
+            # 找鐵匠位置
+            game_state = ctx.production.game_state
+            blacksmith = None
+            for v in game_state.villagers.values():
+                if v.get("occupation") == "blacksmith":
+                    blacksmith = v
+                    break
+            
+            villager_x = villager.get("x", 0)
+            villager_y = villager.get("y", 0)
+            
+            if blacksmith:
+                # 工具從鐵匠飛到買家
+                ctx.queue_broadcast({
+                    "type": "trade_animation",
+                    "data": {
+                        "from_pos": {"x": blacksmith.get("x", 0), "y": blacksmith.get("y", 0)},
+                        "to_pos": {"x": villager_x, "y": villager_y},
+                        "item_id": "tool",
+                        "icon": "🔨",
+                        "quantity": 1
+                    }
+                })
             return True
         else:
             logger.info(f"🔨 {villager['name']} 無法購買工具（錢不夠或不需要）")
