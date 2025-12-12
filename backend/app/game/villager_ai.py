@@ -201,17 +201,28 @@ class VillagerAI:
         
         # 只有在能獲得食物時才顯示選項
         if can_buy_food:
-            action_list.append("- buy_food: 買食物吃")
+            action_list.append("- buy_food: 買食物吃，肚子餓的選項")
         
-        action_list.append("- go_home: 回家休息")
+        action_list.append("- go_home: 回家睡覺，體力不足的選項")
+        
+        # 食物鏈職業（農夫/磨坊主/麵包師）餓了時也能選擇工作
+        food_chain_jobs = ["farmer", "miller", "baker"]
+        occupation = villager.get("occupation", "")
+        stats = villager.get("stats", {})
+        hunger_value = 100 - stats.get("hunger", 0)  # 轉換成飽足度
+        is_hungry = hunger_value < 50
         
         # 只有在能工作時才顯示選項（有原料或有錢買）
+        # 或是食物鏈職業且肚子餓（可以靠工作生產食物）
         if can_work:
             action_list.append("- go_work: 去工作地點工作")
         
+        if occupation in food_chain_jobs and is_hungry:
+            action_list.append("- go_work: 生產食物")
+        
         action_list.extend([
-            "- go_market: 去市集逛逛（社交）",
-            "- sleep: 睡覺（晚上）",
+            "- go_market: 去市集逛逛，社交選項",
+            "- sleep: 睡覺，體力不足的選項",
             "- wander: 隨意閒逛",
         ])
         
@@ -220,7 +231,7 @@ class VillagerAI:
         # 構建優先級提示
         priority_hint = ""
         if sell_action:
-            priority_hint = "\n【最高優先】有標註「優先處理」或「緊急」的行為應該優先選擇！\n"
+            priority_hint = "\n【最高優先】有標註「優先處理」應該優先選擇！\n"
         
         return f"""你是一個中古世紀村莊模擬遊戲的 AI 系統。
 你需要根據村民的性格、狀態和環境，決定他們的下一步行為。
@@ -309,7 +320,7 @@ class VillagerAI:
         if reason == "過剩":
             return f"賣{item_name}給商人（庫存 {best_qty} 個，過剩）←【優先處理】"
         else:
-            return f"變賣{item_name}換錢（現金 ${money}，肚子餓）←【緊急！】"
+            return f"變賣{item_name}換錢←【優先處理】"
     
     def _can_work(self, villager: dict, game_state) -> bool:
         """檢查村民是否有足夠原料可以工作（有原料，或有錢+供應商有貨）"""
