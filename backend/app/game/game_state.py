@@ -14,6 +14,27 @@ from .target_resolver import TargetResolver
 from .models import GameTime, VillagerStats, Sheep, Furniture
 
 
+# === 共用的關係描述函數 ===
+
+def get_affection_desc(affection: int) -> str:
+    """好感度文字描述"""
+    if affection <= -60: return "仇視"
+    if affection <= -30: return "厭惡"
+    if affection <= -10: return "略有嫌隙"
+    if affection <= 10: return "普通"
+    if affection <= 30: return "有好感"
+    if affection <= 60: return "友好"
+    return "非常親近"
+
+def get_familiarity_desc(familiarity: int) -> str:
+    """熟悉度文字描述"""
+    if familiarity <= 10: return "陌生人"
+    if familiarity <= 30: return "見過幾面"
+    if familiarity <= 50: return "認識"
+    if familiarity <= 70: return "熟人"
+    return "老朋友"
+
+
 class GameState:
     def __init__(self):
         self.initialized = False

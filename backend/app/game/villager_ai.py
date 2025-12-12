@@ -232,7 +232,7 @@ class VillagerAI:
 回應必須是 JSON 格式:
 {{
   "action": "行為類型（必須是上方列出的選項之一）",
-  "reason": "簡短的理由（村民心中所想，用繁體中文，10字以內）",
+  "reason": "主觀的簡短理由（用繁體中文，10字以內）",
   "mood": "當前心情"
 }}
 
@@ -511,48 +511,61 @@ class VillagerAI:
         energy = stats.get('energy', 100)
         social = stats.get('social', 100)
         
-        # 生成緊急狀況提示
-        urgent_warnings = self._get_status_warnings(energy, satiety, social)
-        urgent_line = f"\n- ⚠️ 緊急狀況: {urgent_warnings}" if urgent_warnings else ""
+        # 生成狀態描述（標籤 + 百分比 + 優先級標記）
+        status_lines = self._build_status_description(energy, satiety, social)
         
         return f"""村民資訊:
 - 姓名: {villager['name']}
 - 職業: {villager['occupation']}
 - 性格: {', '.join(villager['personality'])}
-- 當前狀態: 體力 {energy:.0f}%, 飽足度 {satiety:.0f}%, 社交 {social:.0f}%{urgent_line}
+
+當前狀態（優先處理標 ⚠️ 的項目）：
+{status_lines}
 
 時間: 第 {time['day']} 天 {time['hour']:02d}:{time['minute']:02d}
 最近記憶: {self._format_memories(villager.get('memories', []))}
 
 請決定這個村民接下來應該做什麼。"""
     
-    def _get_status_warnings(self, energy: float, satiety: float, social: float) -> str:
-        """根據狀態生成緊急警告文字"""
-        warnings = []
+    def _build_status_description(self, energy: float, satiety: float, social: float) -> str:
+        """生成狀態描述（標籤 + 百分比 + 優先級標記）"""
+        lines = []
         
-        # 體力警告
-        if energy < 5:
-            warnings.append("極度疲憊，即將暈倒")
-        elif energy < 15:
-            warnings.append("非常疲累，急需休息")
-        elif energy < 30:
-            warnings.append("疲累")
-        
-        # 飽足度警告
+        # 飽足度（最高優先）
         if satiety <= 0:
-            warnings.append("飢餓至極，必須立即進食！")
+            lines.append(f"- 飽足度：{satiety:.0f}% 🚨 飢餓至極，必須立即進食！")
         elif satiety < 10:
-            warnings.append("非常飢餓，急需食物")
+            lines.append(f"- 飽足度：{satiety:.0f}% ⚠️ 非常飢餓，急需食物")
         elif satiety < 30:
-            warnings.append("飢餓")
+            lines.append(f"- 飽足度：{satiety:.0f}% ⚠️ 飢餓")
+        elif satiety < 50:
+            lines.append(f"- 飽足度：{satiety:.0f}% 有點餓")
+        else:
+            lines.append(f"- 飽足度：{satiety:.0f}% 正常")
         
-        # 社交警告
+        # 體力（次高優先）
+        if energy < 5:
+            lines.append(f"- 體力：{energy:.0f}% ⚠️ 極度疲憊，即將暈倒")
+        elif energy < 15:
+            lines.append(f"- 體力：{energy:.0f}% ⚠️ 非常疲累，急需休息")
+        elif energy < 30:
+            lines.append(f"- 體力：{energy:.0f}% ⚠️ 疲累")
+        elif energy < 50:
+            lines.append(f"- 體力：{energy:.0f}% 有點累")
+        else:
+            lines.append(f"- 體力：{energy:.0f}% 精力充沛")
+        
+        # 社交（最低優先）
         if social < 10:
-            warnings.append("非常孤獨")
+            lines.append(f"- 社交：{social:.0f}% ⚠️ 非常孤獨")
         elif social < 30:
-            warnings.append("孤獨")
+            lines.append(f"- 社交：{social:.0f}% 孤獨")
+        elif social < 50:
+            lines.append(f"- 社交：{social:.0f}% 想找人聊聊")
+        else:
+            lines.append(f"- 社交：{social:.0f}% 正常")
         
-        return " | ".join(warnings)
+        return "\n".join(lines)
 
     def _build_dialogue_prompt(
         self,
@@ -563,10 +576,18 @@ class VillagerAI:
         player_message: Optional[str]
     ) -> str:
         relationship = villager.get("relationships", {}).get("player", {})
+        affection = relationship.get('affection', 0)
+        familiarity = relationship.get('familiarity', 0)
+        
+        # 好感度文字描述
+        affection_desc = self._get_affection_desc(affection)
+        familiarity_desc = self._get_familiarity_desc(familiarity)
         
         prompt = f"""你是 {villager['name']}，一個 {villager['age']} 歲的 {self._get_occupation_name(villager['occupation'])}。
 性格: {', '.join(villager['personality'])}
-與玩家的關係: 好感度 {relationship.get('affection', 0)}，熟悉度 {relationship.get('familiarity', 0)}
+與玩家的關係:
+- 好感度: {affection}（{affection_desc}）
+- 熟悉度: {familiarity}（{familiarity_desc}）
 
 玩家對你 {self._get_action_name(action)}。"""
         
@@ -581,19 +602,26 @@ class VillagerAI:
         rel_a = villager_a.get("relationships", {}).get(villager_b["id"], {})
         rel_b = villager_b.get("relationships", {}).get(villager_a["id"], {})
         
+        aff_a = rel_a.get('affection', 0)
+        aff_b = rel_b.get('affection', 0)
+        fam_a = rel_a.get('familiarity', 0)
+        fam_b = rel_b.get('familiarity', 0)
+        
         return f"""兩個村民相遇:
 
 村民 A:
 - 姓名: {villager_a['name']}
-- 職業: {villager_a['occupation']}  
+- 職業: {self._get_occupation_name(villager_a['occupation'])}
 - 性格: {', '.join(villager_a['personality'])}
-- 對 B 的好感: {rel_a.get('affection', 0)}
+- 對 B 的好感: {aff_a}（{self._get_affection_desc(aff_a)}）
+- 對 B 的熟悉度: {fam_a}（{self._get_familiarity_desc(fam_a)}）
 
 村民 B:
 - 姓名: {villager_b['name']}
-- 職業: {villager_b['occupation']}
+- 職業: {self._get_occupation_name(villager_b['occupation'])}
 - 性格: {', '.join(villager_b['personality'])}
-- 對 A 的好感: {rel_b.get('affection', 0)}
+- 對 A 的好感: {aff_b}（{self._get_affection_desc(aff_b)}）
+- 對 A 的熟悉度: {fam_b}（{self._get_familiarity_desc(fam_b)}）
 
 請模擬他們的相遇互動。"""
 
@@ -604,11 +632,9 @@ class VillagerAI:
         return "; ".join([m.get("event", "") for m in recent])
     
     def _get_occupation_name(self, occupation: str) -> str:
-        names = {
-            "tavern": "酒保", "church": "神父", "market": "商人",
-            "blacksmith": "鐵匠", "bakery": "麵包師", "farm": "農夫", "house": "村民"
-        }
-        return names.get(occupation, "村民")
+        from ..data.occupations import OCCUPATIONS
+        occ = OCCUPATIONS.get(occupation)
+        return occ.name if occ else "村民"
     
     def _get_action_name(self, action: str) -> str:
         names = {
@@ -616,6 +642,14 @@ class VillagerAI:
             "ask_info": "打聽消息", "give_gift": "送禮物"
         }
         return names.get(action, action)
+    
+    def _get_affection_desc(self, affection: int) -> str:
+        from .game_state import get_affection_desc
+        return get_affection_desc(affection)
+    
+    def _get_familiarity_desc(self, familiarity: int) -> str:
+        from .game_state import get_familiarity_desc
+        return get_familiarity_desc(familiarity)
     
     # === 規則系統備用 ===
     

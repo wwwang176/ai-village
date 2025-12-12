@@ -277,16 +277,9 @@ class ConversationSystem:
         
         my_mood = get_mood(my_stats)
         
-        def get_affection_desc(aff):
-            if aff <= -60: return "仇視"
-            if aff <= -30: return "厭惡"
-            if aff <= -10: return "略有嫌隙"
-            if aff <= 10: return "普通"
-            if aff <= 30: return "有好感"
-            if aff <= 60: return "友好"
-            return "非常親近"
-        
-        affection_text = f"{affection}/100（{get_affection_desc(affection)}）"
+        from .game_state import get_affection_desc, get_familiarity_desc
+        affection_text = f"{affection}（{get_affection_desc(affection)}）"
+        familiarity_text = f"{familiarity}（{get_familiarity_desc(familiarity)}）"
         
         my_prefs = villager.get("preferences", {})
         other_prefs = other.get("preferences", {})
@@ -306,7 +299,7 @@ class ConversationSystem:
 - 性格：{', '.join(other.get('personality', ['普通']))}
 
 【你們的關係】
-- 熟悉度：{familiarity}（0=陌生人，100=老朋友）
+- 熟悉度：{familiarity_text}
 - 好感度：{affection_text}
 
 【你對 {other['name']} 的記憶】
@@ -426,7 +419,7 @@ class ConversationSystem:
 {history_text}
 
 請判斷：
-1. 用一句話總結對話內容（最多30字）
+1. 用一句話總結對話內容、情緒（最多30字）
 2. 這次對話讓雙方好感度如何變化？（-3到+3之間的整數）
    - +3: 非常愉快、深入交流
    - +1~+2: 普通友好對話
