@@ -185,10 +185,8 @@ class VillagerAI:
     
     def _get_system_prompt(self, villager: dict, game_state) -> str:
         """根據村民狀態動態生成系統提示詞"""
-        # 檢查是否有可賣產品
-        sell_action = self._get_sell_action(villager)
-        # 檢查是否需要變賣物品換錢
-        sell_excess_action = self._get_sell_excess_action(villager)
+        # 檢查是否有過剩物品可賣給商人
+        sell_action = self._get_sell_action(villager, game_state)
         # 檢查是否可以工作（有原料或有供應商可以買）
         can_work = self._can_work(villager, game_state)
         
@@ -208,20 +206,15 @@ class VillagerAI:
             "- wander: 隨意閒逛",
         ])
         
-        # 動態加入賣東西選項（成品）
+        # 動態加入賣東西選項（過剩物品）
         if sell_action:
-            action_list.append(f"- sell_goods: {sell_action} ← 【最優先！必須先做這個】")
-        
-        # 動態加入變賣物品選項（沒錢時）
-        if sell_excess_action:
-            action_list.append(f"- sell_excess: {sell_excess_action} ← 【緊急！沒錢買食物】")
+            action_list.append(f"- sell_goods: {sell_action}")
         
         actions = "可用的行為類型：\n" + "\n".join(action_list)
         
         # 動態生成優先順序說明
         priorities = [
-            "1. 【有產品要賣】→ 必須先賣東西 (sell_goods)" if sell_action else None,
-            "1. 【沒錢買食物】→ 必須變賣物品 (sell_excess)" if sell_excess_action else None,
+            "1. 【物品過剩或缺錢】→ 賣給商人 (sell_goods)" if sell_action else None,
             "2. 飽足度 < 30% → 必須去買食物 (buy_food)",
             "3. 體力 < 30% → 必須回家休息 (go_home) 或睡覺 (sleep)",
             "4. 工作時間內 → 應該去工作 (go_work)" if can_work else None,
@@ -247,47 +240,78 @@ class VillagerAI:
 注意：不需要提供座標，系統會自動處理移動。
 只能選擇上方列出的行為！"""
     
-    def _get_sell_action(self, villager: dict) -> str:
-        """檢查村民是否有可賣產品，返回描述或空字串"""
-        from ..data.supply_chain import SELLABLE_OCCUPATIONS
+    def _get_sell_action(self, villager: dict, game_state) -> str:
+        """檢查村民是否有過剩物品可賣給商人
         
-        occupation = villager.get("occupation", "")
-        sellable_item = SELLABLE_OCCUPATIONS.get(occupation)
-        
-        if not sellable_item:
-            return ""
-        
-        # 檢查背包是否有該產品
-        inventory = villager.get("inventory", [])
-        for slot in inventory:
-            if slot and slot.get("item_id") == sellable_item:
-                qty = slot.get("quantity", 1)
-                item_name = {"furniture": "家具", "clothes": "衣服"}.get(sellable_item, sellable_item)
-                return f"賣{item_name}給商人（背包有 {qty} 個）"
-        
-        return ""
-    
-    def _get_sell_excess_action(self, villager: dict) -> str:
-        """檢查村民是否需要變賣物品換錢（money < 12 且肚子餓）"""
+        過剩條件：
+        1. 同類物品（背包+地上）>= 該物品的過剩門檻
+        2. 或 現金 < 12 且肚子餓（hunger < 50）
+        """
         from ..data.item_categories import TOOLS
+        from ..data.supply_chain import EXCESS_THRESHOLDS
+        from ..game.production import MATERIAL_PRICES
         
         money = villager.get("money", 0)
-        hunger = villager.get("hunger", 100)
+        stats = villager.get("stats", {})
+        hunger = 100 - stats.get("hunger", 0)  # hunger 是飢餓度，轉換成飽足度
         
-        # 錢夠或不餓就不需要變賣
-        if money >= 12 or hunger >= 50:
-            return ""
+        # 檢查是否缺錢且餓
+        is_broke_and_hungry = money < 12 and hunger < 50
         
-        # 檢查背包是否有非工具物品可賣
+        # 統計所有物品（背包 + 地上）
+        item_counts = {}  # {item_id: total_qty}
+        
+        # 背包物品
         inventory = villager.get("inventory", [])
         for slot in inventory:
             if slot:
                 item_id = slot.get("item_id")
                 if item_id and item_id not in TOOLS:
                     qty = slot.get("quantity", 1)
-                    return f"變賣物品換錢（現金 ${money}，飽足度 {hunger}%）"
+                    item_counts[item_id] = item_counts.get(item_id, 0) + qty
         
-        return ""
+        # 地上物品（自己擁有的）
+        ground_items = game_state.get_items_by_owner(villager["id"])
+        for item in ground_items:
+            item_id = item.get("item_id")
+            if item_id and item_id not in TOOLS:
+                qty = item.get("quantity", 1)
+                item_counts[item_id] = item_counts.get(item_id, 0) + qty
+        
+        # 找出過剩的物品（依照分層門檻）
+        excess_items = []
+        for item_id, qty in item_counts.items():
+            # 只賣有價格的物品
+            if item_id not in MATERIAL_PRICES:
+                continue
+            
+            # 取得該物品的過剩門檻（預設 10）
+            threshold = EXCESS_THRESHOLDS.get(item_id, 10)
+            
+            if qty >= threshold:
+                excess_items.append((item_id, qty, "過剩"))
+            elif is_broke_and_hungry and qty >= 1:
+                excess_items.append((item_id, qty, "缺錢"))
+        
+        if not excess_items:
+            return ""
+        
+        # 選擇數量最多的物品賣
+        excess_items.sort(key=lambda x: x[1], reverse=True)
+        best_item, best_qty, reason = excess_items[0]
+        
+        item_names = {
+            "grain": "穀物", "ore": "礦石", "wood": "木材", "wool": "羊毛",
+            "flour": "麵粉", "iron": "鐵錠", "cloth": "布料", "leather": "皮革",
+            "hide": "獸皮", "meat_raw": "生肉", "bread": "麵包", "meat": "肉品",
+            "furniture": "家具", "clothes": "衣服", "plank": "木板"
+        }
+        item_name = item_names.get(best_item, best_item)
+        
+        if reason == "過剩":
+            return f"賣{item_name}給商人（庫存 {best_qty} 個，過剩）←【優先處理】"
+        else:
+            return f"變賣{item_name}換錢（現金 ${money}，肚子餓）←【緊急！】"
     
     def _can_work(self, villager: dict, game_state) -> bool:
         """檢查村民是否有足夠原料可以工作（有原料，或有錢+供應商有貨）"""

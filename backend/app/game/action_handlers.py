@@ -501,29 +501,71 @@ class BuyFoodActionHandler(ActionHandler):
 # ==================== 販賣物品行為處理器 ====================
 
 class SellGoodsActionHandler(ActionHandler):
-    """販賣物品給商人"""
+    """販賣過剩物品給商人（通用版）
+    
+    過剩條件：
+    1. 同類物品（背包+地上）>= 20 個
+    2. 或 現金 < 12 且肚子餓
+    
+    流程：
+    1. 找出過剩物品
+    2. 如果物品在地上，先去撿起來
+    3. 去找商人賣掉
+    """
     
     def create_tasks(self, villager: dict, ctx: ActionContext) -> List[dict]:
-        from ..data.supply_chain import SELLABLE_OCCUPATIONS, MERCHANT_BUY_PRICES
+        from ..data.item_categories import TOOLS
+        from ..game.production import MATERIAL_PRICES
         
-        occupation = villager.get("occupation", "")
-        sellable_item = SELLABLE_OCCUPATIONS.get(occupation)
+        money = villager.get("money", 0)
+        stats = villager.get("stats", {})
+        hunger = 100 - stats.get("hunger", 0)
+        is_broke_and_hungry = money < 12 and hunger < 50
         
-        if not sellable_item:
-            logger.info(f"💰 {villager['name']} 沒有可賣的物品")
-            return []
+        # 統計所有物品（背包 + 地上）
+        item_counts = {}  # {item_id: {"bag": qty, "ground": [(item, qty), ...]}}
         
-        # 檢查背包是否有可賣的物品
+        # 背包物品
         inventory = villager.get("inventory", [None] * 5)
-        has_item = False
         for slot in inventory:
-            if slot and slot.get("item_id") == sellable_item:
-                has_item = True
-                break
+            if slot:
+                item_id = slot.get("item_id")
+                if item_id and item_id not in TOOLS and item_id in MATERIAL_PRICES:
+                    qty = slot.get("quantity", 1)
+                    if item_id not in item_counts:
+                        item_counts[item_id] = {"bag": 0, "ground": []}
+                    item_counts[item_id]["bag"] += qty
         
-        if not has_item:
-            logger.info(f"💰 {villager['name']} 背包沒有 {sellable_item}")
+        # 地上物品（自己擁有的）
+        ground_items = ctx.game_state.get_items_by_owner(villager["id"])
+        for item in ground_items:
+            item_id = item.get("item_id")
+            if item_id and item_id not in TOOLS and item_id in MATERIAL_PRICES:
+                qty = item.get("quantity", 1)
+                if item_id not in item_counts:
+                    item_counts[item_id] = {"bag": 0, "ground": []}
+                item_counts[item_id]["ground"].append((item, qty))
+        
+        from ..data.supply_chain import EXCESS_THRESHOLDS
+        
+        # 找出過剩的物品（依照分層門檻）
+        excess_items = []
+        for item_id, data in item_counts.items():
+            total_qty = data["bag"] + sum(q for _, q in data["ground"])
+            threshold = EXCESS_THRESHOLDS.get(item_id, 10)
+            
+            if total_qty >= threshold:
+                excess_items.append((item_id, total_qty, data, "過剩"))
+            elif is_broke_and_hungry and total_qty >= 1:
+                excess_items.append((item_id, total_qty, data, "缺錢"))
+        
+        if not excess_items:
+            logger.info(f"💰 {villager['name']} 沒有過剩物品可賣")
             return []
+        
+        # 選擇數量最多的物品
+        excess_items.sort(key=lambda x: x[1], reverse=True)
+        best_item_id, total_qty, data, reason = excess_items[0]
         
         # 找商人
         merchant = self._find_merchant(ctx)
@@ -531,21 +573,34 @@ class SellGoodsActionHandler(ActionHandler):
             logger.info(f"💰 {villager['name']} 找不到商人")
             return []
         
+        tasks = []
+        
+        # 如果背包沒有該物品，先去撿地上的
+        if data["bag"] == 0 and data["ground"]:
+            # 找最近的地上物品
+            ground_item = data["ground"][0][0]
+            item_pos = (ground_item["x"], ground_item["y"])
+            
+            if ctx.need_move(villager, item_pos):
+                tasks.append(Task(type="move", target=item_pos).to_dict())
+            
+            tasks.append(Task(type="pickup", world_item_id=ground_item["id"], duration=1).to_dict())
+            logger.info(f"💰 {villager['name']} 先去撿地上的 {best_item_id}")
+        
         # 記錄交易資訊
         villager["pending_sell"] = {
-            "item": sellable_item,
+            "item": best_item_id,
             "merchant_id": merchant["id"]
         }
         
-        logger.info(f"💰 {villager['name']} 準備向商人 {merchant['name']} 賣 {sellable_item}")
+        logger.info(f"💰 {villager['name']} 準備向商人 {merchant['name']} 賣 {best_item_id}（{reason}，共 {total_qty} 個）")
         
-        tasks = []
         # 移動到商人位置
         if ctx.need_move(villager, (merchant["x"], merchant["y"])):
             tasks.append(Task(type="move_to_villager", target=(merchant["x"], merchant["y"]), target_villager_id=merchant["id"]).to_dict())
         
         # 執行販賣
-        tasks.append(Task(type="sell_to_merchant", merchant_id=merchant["id"], item=sellable_item, duration=2).to_dict())
+        tasks.append(Task(type="sell_to_merchant", merchant_id=merchant["id"], item=best_item_id, duration=2).to_dict())
         
         return tasks
     
@@ -557,60 +612,14 @@ class SellGoodsActionHandler(ActionHandler):
         return None
 
 
-# ==================== 變賣物品行為處理器 ====================
+# ==================== 變賣物品行為處理器（已整合到 SellGoodsActionHandler）====================
 
 class SellExcessActionHandler(ActionHandler):
-    """沒錢時變賣背包物品給商人（原價）"""
+    """沒錢時變賣背包物品給商人 - 已整合到 SellGoodsActionHandler"""
     
     def create_tasks(self, villager: dict, ctx: ActionContext) -> List[dict]:
-        from ..data.item_categories import TOOLS
-        from ..game.production import MATERIAL_PRICES
-        
-        # 檢查背包是否有非工具物品可賣
-        inventory = villager.get("inventory", [None] * 5)
-        sell_item = None
-        for slot in inventory:
-            if slot:
-                item_id = slot.get("item_id")
-                if item_id and item_id not in TOOLS and item_id in MATERIAL_PRICES:
-                    sell_item = item_id
-                    break
-        
-        if not sell_item:
-            logger.info(f"💸 {villager['name']} 沒有可變賣的物品")
-            return []
-        
-        # 找商人
-        merchant = self._find_merchant(ctx)
-        if not merchant:
-            logger.info(f"💸 {villager['name']} 找不到商人")
-            return []
-        
-        # 記錄交易資訊
-        villager["pending_sell"] = {
-            "item": sell_item,
-            "merchant_id": merchant["id"],
-            "is_excess": True  # 標記為變賣（原價）
-        }
-        
-        logger.info(f"💸 {villager['name']} 準備變賣 {sell_item} 給商人換錢")
-        
-        tasks = []
-        # 移動到商人位置
-        if ctx.need_move(villager, (merchant["x"], merchant["y"])):
-            tasks.append(Task(type="move_to_villager", target=(merchant["x"], merchant["y"]), target_villager_id=merchant["id"]).to_dict())
-        
-        # 執行販賣（使用 sell_excess 任務）
-        tasks.append(Task(type="sell_excess", merchant_id=merchant["id"], item=sell_item, duration=2).to_dict())
-        
-        return tasks
-    
-    def _find_merchant(self, ctx: ActionContext) -> Optional[dict]:
-        """找到商人"""
-        for v in ctx.game_state.villagers.values():
-            if v.get("occupation") == "merchant":
-                return v
-        return None
+        # 直接使用 SellGoodsActionHandler 的邏輯
+        return SellGoodsActionHandler().create_tasks(villager, ctx)
 
 
 # ==================== 行為註冊表 ====================

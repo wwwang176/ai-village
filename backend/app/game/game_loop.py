@@ -437,6 +437,11 @@ class GameLoop:
                     action = decision.get("action", "wander")
                     reason = decision.get("reason", "")
                     
+                    # 檢查村民是否已有任務（避免異步競爭覆蓋）
+                    if villager.get("task_queue"):
+                        logger.info(f"⏭️ {villager['name']} 已有任務，丟棄此決策")
+                        return
+                    
                     # 將 AI 決策轉換為任務排程
                     tasks = self.create_task_queue(villager, action)
                     

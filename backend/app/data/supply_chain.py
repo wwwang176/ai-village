@@ -115,15 +115,38 @@ def get_shops_for_need(need_type: str) -> List[str]:
 # 商人收購系統
 # ============================================================
 
-# 商人收購的物品及價格（平衡後）
+# 商人收購的物品及價格（所有原料都可收購，商人賺 20% 出口利潤）
 MERCHANT_BUY_PRICES = {
-    "furniture": 18,    # 家具（木匠 L2 → $100/分）
-    "clothes": 23,      # 衣服（裁縫 L3 → $120/分）
-    "bread": 4,         # 麵包（麵包師 → $80/分，生存必需品）
+    # L1 原料
+    "grain": 2,         # 穀物
+    "ore": 3,           # 礦石
+    "wood": 2,          # 木材
+    "wool": 2,          # 羊毛
+    # L2 半成品
+    "flour": 5,         # 麵粉
+    "iron": 8,          # 鐵錠
+    "cloth": 7,         # 布料
+    "leather": 10,      # 皮革
+    "hide": 4,          # 獸皮
+    "meat_raw": 5,      # 生肉
+    "plank": 6,         # 木板
+    # L3 成品
+    "bread": 4,         # 麵包
+    "meat": 6,          # 熟肉
+    "furniture": 18,    # 家具
+    "clothes": 23,      # 衣服
 }
 
-# 哪些職業可以賣東西給商人
-SELLABLE_OCCUPATIONS = {
-    "carpenter": "furniture",   # 木匠賣家具
-    "tailor": "clothes",        # 裁縫賣衣服
+# 過剩門檻（分層設計）- 達到門檻時會賣給商人
+EXCESS_THRESHOLDS = {
+    # L1 原料：容易大量生產
+    "grain": 20, "ore": 20, "wood": 20, "wool": 20,
+    # L2 半成品：受供應鏈限制
+    "flour": 10, "iron": 10, "cloth": 10, "leather": 10,
+    "hide": 10, "meat_raw": 10, "plank": 10,
+    # L3 成品：生產慢，應積極賣出
+    "bread": 15,      # 基本需求，保留較多
+    "meat": 10,       # 食物
+    "furniture": 1,   # 高價值，立即賣
+    "clothes": 1,     # 高價值，立即賣
 }
