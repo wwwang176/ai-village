@@ -135,6 +135,25 @@ class ProductionSystem:
         # 產出物品（從 occupation 讀取）
         output_item = occupation.output_product
         output_qty = occupation.output_quantity
+        
+        # early_bird/night_owl 工作效率加成
+        personality = villager.get("personality", [])
+        game_time = self.game_state.get_time()
+        hour = game_time.get("hour", 12)
+        is_daytime = 6 <= hour < 18
+        
+        efficiency_bonus = 0
+        if "early_bird" in personality:
+            efficiency_bonus = 0.05 if is_daytime else -0.05  # 白天+5%、晚上-5%
+        elif "night_owl" in personality:
+            efficiency_bonus = -0.05 if is_daytime else 0.05  # 白天-5%、晚上+5%
+        
+        # 用機率方式實現效率（例如 +5% 表示有 5% 機率多產一個）
+        if efficiency_bonus > 0 and random.random() < efficiency_bonus:
+            output_qty += 1
+        elif efficiency_bonus < 0 and random.random() < abs(efficiency_bonus):
+            output_qty = max(1, output_qty - 1)
+        
         location = self.inventory_system.add_item(villager, output_item, output_qty)
         
         return {

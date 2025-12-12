@@ -635,39 +635,10 @@ class VillagerAI:
         if stats["hunger"] > 70:
             return {"action": "buy_food", "target": None, "reason": "肚子餓了，去買點吃的", "mood": "hungry"}
         
-        # 工作時間（根據職業不同）
+        # 工作（不再限制工作時間，由性格 early_bird/night_owl 影響效率）
         occupation = villager.get("occupation", "")
-        
-        # 各職業的工作時間（新職業系統）
-        work_schedules = {
-            # 食物鏈
-            "farmer": (5, 14),        # 農夫：05:00-14:00
-            "miller": (7, 16),        # 磨坊主：07:00-16:00
-            "butcher": (6, 15),       # 屠夫：06:00-15:00
-            "baker": (4, 13),         # 麵包師：04:00-13:00
-            # 器具鏈
-            "miner": (6, 15),         # 礦工：06:00-15:00
-            "lumberjack": (6, 15),    # 伐木工：06:00-15:00
-            "blacksmith": (8, 17),    # 鐵匠：08:00-17:00
-            "carpenter": (8, 17),     # 木匠：08:00-17:00
-            # 服飾鏈
-            "shepherd": (5, 14),      # 牧羊人：05:00-14:00
-            "weaver": (8, 17),        # 織工：08:00-17:00
-            "tanner": (8, 17),        # 皮革匠：08:00-17:00
-            "tailor": (9, 18),        # 裁縫：09:00-18:00
-            # 特殊
-            "merchant": (8, 18),      # 商人：08:00-18:00
-        }
-        
-        # 根據職業工作時間
-        if occupation in work_schedules:
-            start, end = work_schedules[occupation]
-            if start <= hour < end:
-                return {"action": "go_work", "target": None, "reason": "該工作了", "mood": "neutral"}
-        elif occupation and occupation != "house":
-            # 預設工作時間：08:00-17:00
-            if 8 <= hour < 17:
-                return {"action": "go_work", "target": None, "reason": "該工作了", "mood": "neutral"}
+        if occupation and occupation != "house":
+            return {"action": "go_work", "target": None, "reason": "該工作了", "mood": "neutral"}
         
         # 社交需求 - 主動找人聊天
         if stats["social"] < 30:

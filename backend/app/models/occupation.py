@@ -15,10 +15,6 @@ class OccupationType:
     chain: str                 # 產業鏈: food, tool, clothing
     building: str              # 工作建築 ID
     
-    # 工作時間
-    work_start: int = 8
-    work_end: int = 17
-    
     # 工具需求
     required_tool: Optional[str] = None
     
@@ -32,10 +28,6 @@ class OccupationType:
         """是否需要工具"""
         return self.required_tool is not None
     
-    def is_work_time(self, hour: int) -> bool:
-        """檢查是否在工作時間"""
-        return self.work_start <= hour < self.work_end
-    
     def get_required_materials(self) -> List[Tuple[str, int]]:
         """取得所需原料"""
         return self.input_materials
@@ -48,8 +40,6 @@ class OccupationType:
             "tier": self.tier,
             "chain": self.chain,
             "building": self.building,
-            "work_start": self.work_start,
-            "work_end": self.work_end,
             "required_tool": self.required_tool,
             "input_materials": self.input_materials,
             "output_product": self.output_product,

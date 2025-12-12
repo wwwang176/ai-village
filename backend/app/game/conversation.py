@@ -102,8 +102,35 @@ class ConversationSystem:
         if current_time - last_chat_a < 60 or current_time - last_chat_b < 60:
             return
         
-        # 30% 機率觸發
-        if random.random() > 0.3:
+        # 計算聊天觸發機率（基礎 30%）
+        chat_chance = 0.3
+        personality_a = villager_a.get("personality", [])
+        personality_b = villager_b.get("personality", [])
+        
+        # extrovert/introvert 影響聊天機率
+        if "extrovert" in personality_a or "extrovert" in personality_b:
+            chat_chance *= 2.0  # 外向者更容易觸發聊天
+        if "introvert" in personality_a and "introvert" in personality_b:
+            chat_chance *= 0.25  # 兩個內向者很難觸發
+        elif "introvert" in personality_a or "introvert" in personality_b:
+            chat_chance *= 0.5  # 一個內向者降低機率
+        
+        # brave/timid 對陌生人（熟悉度<30）的影響
+        rel_a = villager_a.get("relationships", {}).get(villager_b["id"], {})
+        rel_b = villager_b.get("relationships", {}).get(villager_a["id"], {})
+        familiarity = max(rel_a.get("familiarity", 0), rel_b.get("familiarity", 0))
+        
+        if familiarity < 30:  # 陌生人
+            if "brave" in personality_a or "brave" in personality_b:
+                chat_chance *= 2.0
+            if "timid" in personality_a and "timid" in personality_b:
+                chat_chance *= 0.09  # 0.3 * 0.3
+            elif "timid" in personality_a or "timid" in personality_b:
+                chat_chance *= 0.3
+        
+        chat_chance = min(0.9, chat_chance)  # 上限 90%
+        
+        if random.random() > chat_chance:
             return
         
         # 建立新對話
@@ -342,19 +369,40 @@ class ConversationSystem:
             result = await self.generate_summary(conv, ai_semaphore)
             if result:
                 summary = result.get("summary", "")
-                affection_change = result.get("affection_change", 1)
+                base_affection = result.get("affection_change", 1)
                 
                 self.add_memory(villager_a, villager_b["name"], summary)
                 self.add_memory(villager_b, villager_a["name"], summary)
                 
+                # 計算性格對好感度的影響
+                personality_a = villager_a.get("personality", [])
+                personality_b = villager_b.get("personality", [])
+                
+                # 計算 A 對 B 的好感變化
+                affection_a_to_b = self._calc_affection_change(
+                    base_affection, personality_a, villager_a, villager_b
+                )
+                # 計算 B 對 A 的好感變化
+                affection_b_to_a = self._calc_affection_change(
+                    base_affection, personality_b, villager_b, villager_a
+                )
+                
+                # 計算熟悉度變化（trust 影響）
+                familiarity_a = self._calc_familiarity_change(2, personality_a)
+                familiarity_b = self._calc_familiarity_change(2, personality_b)
+                
                 # 根據對話內容更新好感度
-                self.game_state.update_relationship(villager_a["id"], villager_b["id"], {"familiarity": 2, "affection": affection_change})
-                self.game_state.update_relationship(villager_b["id"], villager_a["id"], {"familiarity": 2, "affection": affection_change})
-                logger.info(f"💕 {villager_a['name']} 和 {villager_b['name']} 好感度 {'+' if affection_change >= 0 else ''}{affection_change}")
+                self.game_state.update_relationship(villager_a["id"], villager_b["id"], {"familiarity": familiarity_a, "affection": affection_a_to_b})
+                self.game_state.update_relationship(villager_b["id"], villager_a["id"], {"familiarity": familiarity_b, "affection": affection_b_to_a})
+                logger.info(f"💕 {villager_a['name']} 和 {villager_b['name']} 好感度 {'+' if affection_a_to_b >= 0 else ''}{affection_a_to_b}")
         else:
             # 對話太短，只更新熟悉度
-            self.game_state.update_relationship(villager_a["id"], villager_b["id"], {"familiarity": 1})
-            self.game_state.update_relationship(villager_b["id"], villager_a["id"], {"familiarity": 1})
+            personality_a = villager_a.get("personality", [])
+            personality_b = villager_b.get("personality", [])
+            familiarity_a = self._calc_familiarity_change(1, personality_a)
+            familiarity_b = self._calc_familiarity_change(1, personality_b)
+            self.game_state.update_relationship(villager_a["id"], villager_b["id"], {"familiarity": familiarity_a})
+            self.game_state.update_relationship(villager_b["id"], villager_a["id"], {"familiarity": familiarity_b})
         
         # 廣播對話結束
         await self.manager.broadcast({
@@ -446,3 +494,36 @@ class ConversationSystem:
                 "turn": conv.get_turn_count()
             }
         })
+    
+    def _calc_affection_change(self, base: int, personality: list, me: dict, other: dict) -> int:
+        """計算性格對好感度變化的影響"""
+        result = float(base)
+        
+        # friendly/grumpy 影響好感度變化
+        if "friendly" in personality:
+            result += 2 if base > 0 else 1  # 友善者好感度提升更多
+        elif "grumpy" in personality:
+            result -= 1  # 暴躁者好感度提升較少
+        
+        # romantic/reserved 影響異性好感度
+        my_gender = me.get("gender", "male")
+        other_gender = other.get("gender", "male")
+        if my_gender != other_gender:  # 異性
+            if "romantic" in personality:
+                result *= 1.5  # 浪漫者對異性好感度提升更多
+            elif "reserved" in personality:
+                result *= 0.7  # 矜持者對異性好感度提升較少
+        
+        return int(round(result))
+    
+    def _calc_familiarity_change(self, base: int, personality: list) -> int:
+        """計算性格對熟悉度變化的影響"""
+        result = float(base)
+        
+        # trusting/suspicious 影響熟悉度提升
+        if "trusting" in personality:
+            result *= 1.5  # 信任者熟悉度提升更快
+        elif "suspicious" in personality:
+            result *= 0.7  # 多疑者熟悉度提升較慢
+        
+        return int(round(result))

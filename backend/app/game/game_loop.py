@@ -170,16 +170,34 @@ class GameLoop:
     def update_villager_stats(self, villager: dict, delta_time: float):
         """更新村民狀態數值"""
         stats = villager.get("stats", {})
+        personality = villager.get("personality", [])
+        
+        # 判斷日夜（6:00-18:00 為白天）
+        game_time = self.game_state.get_time()
+        hour = game_time.get("hour", 12)
+        is_daytime = 6 <= hour < 18
         
         # 飢餓緩慢增加（0.25/秒，約 4.7 分鐘從 0 到 70%）
         stats["hunger"] = min(100, stats.get("hunger", 0) + delta_time * 0.25)
         
         # 體力緩慢下降（非睡眠時）
         if villager.get("state") != "sleeping":
-            stats["energy"] = max(0, stats.get("energy", 100) - delta_time * 0.1)
+            energy_rate = 0.1
+            # early_bird/night_owl 影響體力下降速度
+            if "early_bird" in personality:
+                energy_rate *= 0.8 if is_daytime else 1.2  # 白天慢、晚上快
+            elif "night_owl" in personality:
+                energy_rate *= 1.2 if is_daytime else 0.8  # 白天快、晚上慢
+            stats["energy"] = max(0, stats.get("energy", 100) - delta_time * energy_rate)
         
         # 社交需求下降
-        stats["social"] = max(0, stats.get("social", 50) - delta_time * 0.1)
+        social_rate = 0.1
+        # extrovert/introvert 影響社交下降速度
+        if "extrovert" in personality:
+            social_rate *= 1.5  # 外向者社交需求下降更快
+        elif "introvert" in personality:
+            social_rate *= 0.5  # 內向者社交需求下降更慢
+        stats["social"] = max(0, stats.get("social", 50) - delta_time * social_rate)
     
     def process_task_queue(self, villager: dict, delta_time: float):
         """處理村民的任務隊列"""

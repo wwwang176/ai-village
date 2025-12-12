@@ -26,23 +26,58 @@
 | 12 | 👕 裁縫 | tailor | L3 | 👔 服飾鏈 | ✂️ 剪刀 |
 | 13 | 🏪 商人 | merchant | 特殊 | 💰 貿易 | - |
 
-### 1.2 職業工作時間
+### 1.2 工作時間（已移除）
 
-| 職業 | 工作時間 | 說明 |
-|------|----------|------|
-| 👨‍🌾 農夫 | 05:00-14:00 | 早起務農 |
-| ⛏️ 礦工 | 06:00-15:00 | 礦坑作業 |
-| 🪓 伐木工 | 06:00-15:00 | 森林作業 |
-| 🐑 牧羊人 | 05:00-14:00 | 放牧 |
-| 🌾 磨坊主 | 07:00-16:00 | 配合農夫 |
-| 🔪 屠夫 | 06:00-15:00 | 早市供應 |
-| 🍞 麵包師 | 04:00-13:00 | 凌晨烤麵包 |
-| 🔨 鐵匠 | 08:00-17:00 | 正常工時 |
-| 🪚 木匠 | 08:00-17:00 | 正常工時 |
-| 🧵 織工 | 08:00-17:00 | 正常工時 |
-| 🟤 皮革匠 | 08:00-17:00 | 正常工時 |
-| 👕 裁縫 | 09:00-18:00 | 稍晚開工 |
-| 🏪 商人 | 08:00-18:00 | 市集時間 |
+> ⚠️ **已移除固定工作時間限制**
+> 
+> 村民現在可以隨時工作，工作效率由**性格系統**（early_bird / night_owl）決定。
+> 詳見「村民性格系統」章節。
+
+---
+
+## 1.5 村民性格系統
+
+### 性格維度（7 維度 14 種性格）
+
+每個村民在遊戲開始時從 7 個維度中隨機抽 4 個，每個維度抽一個正面或反面性格。
+
+| 維度 | 正面 | 反面 | 影響機制 |
+|------|------|------|----------|
+| **社交** | extrovert（外向） | introvert（內向） | 聊天觸發機率 ×2/×0.5、社交值下降速度 ×1.5/×0.5 |
+| **態度** | friendly（友善） | grumpy（暴躁） | 聊天後好感度 +2/-1 |
+| **信任** | trusting（信任） | suspicious（多疑） | 熟悉度提升 ×1.5/×0.7 |
+| **感情** | romantic（浪漫） | reserved（矜持） | 異性好感度 ×1.5/×0.7 |
+| **勇氣** | brave（勇敢） | timid（膽小） | 對陌生人（熟悉度<30）搭話機率 ×2/×0.3 |
+| **心態** | optimistic（樂觀） | pessimistic（悲觀） | 心情變化幅度（待實作） |
+| **作息** | early_bird（早起鳥） | night_owl（夜貓子） | 見下表 |
+
+### 作息性格效果詳細
+
+| 效果 | 時段 | early_bird | night_owl |
+|------|------|------------|-----------|
+| **工作效率** | 白天（6:00-18:00） | +5% | -5% |
+| | 晚上（18:00-6:00） | -5% | +5% |
+| **體力下降** | 白天（6:00-18:00） | ×0.8（慢） | ×1.2（快） |
+| | 晚上（18:00-6:00） | ×1.2（快） | ×0.8（慢） |
+
+### 程式碼定義
+
+```python
+# game_state.py
+personality_dimensions = {
+    "social": ["extrovert", "introvert"],
+    "temper": ["friendly", "grumpy"],
+    "trust": ["trusting", "suspicious"],
+    "romance": ["romantic", "reserved"],
+    "courage": ["brave", "timid"],
+    "outlook": ["optimistic", "pessimistic"],
+    "schedule": ["early_bird", "night_owl"],
+}
+
+# 村民生成時抽 4 個維度
+selected_dimensions = random.sample(list(personality_dimensions.keys()), 4)
+traits = [random.choice(personality_dimensions[dim]) for dim in selected_dimensions]
+```
 
 ---
 
@@ -1248,10 +1283,6 @@ class OccupationType:
     chain: str                 # 產業鏈: food, tool, clothing
     building: str              # 工作建築 ID
     
-    # 工作時間
-    work_start: int = 8
-    work_end: int = 17
-    
     # 工具需求
     required_tool: Optional[str] = None
     
@@ -1260,6 +1291,8 @@ class OccupationType:
     output_product: str = ""
     output_quantity: int = 0
     work_time: int = 2
+    
+    # 注意：已移除 work_start/work_end，工作時間由性格系統控制
 ```
 
 ### 14.4 職業定義範例
@@ -1269,7 +1302,7 @@ OCCUPATIONS = {
     # === 食物鏈 L1 ===
     "farmer": OccupationType(
         id="farmer", name="農夫", tier=1, chain="food",
-        building="farm", work_start=5, work_end=14,
+        building="farm",
         required_tool="hoe",
         input_materials=[],
         output_product="grain", output_quantity=2, work_time=2,
@@ -1278,19 +1311,19 @@ OCCUPATIONS = {
     # === 食物鏈 L2 ===
     "miller": OccupationType(
         id="miller", name="磨坊主", tier=2, chain="food",
-        building="mill", work_start=7, work_end=16,
+        building="mill",
         required_tool=None,
-        input_materials=[("grain", 2)],
-        output_product="flour", output_quantity=2, work_time=2,
+        input_materials=[("grain", 1)],
+        output_product="flour", output_quantity=1, work_time=2,
     ),
     
     # === 食物鏈 L3 ===
     "baker": OccupationType(
         id="baker", name="麵包師", tier=3, chain="food",
-        building="bakery", work_start=4, work_end=13,
+        building="bakery",
         required_tool=None,
-        input_materials=[("flour", 2)],
-        output_product="bread", output_quantity=4, work_time=2,
+        input_materials=[("flour", 1)],
+        output_product="bread", output_quantity=2, work_time=2,
     ),
     
     # ... 其他職業
