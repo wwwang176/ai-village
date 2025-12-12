@@ -365,103 +365,126 @@ class BuyFoodActionHandler(ActionHandler):
     """購買食物行為"""
     
     def create_tasks(self, villager: dict, ctx: ActionContext) -> List[dict]:
+        import random
         from ..data.supply_chain import FOOD_SELLERS
         from .models import PendingFoodTrade
         
         inventory = villager.get("inventory", [None] * 5)
+        stove = ctx.game_state.get_stove_by_residence(villager["id"])
         
-        # 1. 先檢查背包有沒有可以直接吃的食物（麵包）
-        for slot in inventory:
-            if slot and slot.get("item_id") == "bread":
-                logger.info(f"🍞 {villager['name']} 背包有麵包，原地吃")
-                return [Task(type="eat", duration=2).to_dict()]
-        
-        # 2. 檢查背包有沒有生肉，有的話回家煮
-        for slot in inventory:
-            if slot and slot.get("item_id") == "meat_raw":
-                logger.info(f"🥩 {villager['name']} 背包有生肉，回家煮")
-                stove = ctx.game_state.get_stove_by_residence(villager["id"])
-                if stove:
-                    return [
-                        Task(type="move", target=(stove["x"], stove["y"])).to_dict(),
-                        Task(type="cook", duration=3).to_dict()
-                    ]
-        
-        # 2.5 麵包師傅有麵粉 → 去工作做麵包（cook 不能處理麵粉）
+        # 0. 麵包師傅有麵粉 → 去工作做麵包（特殊處理）
         if villager.get("occupation") == "baker":
             for slot in inventory:
                 if slot and slot.get("item_id") == "flour":
                     logger.info(f"🌾 {villager['name']} 是麵包師且有麵粉，去工作做麵包")
                     return GoWorkActionHandler().create_tasks(villager, ctx)
         
-        # 3. 檢查地上有沒有自己的麵包可以撿（統一使用基類方法）
+        # 1. 檢查背包有沒有食物（麵包/生肉隨機二選一）
+        bag_options = []
+        for slot in inventory:
+            if slot and slot.get("item_id") == "bread":
+                bag_options.append("bread")
+                break
+        for slot in inventory:
+            if slot and slot.get("item_id") == "meat_raw" and stove:  # 生肉要有灶台才能選
+                bag_options.append("meat_raw")
+                break
+        
+        if bag_options:
+            choice = random.choice(bag_options)
+            if choice == "bread":
+                logger.info(f"🍞 {villager['name']} 背包有麵包，原地吃")
+                return [Task(type="eat", duration=2).to_dict()]
+            else:
+                logger.info(f"🥩 {villager['name']} 背包有生肉，回家煮")
+                return [
+                    Task(type="move", target=(stove["x"], stove["y"])).to_dict(),
+                    Task(type="cook", duration=3).to_dict()
+                ]
+        
+        # 2. 檢查地上有沒有自己的食物（麵包/生肉隨機二選一）
         ground_bread = self._find_owned_ground_item(villager, "bread", ctx)
+        ground_meat = self._find_owned_ground_item(villager, "meat_raw", ctx) if stove else None
+        
+        ground_options = []
         if ground_bread:
+            ground_options.append(("bread", ground_bread))
+        if ground_meat:
+            ground_options.append(("meat_raw", ground_meat))
+        
+        if ground_options:
+            choice, ground_item = random.choice(ground_options)
             tasks = []
             
             # 檢查背包是否滿了
             has_empty_slot = any(slot is None for slot in inventory)
             if not has_empty_slot:
-                # 背包滿了，先丟一個非食物物品
                 drop_index = self._find_non_food_slot(inventory)
                 if drop_index is not None:
                     logger.info(f"🎒 {villager['name']} 背包滿了，先丟一個東西")
                     tasks.append(Task(type="drop_item", duration=1).to_dict())
             
-            logger.info(f"🍞 {villager['name']} 地上有自己的麵包，去撿")
-            tasks.extend([
-                Task(type="move", target=(ground_bread["x"], ground_bread["y"])).to_dict(),
-                Task(type="pickup", item_id=ground_bread["id"], duration=1).to_dict(),
-                Task(type="eat", duration=2).to_dict()
-            ])
+            if choice == "bread":
+                logger.info(f"🍞 {villager['name']} 地上有自己的麵包，去撿來吃")
+                tasks.extend([
+                    Task(type="move", target=(ground_item["x"], ground_item["y"])).to_dict(),
+                    Task(type="pickup", item_id=ground_item["id"], duration=1).to_dict(),
+                    Task(type="eat", duration=2).to_dict()
+                ])
+            else:
+                logger.info(f"🥩 {villager['name']} 地上有自己的生肉，去撿來煮")
+                tasks.extend([
+                    Task(type="move", target=(ground_item["x"], ground_item["y"])).to_dict(),
+                    Task(type="pickup", item_id=ground_item["id"], duration=1).to_dict(),
+                    Task(type="move", target=(stove["x"], stove["y"])).to_dict(),
+                    Task(type="cook", duration=3).to_dict()
+                ])
             return tasks
         
-        # 4. 背包沒食物，尋找有食物賣的村民
+        # 3. 尋找有食物賣的村民（麵包/生肉隨機二選一）
+        FOOD_PRICES = {"bread": 3, "meat_raw": 5}
+        money = villager.get("money", 0)
+        
+        buy_options = []
         for food_item, seller_occupation in FOOD_SELLERS:
+            # 檢查是否買得起
+            price = FOOD_PRICES.get(food_item, 5)
+            if money < price:
+                continue
+            # 生肉需要有灶台
+            if food_item == "meat_raw" and not stove:
+                continue
+            # 檢查有沒有賣家
             seller = self._find_food_seller(seller_occupation, food_item, ctx)
             if seller:
-                # 記錄交易資訊
-                villager["pending_food_trade"] = PendingFoodTrade(
-                    food_item=food_item,
-                    seller_id=seller["id"]
-                ).to_dict()
-                
-                logger.info(f"🍽️ {villager['name']} 準備向 {seller['name']} 購買 {food_item}")
-                
-                tasks = [
-                    Task(type="move_to_villager", target=(seller["x"], seller["y"]), target_villager_id=seller["id"]).to_dict(),
-                    Task(type="buy_food", seller_id=seller["id"], food_item=food_item, duration=2).to_dict()
-                ]
-                
-                # 如果是生肉，需要回家用灶台煮
-                if food_item == "meat_raw":
-                    home = ctx.get_building_by_id(villager.get("residence"))
-                    if home:
-                        # 取得灶台位置
-                        stove = ctx.game_state.get_stove_by_residence(villager["id"])
-                        if stove:
-                            tasks.append(Task(type="move", target=(stove["x"], stove["y"])).to_dict())
-                            tasks.append(Task(type="cook", duration=3).to_dict())
-                            logger.info(f"🍳 {villager['name']} 買完肉會回家煮")
-                
-                return tasks
+                buy_options.append((food_item, seller))
         
-        # 找不到賣食物的人，回家自己煮（如果有生肉的話）
-        logger.info(f"🍖 {villager['name']} 找不到賣食物的人，回家煮飯")
-        tasks = []
-        
-        # 回家
-        home = ctx.get_building_by_id(villager.get("residence"))
-        if home:
-            stove = ctx.game_state.get_stove_by_residence(villager["id"])
-            if stove:
+        if buy_options:
+            food_item, seller = random.choice(buy_options)
+            
+            villager["pending_food_trade"] = PendingFoodTrade(
+                food_item=food_item,
+                seller_id=seller["id"]
+            ).to_dict()
+            
+            logger.info(f"🍽️ {villager['name']} 準備向 {seller['name']} 購買 {food_item}")
+            
+            tasks = [
+                Task(type="move_to_villager", target=(seller["x"], seller["y"]), target_villager_id=seller["id"]).to_dict(),
+                Task(type="buy_food", seller_id=seller["id"], food_item=food_item, duration=2).to_dict()
+            ]
+            
+            # 如果是生肉，需要回家用灶台煮
+            if food_item == "meat_raw":
                 tasks.append(Task(type="move", target=(stove["x"], stove["y"])).to_dict())
                 tasks.append(Task(type="cook", duration=3).to_dict())
-                return tasks
+                logger.info(f"🍳 {villager['name']} 買完肉會回家煮")
+            
+            return tasks
         
-        # 沒有家或沒有灶台，只能挨餓
-        logger.info(f"😢 {villager['name']} 沒有地方煮飯，只能挨餓")
-        return tasks
+        # 4. 什麼都沒有，只能挨餓
+        logger.info(f"😢 {villager['name']} 找不到食物來源，只能挨餓")
+        return []
     
     def _find_non_food_slot(self, inventory: list) -> Optional[int]:
         """找到一個非食物的背包格子（優先丟原料）"""
@@ -522,7 +545,7 @@ class SellGoodsActionHandler(ActionHandler):
     
     def create_tasks(self, villager: dict, ctx: ActionContext) -> List[dict]:
         from ..data.item_categories import TOOLS
-        from ..game.production import MATERIAL_PRICES
+        from ..data.supply_chain import MERCHANT_BUY_PRICES
         
         money = villager.get("money", 0)
         stats = villager.get("stats", {})
@@ -537,7 +560,7 @@ class SellGoodsActionHandler(ActionHandler):
         for slot in inventory:
             if slot:
                 item_id = slot.get("item_id")
-                if item_id and item_id not in TOOLS and item_id in MATERIAL_PRICES:
+                if item_id and item_id not in TOOLS and item_id in MERCHANT_BUY_PRICES:
                     qty = slot.get("quantity", 1)
                     if item_id not in item_counts:
                         item_counts[item_id] = {"bag": 0, "ground": []}
@@ -547,7 +570,7 @@ class SellGoodsActionHandler(ActionHandler):
         ground_items = ctx.game_state.get_items_by_owner(villager["id"])
         for item in ground_items:
             item_id = item.get("item_id")
-            if item_id and item_id not in TOOLS and item_id in MATERIAL_PRICES:
+            if item_id and item_id not in TOOLS and item_id in MERCHANT_BUY_PRICES:
                 qty = item.get("quantity", 1)
                 if item_id not in item_counts:
                     item_counts[item_id] = {"bag": 0, "ground": []}

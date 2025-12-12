@@ -193,13 +193,17 @@ class VillagerAI:
         can_buy_food = self._can_buy_food(villager, game_state)
         
         # 動態生成行為列表
-        action_list = [
-            "- go_home: 回家休息",
-        ]
+        action_list = []
+        
+        # 【最高優先】有過剩物品要賣 → 放在最前面
+        if sell_action:
+            action_list.append(f"- sell_goods: {sell_action}")
         
         # 只有在能獲得食物時才顯示選項
         if can_buy_food:
-            action_list.insert(0, "- buy_food: 買食物吃")
+            action_list.append("- buy_food: 買食物吃")
+        
+        action_list.append("- go_home: 回家休息")
         
         # 只有在能工作時才顯示選項（有原料或有錢買）
         if can_work:
@@ -211,17 +215,18 @@ class VillagerAI:
             "- wander: 隨意閒逛",
         ])
         
-        # 動態加入賣東西選項（過剩物品）
-        if sell_action:
-            action_list.append(f"- sell_goods: {sell_action}")
-        
         actions = "可用的行為類型：\n" + "\n".join(action_list)
+        
+        # 構建優先級提示
+        priority_hint = ""
+        if sell_action:
+            priority_hint = "\n【最高優先】有標註「優先處理」或「緊急」的行為應該優先選擇！\n"
         
         return f"""你是一個中古世紀村莊模擬遊戲的 AI 系統。
 你需要根據村民的性格、狀態和環境，決定他們的下一步行為。
 
 【重要】你只能從下方「可用的行為類型」中選擇！
-
+{priority_hint}
 {actions}
 
 回應必須是 JSON 格式:
@@ -242,8 +247,7 @@ class VillagerAI:
         2. 或 現金 < 12 且肚子餓（hunger < 50）
         """
         from ..data.item_categories import TOOLS
-        from ..data.supply_chain import EXCESS_THRESHOLDS
-        from ..game.production import MATERIAL_PRICES
+        from ..data.supply_chain import EXCESS_THRESHOLDS, MERCHANT_BUY_PRICES
         
         money = villager.get("money", 0)
         stats = villager.get("stats", {})
@@ -275,8 +279,8 @@ class VillagerAI:
         # 找出過剩的物品（依照分層門檻）
         excess_items = []
         for item_id, qty in item_counts.items():
-            # 只賣有價格的物品
-            if item_id not in MATERIAL_PRICES:
+            # 只賣商人會收購的物品
+            if item_id not in MERCHANT_BUY_PRICES:
                 continue
             
             # 取得該物品的過剩門檻（預設 10）
@@ -319,7 +323,11 @@ class VillagerAI:
         if occupation == "butcher":
             return self._can_butcher_work(villager, game_state)
         
-        # 不需要原料的職業（農夫、牧羊人、礦工、伐木工）可以直接工作
+        # 牧羊人特殊處理：需要有可剪毛的羊
+        if occupation == "shepherd":
+            return self._can_shepherd_work(villager, game_state)
+        
+        # 不需要原料的職業（農夫、礦工、伐木工）可以直接工作
         if not required:
             return True
         
@@ -392,32 +400,56 @@ class VillagerAI:
         logger.info(f"🔍 _can_work: {villager['name']}(butcher) 有錢但牧羊人沒有足夠成羊")
         return False
     
+    def _can_shepherd_work(self, villager: dict, game_state) -> bool:
+        """檢查牧羊人是否能工作（有可剪毛的成羊）"""
+        owned_sheep = game_state.get_sheep_by_owner(villager["id"])
+        
+        # 檢查是否有可剪毛的成羊（成羊且羊毛已長好）
+        shearable_sheep = [
+            s for s in owned_sheep 
+            if s.get("is_adult") and s.get("wool_ready", False)
+        ]
+        
+        if shearable_sheep:
+            logger.info(f"🔍 _can_work: {villager['name']}(shepherd) 有 {len(shearable_sheep)} 隻可剪毛的羊")
+            return True
+        
+        logger.info(f"🔍 _can_work: {villager['name']}(shepherd) 沒有可剪毛的羊")
+        return False
+    
     def _can_buy_food(self, villager: dict, game_state) -> bool:
-        """檢查村民是否能獲得食物（背包有食物、或有錢+有賣家有貨）"""
+        """檢查村民是否能獲得食物（背包有食物、地上有食物、或有錢+有賣家有貨）"""
         from ..data.supply_chain import FOOD_SELLERS
         
         inventory = villager.get("inventory", [])
         money = villager.get("money", 0)
+        has_stove = game_state.get_stove_by_residence(villager["id"]) is not None
         
         # 1. 背包有麵包 → 可以直接吃
         for slot in inventory:
             if slot and slot.get("item_id") == "bread":
                 return True
         
-        # 2. 背包有生肉 → 可以回家煮
-        for slot in inventory:
-            if slot and slot.get("item_id") == "meat_raw":
-                return True
+        # 2. 背包有生肉 + 有灶台 → 可以回家煮
+        if has_stove:
+            for slot in inventory:
+                if slot and slot.get("item_id") == "meat_raw":
+                    return True
         
-        # 3. 地上有自己的麵包可撿
+        # 3. 地上有自己的食物可撿
         owned_items = game_state.get_items_by_owner(villager["id"])
         for item in owned_items:
             if item.get("item_id") == "bread":
                 return True
+            if item.get("item_id") == "meat_raw" and has_stove:
+                return True
         
-        # 4. 有錢 + 有賣家有貨
+        # 4. 有錢 + 有賣家有貨（生肉要有灶台）
         FOOD_PRICES = {"bread": 3, "meat_raw": 5}
         for food_item, seller_occupation in FOOD_SELLERS:
+            # 生肉需要有灶台
+            if food_item == "meat_raw" and not has_stove:
+                continue
             price = FOOD_PRICES.get(food_item, 5)
             if money < price:
                 continue
@@ -476,17 +508,51 @@ class VillagerAI:
         
         # 計算飽足度（100 - 飢餓度）
         satiety = 100 - stats.get('hunger', 0)
+        energy = stats.get('energy', 100)
+        social = stats.get('social', 100)
+        
+        # 生成緊急狀況提示
+        urgent_warnings = self._get_status_warnings(energy, satiety, social)
+        urgent_line = f"\n- ⚠️ 緊急狀況: {urgent_warnings}" if urgent_warnings else ""
         
         return f"""村民資訊:
 - 姓名: {villager['name']}
 - 職業: {villager['occupation']}
 - 性格: {', '.join(villager['personality'])}
-- 當前狀態: 體力 {stats['energy']:.0f}%, 飽足度 {satiety:.0f}%, 社交 {stats['social']:.0f}%
+- 當前狀態: 體力 {energy:.0f}%, 飽足度 {satiety:.0f}%, 社交 {social:.0f}%{urgent_line}
 
 時間: 第 {time['day']} 天 {time['hour']:02d}:{time['minute']:02d}
 最近記憶: {self._format_memories(villager.get('memories', []))}
 
 請決定這個村民接下來應該做什麼。"""
+    
+    def _get_status_warnings(self, energy: float, satiety: float, social: float) -> str:
+        """根據狀態生成緊急警告文字"""
+        warnings = []
+        
+        # 體力警告
+        if energy < 5:
+            warnings.append("極度疲憊，即將暈倒")
+        elif energy < 15:
+            warnings.append("非常疲累，急需休息")
+        elif energy < 30:
+            warnings.append("疲累")
+        
+        # 飽足度警告
+        if satiety <= 0:
+            warnings.append("飢餓至極，必須立即進食！")
+        elif satiety < 10:
+            warnings.append("非常飢餓，急需食物")
+        elif satiety < 30:
+            warnings.append("飢餓")
+        
+        # 社交警告
+        if social < 10:
+            warnings.append("非常孤獨")
+        elif social < 30:
+            warnings.append("孤獨")
+        
+        return " | ".join(warnings)
 
     def _build_dialogue_prompt(
         self,
