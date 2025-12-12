@@ -189,12 +189,17 @@ class VillagerAI:
         sell_action = self._get_sell_action(villager, game_state)
         # 檢查是否可以工作（有原料或有供應商可以買）
         can_work = self._can_work(villager, game_state)
+        # 檢查是否能買到食物
+        can_buy_food = self._can_buy_food(villager, game_state)
         
         # 動態生成行為列表
         action_list = [
-            "- buy_food: 買食物吃",
             "- go_home: 回家休息",
         ]
+        
+        # 只有在能獲得食物時才顯示選項
+        if can_buy_food:
+            action_list.insert(0, "- buy_food: 買食物吃")
         
         # 只有在能工作時才顯示選項（有原料或有錢買）
         if can_work:
@@ -212,21 +217,10 @@ class VillagerAI:
         
         actions = "可用的行為類型：\n" + "\n".join(action_list)
         
-        # 動態生成優先順序說明
-        priorities = [
-            "1. 【物品過剩或缺錢】→ 賣給商人 (sell_goods)" if sell_action else None,
-            "2. 飽足度 < 30% → 必須去買食物 (buy_food)",
-            "3. 體力 < 30% → 必須回家休息 (go_home) 或睡覺 (sleep)",
-            "4. 工作時間內 → 應該去工作 (go_work)" if can_work else None,
-            "5. 其他需求可以根據性格和時間自由選擇",
-        ]
-        priority_text = "\n".join([p for p in priorities if p])
-        
         return f"""你是一個中古世紀村莊模擬遊戲的 AI 系統。
 你需要根據村民的性格、狀態和環境，決定他們的下一步行為。
 
 【重要】你只能從下方「可用的行為類型」中選擇！
-{priority_text}
 
 {actions}
 
@@ -321,6 +315,10 @@ class VillagerAI:
         occupation = villager.get("occupation", "")
         required = REQUIRED_MATERIALS.get(occupation, [])
         
+        # 屠夫特殊處理：需要羊或有錢買羊
+        if occupation == "butcher":
+            return self._can_butcher_work(villager, game_state)
+        
         # 不需要原料的職業（農夫、牧羊人、礦工、伐木工）可以直接工作
         if not required:
             return True
@@ -364,6 +362,70 @@ class VillagerAI:
         
         logger.info(f"   → 可以工作")
         return True
+    
+    def _can_butcher_work(self, villager: dict, game_state) -> bool:
+        """檢查屠夫是否能工作（有羊或有錢買羊+牧羊人有羊賣）"""
+        SHEEP_PRICE = 10
+        money = villager.get("money", 0)
+        
+        # 1. 屠夫已有羊 → 可以工作（去宰羊）
+        owned_sheep = game_state.get_sheep_by_owner(villager["id"])
+        if owned_sheep:
+            logger.info(f"🔍 _can_work: {villager['name']}(butcher) 有 {len(owned_sheep)} 隻羊可宰")
+            return True
+        
+        # 2. 沒有羊，檢查有沒有錢買羊
+        if money < SHEEP_PRICE:
+            logger.info(f"🔍 _can_work: {villager['name']}(butcher) 沒羊且錢不夠(${money}<${SHEEP_PRICE})")
+            return False
+        
+        # 3. 有錢，檢查牧羊人是否有成羊可賣（至少留 2 隻繁殖）
+        for v in game_state.villagers.values():
+            if v.get("occupation") != "shepherd":
+                continue
+            shepherd_sheep = game_state.get_sheep_by_owner(v["id"])
+            adult_sheep = [s for s in shepherd_sheep if s.get("is_adult")]
+            if len(adult_sheep) > 2:
+                logger.info(f"🔍 _can_work: {villager['name']}(butcher) 有錢且牧羊人有 {len(adult_sheep)} 隻成羊")
+                return True
+        
+        logger.info(f"🔍 _can_work: {villager['name']}(butcher) 有錢但牧羊人沒有足夠成羊")
+        return False
+    
+    def _can_buy_food(self, villager: dict, game_state) -> bool:
+        """檢查村民是否能獲得食物（背包有食物、或有錢+有賣家有貨）"""
+        from ..data.supply_chain import FOOD_SELLERS
+        
+        inventory = villager.get("inventory", [])
+        money = villager.get("money", 0)
+        
+        # 1. 背包有麵包 → 可以直接吃
+        for slot in inventory:
+            if slot and slot.get("item_id") == "bread":
+                return True
+        
+        # 2. 背包有生肉 → 可以回家煮
+        for slot in inventory:
+            if slot and slot.get("item_id") == "meat_raw":
+                return True
+        
+        # 3. 地上有自己的麵包可撿
+        owned_items = game_state.get_items_by_owner(villager["id"])
+        for item in owned_items:
+            if item.get("item_id") == "bread":
+                return True
+        
+        # 4. 有錢 + 有賣家有貨
+        FOOD_PRICES = {"bread": 3, "meat_raw": 5}
+        for food_item, seller_occupation in FOOD_SELLERS:
+            price = FOOD_PRICES.get(food_item, 5)
+            if money < price:
+                continue
+            # 檢查有沒有賣家有庫存
+            if self._check_supplier_stock(game_state, seller_occupation, food_item):
+                return True
+        
+        return False
     
     def _check_supplier_stock(self, game_state, supplier_occupation: str, material: str) -> bool:
         """檢查供應商是否有庫存"""

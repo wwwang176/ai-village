@@ -387,6 +387,13 @@ class BuyFoodActionHandler(ActionHandler):
                         Task(type="cook", duration=3).to_dict()
                     ]
         
+        # 2.5 麵包師傅有麵粉 → 去工作做麵包（cook 不能處理麵粉）
+        if villager.get("occupation") == "baker":
+            for slot in inventory:
+                if slot and slot.get("item_id") == "flour":
+                    logger.info(f"🌾 {villager['name']} 是麵包師且有麵粉，去工作做麵包")
+                    return GoWorkActionHandler().create_tasks(villager, ctx)
+        
         # 3. 檢查地上有沒有自己的麵包可以撿（統一使用基類方法）
         ground_bread = self._find_owned_ground_item(villager, "bread", ctx)
         if ground_bread:
