@@ -21,11 +21,24 @@ class TaskContext:
         self, 
         production: "ProductionSystem",
         inventory: "InventorySystem",
-        sheep: "SheepSystem"
+        sheep: "SheepSystem",
+        manager=None
     ):
         self.production = production
         self.inventory = inventory
         self.sheep = sheep
+        self.manager = manager  # ConnectionManager for broadcasting
+        self._pending_broadcasts = []  # 待廣播的訊息（因為 execute 是同步的）
+    
+    def queue_broadcast(self, message: dict):
+        """將訊息加入待廣播隊列（稍後由 async 函數發送）"""
+        self._pending_broadcasts.append(message)
+    
+    def get_pending_broadcasts(self) -> list:
+        """取得並清空待廣播隊列"""
+        broadcasts = self._pending_broadcasts.copy()
+        self._pending_broadcasts.clear()
+        return broadcasts
 
 
 class TaskEffect(ABC):
@@ -148,6 +161,19 @@ class BuyMaterialEffect(TaskEffect):
         trade_info = ctx.production.execute_material_trade(villager, task)
         if trade_info["success"]:
             logger.info(f"💰 {villager['name']} 向 {trade_info['seller_name']} 購買了 {trade_info['material']} x{trade_info['quantity']}（花費 ${trade_info['price']}）")
+            # 廣播交易動畫事件
+            from ..data.items import ITEM_TYPES
+            item_type = ITEM_TYPES.get(trade_info['material'])
+            ctx.queue_broadcast({
+                "type": "trade_animation",
+                "data": {
+                    "from_pos": trade_info['seller_pos'],
+                    "to_pos": trade_info['buyer_pos'],
+                    "item_id": trade_info['material'],
+                    "icon": item_type.icon if item_type else "📦",
+                    "quantity": trade_info['quantity']
+                }
+            })
             return True
         else:
             logger.info(f"💰 {villager['name']} 購買失敗：{trade_info['reason']}")
@@ -166,6 +192,19 @@ class BuyFoodEffect(TaskEffect):
             else:
                 # 其他食物直接吃
                 logger.info(f"🍽️ {villager['name']} 向 {food_result['seller_name']} 購買並吃了 {food_result['food_name']}（花費 ${food_result['price']}，飽足度 +{food_result['hunger_restore']}）")
+            # 廣播交易動畫事件
+            from ..data.items import ITEM_TYPES
+            item_type = ITEM_TYPES.get(food_result.get('food_item', 'bread'))
+            ctx.queue_broadcast({
+                "type": "trade_animation",
+                "data": {
+                    "from_pos": food_result['seller_pos'],
+                    "to_pos": food_result['buyer_pos'],
+                    "item_id": food_result.get('food_item', 'bread'),
+                    "icon": item_type.icon if item_type else "🍞",
+                    "quantity": 2
+                }
+            })
             return True
         else:
             # 購買失敗
@@ -401,6 +440,20 @@ class SellToMerchantEffect(TaskEffect):
             del villager["pending_sell"]
         
         logger.info(f"💰 {villager['name']} 賣了 {sell_qty} 個 {item_id} 給 {merchant['name']}，獲得 ${total_price}（商人出口利潤 +${export_profit}）")
+        
+        # 廣播交易動畫事件（物品從賣家飛到商人）
+        from ..data.items import ITEM_TYPES
+        item_type = ITEM_TYPES.get(item_id)
+        ctx.queue_broadcast({
+            "type": "trade_animation",
+            "data": {
+                "from_pos": {"x": villager.get("x", 0), "y": villager.get("y", 0)},
+                "to_pos": {"x": merchant.get("x", 0), "y": merchant.get("y", 0)},
+                "item_id": item_id,
+                "icon": item_type.icon if item_type else "📦",
+                "quantity": sell_qty
+            }
+        })
         return True
 
 
@@ -480,6 +533,20 @@ class SellExcessEffect(TaskEffect):
             del villager["pending_sell"]
         
         logger.info(f"💸 {villager['name']} 變賣了 {sell_qty} 個 {item_id} 給 {merchant['name']}，獲得 ${total_price}（原價）")
+        
+        # 廣播交易動畫事件（物品從賣家飛到商人）
+        from ..data.items import ITEM_TYPES
+        item_type = ITEM_TYPES.get(item_id)
+        ctx.queue_broadcast({
+            "type": "trade_animation",
+            "data": {
+                "from_pos": {"x": villager.get("x", 0), "y": villager.get("y", 0)},
+                "to_pos": {"x": merchant.get("x", 0), "y": merchant.get("y", 0)},
+                "item_id": item_id,
+                "icon": item_type.icon if item_type else "📦",
+                "quantity": sell_qty
+            }
+        })
         return True
 
 

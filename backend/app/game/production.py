@@ -215,11 +215,14 @@ class ProductionSystem:
             return {
                 "success": True,
                 "food_name": food_info["name"],
+                "food_item": food_item,
                 "price": total_price,
                 "hunger_restore": 0,  # 還沒吃
                 "seller_name": seller_name,
                 "need_cook": True,
-                "location": location
+                "location": location,
+                "seller_pos": {"x": seller.get("x", 0), "y": seller.get("y", 0)},
+                "buyer_pos": {"x": buyer.get("x", 0), "y": buyer.get("y", 0)}
             }
         
         # 其他食物（如麵包）直接吃掉
@@ -233,10 +236,13 @@ class ProductionSystem:
         return {
             "success": True,
             "food_name": food_info["name"],
+            "food_item": food_item,
             "price": total_price,
             "hunger_restore": hunger_restore,
             "seller_name": seller_name,
-            "need_cook": False
+            "need_cook": False,
+            "seller_pos": {"x": seller.get("x", 0), "y": seller.get("y", 0)},
+            "buyer_pos": {"x": buyer.get("x", 0), "y": buyer.get("y", 0)}
         }
     
     def execute_material_trade(self, buyer: dict, task: dict) -> dict:
@@ -331,5 +337,7 @@ class ProductionSystem:
             "material": material,
             "quantity": quantity,
             "price": total_price,
-            "seller_name": seller_name
+            "seller_name": seller_name,
+            "seller_pos": {"x": seller.get("x", 0), "y": seller.get("y", 0)},
+            "buyer_pos": {"x": buyer.get("x", 0), "y": buyer.get("y", 0)}
         }

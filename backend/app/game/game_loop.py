@@ -60,7 +60,8 @@ class GameLoop:
         task_context = TaskContext(
             production=self.production_system,
             inventory=self.inventory_system,
-            sheep=self.sheep_system
+            sheep=self.sheep_system,
+            manager=connection_manager
         )
         self.task_executor = TaskEffectExecutor(task_context)
         
@@ -425,7 +426,14 @@ class GameLoop:
     
     def apply_task_effect(self, villager: dict, task: dict) -> bool:
         """執行任務效果（委託給 TaskEffectExecutor），返回是否成功"""
-        return self.task_executor.execute(villager, task)
+        result = self.task_executor.execute(villager, task)
+        
+        # 處理待廣播隊列（交易動畫等）
+        pending_broadcasts = self.task_executor.context.get_pending_broadcasts()
+        for broadcast in pending_broadcasts:
+            asyncio.create_task(self.manager.broadcast(broadcast))
+        
+        return result
     
     def create_task_queue(self, villager: dict, action: str) -> list:
         """將 AI 決策轉換為任務排程（委託給 ActionHandlerExecutor）"""

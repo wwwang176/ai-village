@@ -264,6 +264,11 @@ export class Game {
     this.api.on('villager_chat', (data) => {
       this.handleVillagerChat(data);
     });
+    
+    // 交易動畫
+    this.api.on('trade_animation', (data) => {
+      this.playTradeAnimation(data);
+    });
   }
   
   /**
@@ -405,6 +410,38 @@ export class Game {
   }
   
   /**
+   * 播放交易動畫（物品從 A 飛到 B）
+   */
+  playTradeAnimation(data) {
+    const { from_pos, to_pos, icon, quantity } = data;
+    
+    if (!from_pos || !to_pos) {
+      console.warn('⚠️ 交易動畫資料不完整:', data);
+      return;
+    }
+    
+    // 建立飛行物件
+    const flyingItem = {
+      x: from_pos.x * this.config.tileSize + this.config.tileSize / 2,
+      y: from_pos.y * this.config.tileSize + this.config.tileSize / 2,
+      targetX: to_pos.x * this.config.tileSize + this.config.tileSize / 2,
+      targetY: to_pos.y * this.config.tileSize + this.config.tileSize / 2,
+      icon: icon || '📦',
+      quantity: quantity || 1,
+      progress: 0,
+      duration: 800  // 動畫持續 0.8 秒
+    };
+    
+    // 加入動畫列表
+    if (!this.flyingItems) {
+      this.flyingItems = [];
+    }
+    this.flyingItems.push(flyingItem);
+    
+    console.log(`🎁 交易動畫: ${icon} x${quantity} 從 (${from_pos.x},${from_pos.y}) 飛到 (${to_pos.x},${to_pos.y})`);
+  }
+  
+  /**
    * 同步後端狀態
    */
   syncFromServer(state) {
@@ -486,6 +523,34 @@ export class Game {
     
     // 更新 UI
     this.uiManager.update(this.selectedVillager, this.timeSystem);
+    
+    // 更新飛行物品動畫
+    this.updateFlyingItems(deltaTime);
+  }
+  
+  /**
+   * 更新飛行物品動畫
+   */
+  updateFlyingItems(deltaTime) {
+    if (!this.flyingItems || this.flyingItems.length === 0) return;
+    
+    for (let i = this.flyingItems.length - 1; i >= 0; i--) {
+      const item = this.flyingItems[i];
+      item.progress += (deltaTime * 1000) / item.duration;
+      
+      if (item.progress >= 1) {
+        // 動畫完成，移除
+        this.flyingItems.splice(i, 1);
+      } else {
+        // 使用 ease-out 曲線計算位置
+        const t = 1 - Math.pow(1 - item.progress, 3);
+        item.currentX = item.x + (item.targetX - item.x) * t;
+        item.currentY = item.y + (item.targetY - item.y) * t;
+        // 加入拋物線高度（最高點在中間）
+        const arcHeight = 30;
+        item.arcY = -Math.sin(item.progress * Math.PI) * arcHeight;
+      }
+    }
   }
   
   /**
@@ -564,6 +629,9 @@ export class Game {
     // 渲染村民
     this.renderer.renderVillagers(this.villagerManager.villagers, this.selectedVillager);
     
+    // 渲染飛行物品（交易動畫）
+    this.renderFlyingItems();
+    
     // 渲染建築物頂部（遮擋效果）
     this.renderer.renderBuildingTops(this.map);
     
@@ -580,6 +648,49 @@ export class Game {
       this.canvas.height,
       this.camera.zoom
     );
+  }
+  
+  /**
+   * 渲染飛行物品（交易動畫）
+   */
+  renderFlyingItems() {
+    if (!this.flyingItems || this.flyingItems.length === 0) return;
+    
+    const ctx = this.ctx;
+    
+    for (const item of this.flyingItems) {
+      if (item.currentX === undefined) continue;
+      
+      // 轉換為螢幕座標
+      const screenX = item.currentX - this.camera.x;
+      const screenY = item.currentY - this.camera.y + (item.arcY || 0);
+      
+      // 繪製 emoji 圖示
+      ctx.save();
+      ctx.font = '16px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // 縮放效果（開始和結束時較小）
+      const scale = 0.8 + 0.4 * Math.sin(item.progress * Math.PI);
+      ctx.translate(screenX, screenY);
+      ctx.scale(scale, scale);
+      
+      // 繪製圖示
+      ctx.fillText(item.icon, 0, 0);
+      
+      // 如果數量 > 1，顯示數量
+      if (item.quantity > 1) {
+        ctx.font = 'bold 10px Arial';
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.strokeText(`x${item.quantity}`, 10, 8);
+        ctx.fillText(`x${item.quantity}`, 10, 8);
+      }
+      
+      ctx.restore();
+    }
   }
   
   /**
