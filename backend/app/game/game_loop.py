@@ -214,6 +214,7 @@ class GameLoop:
                 villager["state"] = "idle"
                 villager.pop("waiting_for", None)
                 villager.pop("waiting_since", None)
+                return  # 下一個 tick 再處理任務，避免瞬移
             else:
                 return
         
