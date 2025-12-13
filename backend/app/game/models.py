@@ -226,6 +226,12 @@ class Sheep:
 
 # ==================== 家具/可交互物件 ====================
 
+# 家具互動座標預設值
+FURNITURE_INTERACT_OFFSETS = {
+    "bed": [(0, 0)],              # 站在床上
+    "stove": [(0, 1), (-1, 0), (1, 0)],  # 站在灶台前面或左右
+}
+
 @dataclass
 class Furniture:
     """家具/可交互地圖物件"""
@@ -234,8 +240,13 @@ class Furniture:
     x: float
     y: float
     building_id: str       # 所屬建築 ID
+    interact_offsets: List[Tuple[int, int]] = None  # 互動座標偏移
     in_use: bool = False   # 是否正在使用
     user_id: Optional[str] = None  # 誰在使用
+    
+    def __post_init__(self):
+        if self.interact_offsets is None:
+            self.interact_offsets = FURNITURE_INTERACT_OFFSETS.get(self.type, [(0, 0)])
     
     def to_dict(self) -> dict:
         return {
@@ -244,6 +255,7 @@ class Furniture:
             "x": self.x,
             "y": self.y,
             "building_id": self.building_id,
+            "interact_offsets": self.interact_offsets,
             "in_use": self.in_use,
             "user_id": self.user_id
         }
@@ -256,6 +268,7 @@ class Furniture:
             x=data["x"],
             y=data["y"],
             building_id=data["building_id"],
+            interact_offsets=data.get("interact_offsets"),
             in_use=data.get("in_use", False),
             user_id=data.get("user_id")
         )

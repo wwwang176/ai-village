@@ -17,7 +17,6 @@ export const TASK_NAMES = {
   move_to_villager: '前往村民',
   eat: '吃東西',
   rest: '休息',
-  sleep: '睡覺',
   work: '工作',
   wait: '等待',
   socialize: '社交',
@@ -28,28 +27,36 @@ export const TASK_NAMES = {
   buy_material: '購買原料',
   buy_food: '購買食物',
   sell_to_merchant: '販賣給商人',
+  sell_excess: '販賣過剩物品',
   cook: '烹飪',
+  shear_sheep: '剪羊毛',
+  buy_sheep: '購買羊',
+  slaughter_sheep: '屠宰羊',
 };
 
-// 性格特質中文翻譯
+// 性格特質中文翻譯（7 維度 × 正反面）
 export const PERSONALITY_NAMES = {
-  // 正面
-  friendly: '友善',
-  hardworking: '勤勞',
-  generous: '慷慨',
-  optimistic: '樂觀',
-  curious: '好奇',
-  // 負面
-  greedy: '貪婪',
-  lazy: '懶惰',
-  suspicious: '多疑',
-  grumpy: '暴躁',
-  gossip: '八卦',
-  // 中性
-  introvert: '內向',
+  // 社交維度
   extrovert: '外向',
+  introvert: '內向',
+  // 態度維度
+  friendly: '友善',
+  grumpy: '暴躁',
+  // 信任維度
+  trusting: '信任',
+  suspicious: '多疑',
+  // 感情維度
   romantic: '浪漫',
-  religious: '虔誠',
+  reserved: '矜持',
+  // 勇氣維度
+  brave: '勇敢',
+  timid: '膽小',
+  // 心態維度
+  optimistic: '樂觀',
+  pessimistic: '悲觀',
+  // 作息維度
+  early_bird: '早起',
+  night_owl: '夜貓',
 };
 
 // 名字池

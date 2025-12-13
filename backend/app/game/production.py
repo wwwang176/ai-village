@@ -163,44 +163,69 @@ class ProductionSystem:
             "location": location
         }
     
-    def execute_food_purchase(self, buyer: dict, task: dict) -> dict:
-        """執行食物購買並消費"""
-        seller_id = task.get("seller_id")
-        food_item = task.get("food_item")
-        quantity = 2
+    def execute_trade(self, buyer: dict, seller_id: str, item_id: str, 
+                       want_quantity: int, price_per_unit: int, 
+                       flexible_quantity: bool = False) -> dict:
+        """通用交易執行
         
-        food_info = FOOD_INFO.get(food_item, {"name": food_item, "price": 4, "hunger_restore": 30})
-        total_price = food_info["price"] * quantity
+        Args:
+            buyer: 買家村民
+            seller_id: 賣家 ID
+            item_id: 物品 ID
+            want_quantity: 想買的數量
+            price_per_unit: 單價
+            flexible_quantity: 是否彈性數量（有多少買多少）
         
+        Returns:
+            交易結果 dict
+        """
         seller = self.game_state.get_villager(seller_id)
         if not seller:
             return {"success": False, "reason": "找不到賣家"}
         
         seller_name = seller.get("name", "未知")
         
-        # 檢查買家金錢
-        buyer_money = buyer.get("money", 0)
-        if buyer_money < total_price:
-            return {"success": False, "reason": f"錢不夠（需要 ${total_price}）", "seller_name": seller_name}
-        
         # 計算賣家背包庫存
         seller_inventory = seller.get("inventory", [None] * 5)
         bag_qty = 0
         for slot in seller_inventory:
-            if slot and slot.get("item_id") == food_item:
+            if slot and slot.get("item_id") == item_id:
                 bag_qty += slot.get("quantity", 0)
         
         # 計算賣家地上庫存
         ground_items = []
         ground_qty = 0
         for item in self.game_state.get_items_by_owner(seller["id"]):
-            if item.get("item_id") == food_item:
+            if item.get("item_id") == item_id:
                 ground_items.append(item)
                 ground_qty += item.get("quantity", 0)
         
         total_available = bag_qty + ground_qty
-        if total_available < quantity:
-            return {"success": False, "reason": f"賣家沒有足夠的 {food_info['name']}", "seller_name": seller_name}
+        
+        # 決定實際購買數量
+        if flexible_quantity:
+            if total_available == 0:
+                return {"success": False, "reason": f"賣家沒有 {item_id}", "seller_name": seller_name}
+            quantity = min(want_quantity, total_available)
+        else:
+            if total_available < want_quantity:
+                return {"success": False, "reason": f"賣家沒有足夠的 {item_id}", "seller_name": seller_name}
+            quantity = want_quantity
+        
+        total_price = price_per_unit * quantity
+        
+        # 檢查買家金錢
+        buyer_money = buyer.get("money", 0)
+        if buyer_money < total_price:
+            if flexible_quantity:
+                # 買不起想要的量，看能買多少
+                affordable_qty = buyer_money // price_per_unit
+                if affordable_qty == 0:
+                    return {"success": False, "reason": f"錢不夠（單價 ${price_per_unit}，擁有 ${buyer_money}）", "seller_name": seller_name}
+                quantity = min(quantity, affordable_qty)
+                total_price = price_per_unit * quantity
+            else:
+                return {"success": False, "reason": f"錢不夠（需要 ${total_price}）", "seller_name": seller_name}
         
         # 執行交易 - 金錢轉移
         buyer["money"] = buyer_money - total_price
@@ -208,12 +233,13 @@ class ProductionSystem:
         
         # 從賣家扣除物品（優先從背包）
         remaining = quantity
+        from_bag = 0  # 追蹤從背包扣了多少
         
         # 1. 先從背包扣
         for i, slot in enumerate(seller_inventory):
             if remaining <= 0:
                 break
-            if slot and slot.get("item_id") == food_item:
+            if slot and slot.get("item_id") == item_id:
                 slot_qty = slot.get("quantity", 0)
                 deduct = min(slot_qty, remaining)
                 if slot_qty <= deduct:
@@ -221,8 +247,9 @@ class ProductionSystem:
                 else:
                     slot["quantity"] = slot_qty - deduct
                 remaining -= deduct
+                from_bag += deduct
         
-        # 2. 不夠再從地上扣（轉移擁有者）
+        # 2. 不夠再從地上扣（轉移擁有者，買家自己去撿）
         for item in ground_items:
             if remaining <= 0:
                 break
@@ -235,7 +262,7 @@ class ProductionSystem:
                 # 部分扣除：原物品減量，買家在相同位置獲得新物品
                 item["quantity"] = item_qty - deduct
                 self.game_state.add_world_item(
-                    item_id=food_item,
+                    item_id=item_id,
                     x=item.get("x", 0),
                     y=item.get("y", 0),
                     owner_id=buyer["id"],
@@ -243,118 +270,68 @@ class ProductionSystem:
                 )
             remaining -= deduct
         
-        # 食物放到買家背包，由 AI 決定後續行動
-        location = self.inventory_system.add_item(buyer, food_item, quantity)
-        
-        if "pending_food_trade" in buyer:
-            del buyer["pending_food_trade"]
+        # 只有從背包扣的數量才放入買家背包（地上的由買家自己去撿）
+        location = "ground"
+        if from_bag > 0:
+            location = self.inventory_system.add_item(buyer, item_id, from_bag)
         
         return {
             "success": True,
-            "food_name": food_info["name"],
-            "food_item": food_item,
+            "item_id": item_id,
+            "quantity": quantity,
+            "from_bag": from_bag,
+            "from_ground": quantity - from_bag,
             "price": total_price,
-            "hunger_restore": 0,  # 還沒吃，由 AI 決定
             "seller_name": seller_name,
-            "need_cook": food_item == "meat_raw",
             "location": location,
             "seller_pos": {"x": seller.get("x", 0), "y": seller.get("y", 0)},
             "buyer_pos": {"x": buyer.get("x", 0), "y": buyer.get("y", 0)}
         }
     
+    def execute_food_purchase(self, buyer: dict, task: dict) -> dict:
+        """執行食物購買"""
+        seller_id = task.get("seller_id")
+        food_item = task.get("food_item")
+        food_info = FOOD_INFO.get(food_item, {"name": food_item, "price": 4, "hunger_restore": 30})
+        
+        result = self.execute_trade(
+            buyer=buyer,
+            seller_id=seller_id,
+            item_id=food_item,
+            want_quantity=2,
+            price_per_unit=food_info["price"],
+            flexible_quantity=False
+        )
+        
+        if result["success"]:
+            if "pending_food_trade" in buyer:
+                del buyer["pending_food_trade"]
+            result["food_name"] = food_info["name"]
+            result["food_item"] = food_item
+            result["hunger_restore"] = 0
+            result["need_cook"] = food_item == "meat_raw"
+        
+        return result
+    
     def execute_material_trade(self, buyer: dict, task: dict) -> dict:
         """執行原料交易（有多少買多少）"""
         supplier_id = task.get("supplier_id")
         material = task.get("material")
-        want_quantity = task.get("quantity", 3)  # 想買的數量
-        
-        seller = self.game_state.get_villager(supplier_id)
-        if not seller:
-            return {"success": False, "reason": "找不到賣家"}
-        
-        seller_name = seller.get("name", "未知")
-        
-        # 計算賣家背包庫存
-        seller_inventory = seller.get("inventory", [None] * 5)
-        bag_qty = 0
-        for slot in seller_inventory:
-            if slot and slot.get("item_id") == material:
-                bag_qty += slot.get("quantity", 0)
-        
-        # 計算賣家地上庫存
-        ground_items = []
-        ground_qty = 0
-        for item in self.game_state.get_items_by_owner(seller["id"]):
-            if item.get("item_id") == material:
-                ground_items.append(item)
-                ground_qty += item.get("quantity", 0)
-        
-        total_available = bag_qty + ground_qty
-        if total_available == 0:
-            return {"success": False, "reason": f"賣家沒有 {material}", "seller_name": seller_name}
-        
-        # 有多少買多少（不超過想買的量）
-        quantity = min(want_quantity, total_available)
-        
+        want_quantity = task.get("quantity", 3)
         price_per_unit = MATERIAL_PRICES.get(material, 5)
-        total_price = price_per_unit * quantity
         
-        # 檢查買家金錢
-        buyer_money = buyer.get("money", 0)
-        if buyer_money < total_price:
-            # 買不起想要的量，看能買多少
-            affordable_qty = buyer_money // price_per_unit
-            if affordable_qty == 0:
-                return {"success": False, "reason": f"錢不夠（單價 ${price_per_unit}，擁有 ${buyer_money}）", "seller_name": seller_name}
-            quantity = min(quantity, affordable_qty)
-            total_price = price_per_unit * quantity
+        result = self.execute_trade(
+            buyer=buyer,
+            seller_id=supplier_id,
+            item_id=material,
+            want_quantity=want_quantity,
+            price_per_unit=price_per_unit,
+            flexible_quantity=True
+        )
         
-        # 執行交易 - 金錢轉移
-        buyer["money"] = buyer_money - total_price
-        seller["money"] = seller.get("money", 0) + total_price
+        if result["success"]:
+            if "pending_trade" in buyer:
+                del buyer["pending_trade"]
+            result["material"] = material
         
-        # 從賣家扣除物品（優先從背包）
-        remaining = quantity
-        
-        # 1. 先從背包扣
-        for i, slot in enumerate(seller_inventory):
-            if remaining <= 0:
-                break
-            if slot and slot.get("item_id") == material:
-                slot_qty = slot.get("quantity", 0)
-                deduct = min(slot_qty, remaining)
-                if slot_qty <= deduct:
-                    seller["inventory"][i] = None
-                else:
-                    slot["quantity"] = slot_qty - deduct
-                remaining -= deduct
-        
-        # 2. 不夠再從地上扣
-        for item in ground_items:
-            if remaining <= 0:
-                break
-            item_qty = item.get("quantity", 0)
-            deduct = min(item_qty, remaining)
-            if item_qty <= deduct:
-                # 整個移除
-                self.game_state.remove_world_item(item["id"])
-            else:
-                # 部分扣除（需要更新地上物品數量）
-                item["quantity"] = item_qty - deduct
-            remaining -= deduct
-        
-        # 給買家物品
-        self.inventory_system.add_item(buyer, material, quantity)
-        
-        if "pending_trade" in buyer:
-            del buyer["pending_trade"]
-        
-        return {
-            "success": True,
-            "material": material,
-            "quantity": quantity,
-            "price": total_price,
-            "seller_name": seller_name,
-            "seller_pos": {"x": seller.get("x", 0), "y": seller.get("y", 0)},
-            "buyer_pos": {"x": buyer.get("x", 0), "y": buyer.get("y", 0)}
-        }
+        return result

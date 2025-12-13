@@ -108,18 +108,6 @@ class RestActionHandler(ActionHandler):
         return tasks
 
 
-class SleepActionHandler(ActionHandler):
-    """睡覺行為"""
-    
-    def create_tasks(self, villager: dict, ctx: ActionContext) -> List[dict]:
-        tasks = []
-        target = ctx.resolve_target(villager, "sleep")
-        if ctx.need_move(villager, target):
-            tasks.append(Task(type="move", target=target).to_dict())
-        tasks.append(Task(type="rest", duration=20).to_dict())
-        return tasks
-
-
 class GoMarketActionHandler(ActionHandler):
     """去市集行為（等待遇人）"""
     
@@ -657,8 +645,7 @@ class SellExcessActionHandler(ActionHandler):
 ACTION_HANDLERS: Dict[str, ActionHandler] = {
     "eat": EatActionHandler(),
     "rest": RestActionHandler(),
-    "go_home": RestActionHandler(),  # go_home 同 rest
-    "sleep": SleepActionHandler(),
+    "go_home": RestActionHandler(),
     "go_market": GoMarketActionHandler(),
     "socialize": SocializeActionHandler(),
     "go_work": GoWorkActionHandler(),

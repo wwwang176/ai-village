@@ -141,16 +141,9 @@ class GameState:
         names_female = ["瑪莉", "伊莉莎白", "安娜", "凱薩琳", "艾瑪", "露西", "克萊兒", "蘇菲",
                         "夏洛特", "愛麗絲", "維多莉亞", "艾蓮娜", "羅莎", "貝蒂", "海倫", "伊芙"]
         
-        # 性格系統：7 個維度，每維度有正反兩面
-        personality_dimensions = {
-            "social": ["extrovert", "introvert"],       # 社交：外向/內向
-            "temper": ["friendly", "grumpy"],           # 態度：友善/暴躁
-            "trust": ["trusting", "suspicious"],        # 信任：信任/多疑
-            "romance": ["romantic", "reserved"],        # 感情：浪漫/矜持
-            "courage": ["brave", "timid"],              # 勇氣：勇敢/膽小
-            "outlook": ["optimistic", "pessimistic"],   # 心態：樂觀/悲觀
-            "schedule": ["early_bird", "night_owl"],    # 作息：早起鳥/夜貓子
-        }
+        # 性格系統：從設定檔讀取 7 個維度
+        from ..data.personalities import get_dimension_traits
+        personality_dimensions = get_dimension_traits()
         
         # 喜好池
         hobbies = [
@@ -219,8 +212,8 @@ class GameState:
                     name = names_male[male_index]
                     male_index += 1
             
-            # 隨機性格：從 7 個維度中抽 4 個，每個維度抽一個正或反
-            selected_dimensions = random.sample(list(personality_dimensions.keys()), 4)
+            # 隨機性格：從 7 個維度中抽 6 個，每個維度抽一個正或反
+            selected_dimensions = random.sample(list(personality_dimensions.keys()), 6)
             traits = [random.choice(personality_dimensions[dim]) for dim in selected_dimensions]
             
             # 分配職業和工作地點

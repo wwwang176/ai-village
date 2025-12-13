@@ -3,7 +3,7 @@
 """
 
 import random
-from typing import Optional, Tuple, TYPE_CHECKING
+from typing import Optional, Tuple, List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .game_state import GameState
@@ -32,12 +32,11 @@ class TargetResolver:
         """
         action_targets = {
             "go_work": lambda v: self._get_work_target(v),
-            "go_home": lambda v: self._get_home_target(v),
+            "go_home": lambda v: self._get_bed_target(v),
             "go_market": lambda v: self._get_building_target("market"),
-            "go_blacksmith": lambda v: self._get_building_target("blacksmith"),
+            "go_blacksmith": lambda v: self._get_villager_by_occupation("blacksmith"),
             "eat": lambda v: self._get_eat_target(v),
             "rest": lambda v: self._get_home_target(v),
-            "sleep": lambda v: self._get_home_target(v),
             "socialize": lambda v: self._get_social_target(v),
             "wander": lambda v: self._get_wander_target(v),
         }
@@ -77,13 +76,34 @@ class TargetResolver:
             return self.game_state.get_building_door(building)
         return None
     
+    def _get_furniture_interact_pos(self, furniture: dict) -> Optional[Tuple[int, int]]:
+        """取得家具的互動位置（隨機選擇一個）"""
+        offsets = furniture.get("interact_offsets", [(0, 0)])
+        offset = random.choice(offsets)
+        x = int(furniture["x"]) + offset[0]
+        y = int(furniture["y"]) + offset[1]
+        return (x, y)
+    
+    def _get_bed_target(self, villager: dict) -> Optional[Tuple[int, int]]:
+        """取得床的位置"""
+        bed = self.game_state.get_bed_by_residence(villager.get("id"))
+        if bed:
+            return self._get_furniture_interact_pos(bed)
+        return self._get_home_target(villager)
+    
     def _get_eat_target(self, villager: dict) -> Optional[Tuple[int, int]]:
         """取得吃東西的地點（家裡灶台）"""
-        # 取得村民家裡的灶台位置
         stove = self.game_state.get_stove_by_residence(villager.get("id"))
         if stove:
-            return (int(stove["x"]), int(stove["y"]))
+            return self._get_furniture_interact_pos(stove)
         return self._get_home_target(villager)
+    
+    def _get_villager_by_occupation(self, occupation: str) -> Optional[Tuple[int, int]]:
+        """取得特定職業的村民位置"""
+        for v in self.game_state.villagers.values():
+            if v.get("occupation") == occupation:
+                return (int(v["x"]), int(v["y"]))
+        return None
     
     def _get_social_target(self, villager: dict) -> Tuple[Optional[Tuple[int, int]], Optional[str]]:
         """取得社交目標 - 找附近的村民聊天

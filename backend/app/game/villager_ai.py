@@ -32,16 +32,13 @@ class VillagerAI:
         self._api_interval = 3.0  # 每村民至少間隔 3 秒
         
         if not self.client:
-            logger.warning("⚠️ OpenAI API Key 未設定，使用規則系統")
-        else:
-            logger.info(f"✅ OpenAI 已初始化，模型: {self.model}")
+            raise RuntimeError("❌ OpenAI API Key 未設定，無法啟動遊戲")
+        
+        logger.info(f"✅ OpenAI 已初始化，模型: {self.model}")
     
     async def make_decision(self, villager: dict, game_state) -> dict:
         """為村民做出行為決策"""
         
-        # 如果沒有 API Key，使用規則系統
-        if not self.client:
-            return self._rule_based_decision(villager, game_state)
         
         # 檢查此村民的 API 呼叫間隔
         villager_id = villager.get("id", "unknown")
@@ -96,7 +93,7 @@ class VillagerAI:
             
         except Exception as e:
             logger.error(f"AI 決策錯誤: {e}")
-            return self._rule_based_decision(villager, game_state)
+            return None  # 跳過這輪決策
     
     async def generate_dialogue(
         self,
@@ -107,10 +104,6 @@ class VillagerAI:
         player_message: Optional[str] = None
     ) -> dict:
         """生成對話內容"""
-        
-        if not self.client:
-            return self._rule_based_dialogue(villager, action)
-        
         try:
             prompt = self._build_dialogue_prompt(villager, player, action, game_state, player_message)
             system_prompt = self._get_dialogue_system_prompt()
@@ -149,7 +142,7 @@ class VillagerAI:
             
         except Exception as e:
             logger.error(f"對話生成錯誤: {e}")
-            return self._rule_based_dialogue(villager, action)
+            return None  # 跳過這次對話
     
     async def generate_encounter(
         self,
@@ -158,10 +151,6 @@ class VillagerAI:
         game_state
     ) -> dict:
         """生成兩個村民相遇的互動"""
-        
-        if not self.client:
-            return self._rule_based_encounter(villager_a, villager_b)
-        
         try:
             prompt = self._build_encounter_prompt(villager_a, villager_b, game_state)
             
@@ -179,12 +168,22 @@ class VillagerAI:
             return json.loads(response.choices[0].message.content)
             
         except Exception as e:
-            print(f"相遇生成錯誤: {e}")
-            return self._rule_based_encounter(villager_a, villager_b)
+            logger.error(f"相遇生成錯誤: {e}")
+            return None  # 跳過這次相遇
     
     def _get_system_prompt(self, villager: dict, game_state) -> str:
-        """固定的系統提示詞"""
-        return """你是中古世紀村莊模擬遊戲的村民 AI。
+        """動態生成系統提示詞（只包含村民擁有的性格）"""
+        from ..data.personalities import get_trait_description
+        
+        # 建構村民性格描述
+        traits = villager.get("personality", [])
+        trait_lines = []
+        for trait in traits:
+            desc = get_trait_description(trait)
+            trait_lines.append(f"- {trait}：{desc}")
+        traits_section = "\n".join(trait_lines) if trait_lines else "- 無特殊性格"
+        
+        return f"""你是中古世紀村莊模擬遊戲的村民 AI。
 根據村民的性格和當前狀態，選擇最符合角色個性的行為。
 
 【決策原則】
@@ -192,26 +191,17 @@ class VillagerAI:
 2. ⚠️ 偏低（20-50%）：建議處理，可依性格延後
 3. 正常（>50%）：自由選擇
 
-【性格傾向】
-- extrovert（外向）：喜歡社交，常去市集
-- introvert（內向）：偏好獨處，專注工作
-- friendly（友善）：樂於助人，重視社交
-- grumpy（暴躁）：討厭被打擾，優先處理自己的事
-- brave（勇敢）：狀態偏低也敢繼續撐
-- timid（膽小）：狀態稍低就想處理
-- optimistic（樂觀）：傾向繼續工作
-- pessimistic（悲觀）：傾向先滿足需求
-- early_bird（早起）：白天更積極
-- night_owl（夜貓）：夜間也願意活動
+【此村民的性格】
+{traits_section}
 
 【職業特性】
 - 農夫/磨坊主/麵包師：工作可生產食物鏈物資，餓了也可選擇工作
 
 【回應格式】JSON
-{
+{{
   "action": "行為類型（從可用行為中選擇）",
   "reason": "第一人稱理由（繁體中文，15字內）"
-}"""
+}}"""
     
     def _get_status_tag(self, value: float) -> str:
         """取得狀態標記"""
@@ -241,8 +231,7 @@ class VillagerAI:
             action_list.append("- buy_food：買食物吃 (肚子餓的選擇)")
         
         # 3. 休息
-        action_list.append("- go_home：回家休息 (體力不足的選擇)")
-        action_list.append("- sleep：原地休息 (體力不足的選擇)")
+        action_list.append("- go_home：回家睡覺 (體力不足的選擇)")
         
         # 4. 工作（能工作才顯示，食物鏈職業加註）
         if can_work:
@@ -637,93 +626,3 @@ class VillagerAI:
     def _get_familiarity_desc(self, familiarity: int) -> str:
         from .game_state import get_familiarity_desc
         return get_familiarity_desc(familiarity)
-    
-    # === 規則系統備用 ===
-    
-    def _rule_based_decision(self, villager: dict, game_state) -> dict:
-        """規則系統決策（無 API 時使用）"""
-        import random
-        
-        stats = villager["stats"]
-        time = game_state.get_time()
-        hour = time["hour"]
-        
-        # 睡眠時間
-        if (hour >= 22 or hour < 6) and stats["energy"] < 50:
-            return {"action": "go_home", "target": None, "reason": "太累了，該睡覺了"}
-        
-        # 很餓 - 去買食物
-        if stats["hunger"] > 70:
-            return {"action": "buy_food", "target": None, "reason": "肚子餓了，去買點吃的"}
-        
-        # 工作（不再限制工作時間，由性格 early_bird/night_owl 影響效率）
-        occupation = villager.get("occupation", "")
-        if occupation and occupation != "house":
-            return {"action": "go_work", "target": None, "reason": "該工作了"}
-        
-        # 社交需求 - 主動找人聊天
-        if stats["social"] < 30:
-            return {"action": "socialize", "target": None, "reason": "想找人聊聊"}
-        
-        # 隨機閒逛
-        actions = ["wander", "rest", "go_market"]
-        return {
-            "action": random.choice(actions),
-            "target": None,
-            "reason": "隨便走走"
-        }
-    
-    def _rule_based_dialogue(self, villager: dict, action: str) -> dict:
-        """規則系統對話（無 API 時使用）"""
-        dialogues = {
-            "greet": [
-                "你好！今天天氣真好。",
-                "嗨，見到你真高興。",
-                "早安！有什麼事嗎？"
-            ],
-            "chat": [
-                "最近村裡挺熱鬧的。",
-                "聽說市集來了新商人呢。",
-                "你有聽說老磨坊的事嗎？"
-            ],
-            "ask_info": [
-                "你想知道什麼？我倒是聽說了一些事...",
-                "這個嘛...讓我想想...",
-                "村裡最近有些傳言呢。"
-            ],
-            "give_gift": [
-                "這是給我的？太感謝了！",
-                "哇，你真是太好了！",
-                "我很感動，謝謝你！"
-            ]
-        }
-        
-        import random
-        texts = dialogues.get(action, ["..."])
-        
-        return {
-            "speaker": villager["name"],
-            "text": random.choice(texts)
-        }
-    
-    def _rule_based_encounter(self, villager_a: dict, villager_b: dict) -> dict:
-        """規則系統相遇（無 API 時使用）"""
-        import random
-        
-        will_interact = random.random() > 0.3
-        
-        if not will_interact:
-            return {"will_interact": False}
-        
-        return {
-            "will_interact": True,
-            "dialogue": [
-                {"speaker": villager_a["name"], "text": f"嗨，{villager_b['name']}！"},
-                {"speaker": villager_b["name"], "text": "你好！最近怎麼樣？"},
-                {"speaker": villager_a["name"], "text": "還不錯，就是有點忙。"}
-            ],
-            "relationship_changes": {
-                "a_to_b": {"affection": 1, "familiarity": 2},
-                "b_to_a": {"affection": 1, "familiarity": 2}
-            }
-        }
