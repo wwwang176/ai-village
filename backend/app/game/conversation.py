@@ -425,7 +425,7 @@ class ConversationSystem:
 {history_text}
 
 請判斷：
-1. 用一句話總結對話內容、情緒（最多30字）
+1. 用一句話總結對話內容、雙方情緒
 2. 這次對話讓雙方好感度如何變化？（-3到+3之間的整數）
    - +3: 非常愉快、深入交流
    - +1~+2: 普通友好對話
@@ -440,7 +440,7 @@ class ConversationSystem:
                 response = await self.villager_ai.client.chat.completions.create(
                     model=os.getenv("OPENAI_MODEL", "gpt-4.1-nano"),
                     messages=[{"role": "user", "content": prompt}],
-                    max_tokens=100,
+                    max_tokens=500,
                     temperature=0.5
                 )
             

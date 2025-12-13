@@ -85,14 +85,11 @@ def generate_map(seed: int, width: int = 96, height: int = 96) -> dict:
         buildings, width, height
     )
     
-    # 添加道路
-    _add_roads(terrain, width, height)
+    # 添加道路（連接所有建築）
+    _add_roads(terrain, buildings, width, height)
     
     # 物件
-    objects = [
-        {"id": "well_1", "type": "well", "name": "水井", "x": 31, "y": 30,
-         "actions": [{"id": "draw_water", "name": "打水", "duration": 3000}]}
-    ]
+    objects = []
     
     return {
         "width": width,
@@ -209,9 +206,48 @@ def _generate_terrain_and_collision(
     return terrain, collision
 
 
-def _add_roads(terrain: List[List[int]], width: int, height: int):
-    """添加道路"""
-    center_y = 32
-    for x in range(10, 54):
-        terrain[center_y][x] = 1
-        terrain[center_y+1][x] = 1
+def _add_roads(terrain: List[List[int]], buildings: List[dict], width: int, height: int):
+    """添加道路：中央主幹道 + 建築連接最近支線"""
+    
+    center_x = width // 2
+    center_y = height // 2
+    
+    # 主幹道位置（十字）
+    main_roads_x = [center_x, center_x + 1]  # 垂直主幹道
+    main_roads_y = [center_y, center_y + 1]  # 水平主幹道
+    
+    # 畫主幹道
+    for x in range(4, width - 4):
+        for y in main_roads_y:
+            _set_road(terrain, x, y, width, height)
+    for y in range(4, height - 4):
+        for x in main_roads_x:
+            _set_road(terrain, x, y, width, height)
+    
+    # 每個建築門口用最短路徑連到主幹道
+    for b in buildings:
+        door_x = b.get("doorX", b["x"] + b["width"] // 2)
+        door_y = b.get("doorY", b["y"] + b["height"] - 1) + 1
+        
+        # 判斷連接水平還是垂直主幹道（選最近的）
+        dist_to_h = abs(door_y - center_y)  # 到水平主幹道的距離
+        dist_to_v = abs(door_x - center_x)  # 到垂直主幹道的距離
+        
+        if dist_to_h <= dist_to_v:
+            # 垂直連接到水平主幹道
+            y_start, y_end = (door_y, center_y) if door_y < center_y else (center_y + 1, door_y)
+            for y in range(y_start, y_end + 1):
+                _set_road(terrain, door_x, y, width, height)
+        else:
+            # 水平連接到垂直主幹道
+            x_start, x_end = (door_x, center_x) if door_x < center_x else (center_x + 1, door_x)
+            for x in range(x_start, x_end + 1):
+                _set_road(terrain, x, door_y, width, height)
+
+
+def _set_road(terrain: List[List[int]], x: int, y: int, width: int, height: int):
+    """設定道路地磚（只在草地上畫）"""
+    if 0 <= x < width and 0 <= y < height:
+        # 只有草地(0)才變成道路(1)，不覆蓋其他地形
+        if terrain[y][x] == 0:
+            terrain[y][x] = 1
