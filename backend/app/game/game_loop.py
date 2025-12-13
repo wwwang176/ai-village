@@ -199,6 +199,31 @@ class GameLoop:
         elif "introvert" in personality:
             social_rate *= 0.5  # 內向者社交需求下降更慢
         stats["social"] = max(0, stats.get("social", 50) - delta_time * social_rate)
+        
+        # 心情變化（根據其他狀態值）
+        happiness = stats.get("happiness", 70)
+        energy = stats.get("energy", 100)
+        hunger = stats.get("hunger", 0)
+        social = stats.get("social", 50)
+        
+        happiness_rate = 0.0
+        # 體力影響
+        if energy > 80:
+            happiness_rate += 0.1
+        elif energy < 20:
+            happiness_rate -= 0.1
+        # 飽足度影響（hunger 越高越餓，所以反過來）
+        if hunger < 20:  # 飽足度 > 80%
+            happiness_rate += 0.1
+        elif hunger > 80:  # 飽足度 < 20%
+            happiness_rate -= 0.1
+        # 社交影響
+        if social > 80:
+            happiness_rate += 0.1
+        elif social < 20:
+            happiness_rate -= 0.1
+        
+        stats["happiness"] = max(0, min(100, happiness + happiness_rate * delta_time))
     
     def process_task_queue(self, villager: dict, delta_time: float):
         """處理村民的任務隊列"""
@@ -486,8 +511,7 @@ class GameLoop:
                             "villager_id": villager["id"],
                             "decision": {
                                 "action": action,
-                                "reason": reason,
-                                "mood": decision.get("mood")
+                                "reason": reason
                             }
                         }
                     })

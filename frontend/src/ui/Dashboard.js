@@ -42,8 +42,10 @@ export class Dashboard {
       const stateText = this.getStateText(villager.state);
       const stateClass = villager.state || 'idle';
       
+      const occupationText = this.getOccupationText(villager.occupation);
+      
       item.innerHTML = `
-        <span class="villager-name">${villager.name}</span>
+        <span class="villager-name">${villager.name} (${occupationText})</span>
         <span class="villager-state ${stateClass}">${stateText}</span>
       `;
       
@@ -376,7 +378,8 @@ export class Dashboard {
       const villagers = this.game.villagerManager.villagers.map(v => ({
         id: v.id,
         name: v.name,
-        state: v.state
+        state: v.state,
+        occupation: v.occupation
       }));
       this.updateVillagerList(villagers);
     }

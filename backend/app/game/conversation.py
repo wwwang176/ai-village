@@ -388,6 +388,12 @@ class ConversationSystem:
                 self.game_state.update_relationship(villager_a["id"], villager_b["id"], {"familiarity": familiarity_a, "affection": affection_a_to_b})
                 self.game_state.update_relationship(villager_b["id"], villager_a["id"], {"familiarity": familiarity_b, "affection": affection_b_to_a})
                 logger.info(f"💕 {villager_a['name']} 和 {villager_b['name']} 好感度 {'+' if affection_a_to_b >= 0 else ''}{affection_a_to_b}")
+                
+                # 好感度變化影響心情（每點好感 = ±5 心情）
+                stats_a = villager_a.get("stats", {})
+                stats_a["happiness"] = max(0, min(100, stats_a.get("happiness", 70) + affection_a_to_b * 5))
+                stats_b = villager_b.get("stats", {})
+                stats_b["happiness"] = max(0, min(100, stats_b.get("happiness", 70) + affection_b_to_a * 5))
         else:
             # 對話太短，只更新熟悉度
             personality_a = villager_a.get("personality", [])

@@ -89,7 +89,6 @@ class VillagerAI:
                 logger.info(f"📥 OpenAI 回傳:")
                 logger.info(f"   action: {result.get('action')}")
                 logger.info(f"   reason: {result.get('reason')}")
-                logger.info(f"   mood: {result.get('mood')}")
                 logger.info(f"💰 Tokens: {response.usage.total_tokens}")
                 logger.info(f"{'='*50}")
             
@@ -211,8 +210,7 @@ class VillagerAI:
 【回應格式】JSON
 {
   "action": "行為類型（從可用行為中選擇）",
-  "reason": "第一人稱理由（繁體中文，15字內）",
-  "mood": "心情（如 content, tired, hungry, lonely, focused, anxious）"
+  "reason": "第一人稱理由（繁體中文，15字內）"
 }"""
     
     def _get_status_tag(self, value: float) -> str:
@@ -652,28 +650,27 @@ class VillagerAI:
         
         # 睡眠時間
         if (hour >= 22 or hour < 6) and stats["energy"] < 50:
-            return {"action": "go_home", "target": None, "reason": "太累了，該睡覺了", "mood": "tired"}
+            return {"action": "go_home", "target": None, "reason": "太累了，該睡覺了"}
         
         # 很餓 - 去買食物
         if stats["hunger"] > 70:
-            return {"action": "buy_food", "target": None, "reason": "肚子餓了，去買點吃的", "mood": "hungry"}
+            return {"action": "buy_food", "target": None, "reason": "肚子餓了，去買點吃的"}
         
         # 工作（不再限制工作時間，由性格 early_bird/night_owl 影響效率）
         occupation = villager.get("occupation", "")
         if occupation and occupation != "house":
-            return {"action": "go_work", "target": None, "reason": "該工作了", "mood": "neutral"}
+            return {"action": "go_work", "target": None, "reason": "該工作了"}
         
         # 社交需求 - 主動找人聊天
         if stats["social"] < 30:
-            return {"action": "socialize", "target": None, "reason": "想找人聊聊", "mood": "lonely"}
+            return {"action": "socialize", "target": None, "reason": "想找人聊聊"}
         
         # 隨機閒逛
         actions = ["wander", "rest", "go_market"]
         return {
             "action": random.choice(actions),
             "target": None,
-            "reason": "隨便走走",
-            "mood": "content"
+            "reason": "隨便走走"
         }
     
     def _rule_based_dialogue(self, villager: dict, action: str) -> dict:
