@@ -68,7 +68,7 @@ class VillagerAI:
             if DEBUG_OPENAI:
                 logger.info(f"\n{'='*50}")
                 logger.info(f"🤖 [決策請求] 村民: {villager.get('name', villager.get('id'))}")
-                logger.info(f"📤 System Prompt:\n{system_prompt[:200]}...")
+                logger.info(f"📤 System Prompt:\n{system_prompt[:500]}...")
                 logger.info(f"📤 User Prompt:\n{prompt}")
                 logger.info(f"{'='*50}")
             
@@ -192,6 +192,13 @@ class VillagerAI:
         # 檢查是否能買到食物
         can_buy_food = self._can_buy_food(villager, game_state)
         
+        # 食物鏈職業（農夫/磨坊主/麵包師）餓了時也能選擇工作
+        food_chain_jobs = ["farmer", "miller", "baker"]
+        occupation = villager.get("occupation", "")
+        stats = villager.get("stats", {})
+        hunger_value = 100 - stats.get("hunger", 0)  # 轉換成飽足度
+        is_hungry = hunger_value < 80
+        
         # 動態生成行為列表
         action_list = []
         
@@ -199,26 +206,19 @@ class VillagerAI:
         if sell_action:
             action_list.append(f"- sell_goods: {sell_action}")
         
+        # 食物鏈職業（農夫/磨坊主/麵包師）餓了時也能選擇工作
+        if can_work and occupation in food_chain_jobs and is_hungry:
+            action_list.append("- go_work: 生產食物，肚子餓的選項")
+        
         # 只有在能獲得食物時才顯示選項
         if can_buy_food:
             action_list.append("- buy_food: 買食物吃，肚子餓的選項")
         
         action_list.append("- go_home: 回家睡覺，體力不足的選項")
         
-        # 食物鏈職業（農夫/磨坊主/麵包師）餓了時也能選擇工作
-        food_chain_jobs = ["farmer", "miller", "baker"]
-        occupation = villager.get("occupation", "")
-        stats = villager.get("stats", {})
-        hunger_value = 100 - stats.get("hunger", 0)  # 轉換成飽足度
-        is_hungry = hunger_value < 50
-        
         # 只有在能工作時才顯示選項（有原料或有錢買）
-        # 或是食物鏈職業且肚子餓（可以靠工作生產食物）
         if can_work:
             action_list.append("- go_work: 去工作地點工作")
-        
-        if occupation in food_chain_jobs and is_hungry:
-            action_list.append("- go_work: 生產食物")
         
         action_list.extend([
             "- go_market: 去市集逛逛，社交選項",
@@ -237,6 +237,7 @@ class VillagerAI:
 你需要根據村民的性格、狀態和環境，決定他們的下一步行為。
 
 【重要】你只能從下方「可用的行為類型」中選擇！
+【行為優先度】賣東西給商人 > 吃飽 > 睡飽 > 工作/社交；如果有重複選項則隨機挑選一個(例如兩個吃飽，擇機挑選一個吃飽)
 {priority_hint}
 {actions}
 

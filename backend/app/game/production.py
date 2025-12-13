@@ -183,28 +183,65 @@ class ProductionSystem:
         if buyer_money < total_price:
             return {"success": False, "reason": f"錢不夠（需要 ${total_price}）", "seller_name": seller_name}
         
-        # 檢查賣家庫存
+        # 計算賣家背包庫存
         seller_inventory = seller.get("inventory", [None] * 5)
-        seller_slot_index = -1
-        
-        for i, slot in enumerate(seller_inventory):
+        bag_qty = 0
+        for slot in seller_inventory:
             if slot and slot.get("item_id") == food_item:
-                if slot.get("quantity", 0) >= quantity:
-                    seller_slot_index = i
-                    break
+                bag_qty += slot.get("quantity", 0)
         
-        if seller_slot_index == -1:
+        # 計算賣家地上庫存
+        ground_items = []
+        ground_qty = 0
+        for item in self.game_state.get_items_by_owner(seller["id"]):
+            if item.get("item_id") == food_item:
+                ground_items.append(item)
+                ground_qty += item.get("quantity", 0)
+        
+        total_available = bag_qty + ground_qty
+        if total_available < quantity:
             return {"success": False, "reason": f"賣家沒有足夠的 {food_info['name']}", "seller_name": seller_name}
         
-        # 執行交易
+        # 執行交易 - 金錢轉移
         buyer["money"] = buyer_money - total_price
         seller["money"] = seller.get("money", 0) + total_price
         
-        seller_slot = seller_inventory[seller_slot_index]
-        if seller_slot["quantity"] <= quantity:
-            seller["inventory"][seller_slot_index] = None
-        else:
-            seller_slot["quantity"] -= quantity
+        # 從賣家扣除物品（優先從背包）
+        remaining = quantity
+        
+        # 1. 先從背包扣
+        for i, slot in enumerate(seller_inventory):
+            if remaining <= 0:
+                break
+            if slot and slot.get("item_id") == food_item:
+                slot_qty = slot.get("quantity", 0)
+                deduct = min(slot_qty, remaining)
+                if slot_qty <= deduct:
+                    seller["inventory"][i] = None
+                else:
+                    slot["quantity"] = slot_qty - deduct
+                remaining -= deduct
+        
+        # 2. 不夠再從地上扣（轉移擁有者）
+        for item in ground_items:
+            if remaining <= 0:
+                break
+            item_qty = item.get("quantity", 0)
+            deduct = min(item_qty, remaining)
+            if item_qty <= deduct:
+                # 整個轉移擁有者
+                item["owner_id"] = buyer["id"]
+            else:
+                # 部分扣除：原物品減量，買家在相同位置獲得新物品
+                item["quantity"] = item_qty - deduct
+                self.game_state.add_world_item(
+                    item_id=food_item,
+                    x=item.get("x", 0),
+                    y=item.get("y", 0),
+                    owner_id=buyer["id"],
+                    quantity=deduct
+                )
+            remaining -= deduct
         
         # 生肉需要回家煮，先放到背包
         if food_item == "meat_raw":
