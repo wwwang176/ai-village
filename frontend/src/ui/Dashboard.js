@@ -1,4 +1,4 @@
-import { PERSONALITY_NAMES, TASK_NAMES } from '../entities/Villager.js';
+import { PERSONALITY_NAMES, TASK_NAMES, STATE_NAMES, OCCUPATION_NAMES, ITEM_ICONS } from '../entities/Villager.js';
 
 /**
  * 村民 Dashboard - 顯示村民列表和詳細資訊
@@ -254,22 +254,12 @@ export class Dashboard {
    * 渲染背包
    */
   renderInventory(inventory) {
-    // 物品圖示對應表
-    const itemIcons = {
-      'hoe': '⛏️', 'pickaxe': '⛏️', 'axe': '🪓', 'shears': '✂️',
-      'cleaver': '🔪', 'hammer': '🔨', 'saw': '🪚', 'scraper': '🔪',
-      'grain': '🌾', 'livestock': '🐄', 'ore': '🪨', 'wood': '🪵',
-      'wool': '🧶', 'hide': '🐑', 'flour': '🌫️', 'meat_raw': '🥩',
-      'iron': '🔩', 'plank': '📏', 'cloth': '🧵', 'leather': '🟤',
-      'bread': '🍞', 'meat': '🍖', 'clothes': '👕', 'furniture': '🪑'
-    };
-    
     return inventory.map((slot, i) => {
       if (!slot) {
         return `<div class="inventory-slot empty">空</div>`;
       }
       
-      const icon = itemIcons[slot.item_id] || '📦';
+      const icon = ITEM_ICONS[slot.item_id] || '📦';
       const isTool = slot.durability !== undefined && slot.durability !== null;
       
       if (isTool) {
@@ -301,28 +291,7 @@ export class Dashboard {
    * 職業文字轉換
    */
   getOccupationText(occupation) {
-    const occupationMap = {
-      // 食物鏈
-      'farmer': '農夫',
-      'miller': '磨坊主',
-      'butcher': '屠夫',
-      'baker': '麵包師',
-      // 器具鏈
-      'miner': '礦工',
-      'lumberjack': '伐木工',
-      'blacksmith': '鐵匠',
-      'carpenter': '木匠',
-      // 服飾鏈
-      'shepherd': '牧羊人',
-      'weaver': '織工',
-      'tanner': '皮革匠',
-      'tailor': '裁縫',
-      // 特殊
-      'merchant': '商人',
-      // 其他
-      'house': '無業'
-    };
-    return occupationMap[occupation] || occupation || '村民';
+    return OCCUPATION_NAMES[occupation] || occupation || '村民';
   }
   
   /**
@@ -349,24 +318,7 @@ export class Dashboard {
    * 狀態文字轉換
    */
   getStateText(state) {
-    const stateMap = {
-      'idle': '閒置',
-      'walking': '行走',
-      'talking': '聊天',
-      'eating': '進食',
-      'eat': '進食',
-      'working': '工作',
-      'work': '工作',
-      'resting': '休息',
-      'rest': '休息',
-      'socializing': '社交',
-      'socialize': '社交',
-      'waiting': '等待',
-      'waiting_social': '等人',
-      'initiate_chat': '找人聊天',
-      'move_to_villager': '找人中'
-    };
-    return stateMap[state] || state || '閒置';
+    return STATE_NAMES[state] || state || '閒置';
   }
   
   /**

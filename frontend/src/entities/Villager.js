@@ -34,6 +34,93 @@ export const TASK_NAMES = {
   slaughter_sheep: '屠宰羊',
 };
 
+// 物品圖示
+export const ITEM_ICONS = {
+  // 工具
+  hoe: '⛏️',
+  pickaxe: '⛏️',
+  axe: '🪓',
+  shears: '✂️',
+  cleaver: '🔪',
+  hammer: '🔨',
+  saw: '🪚',
+  scraper: '🔪',
+  // 原料
+  grain: '🌾',
+  livestock: '🐄',
+  ore: '🪨',
+  wood: '🪵',
+  wool: '🧶',
+  hide: '🐑',
+  // 中間產物
+  flour: '🌫️',
+  meat_raw: '🥩',
+  iron: '🔩',
+  plank: '📏',
+  cloth: '🧵',
+  leather: '🟤',
+  // 成品
+  bread: '🍞',
+  meat: '🍖',
+  clothes: '👕',
+  furniture: '🪑',
+};
+
+// 狀態中文翻譯
+export const STATE_NAMES = {
+  idle: '閒置',
+  walking: '行走',
+  talking: '聊天',
+  eating: '進食',
+  eat: '進食',
+  working: '工作',
+  work: '工作',
+  resting: '休息',
+  rest: '休息',
+  socializing: '社交',
+  socialize: '社交',
+  wait: '等待',
+  waiting_social: '等人',
+  initiate_chat: '找人聊天',
+  move_to_villager: '找人中',
+  // 任務狀態
+  pickup: '撿取中',
+  drop_item: '放下物品',
+  drop_one_item: '放下物品',
+  buy_tool: '購買工具',
+  buy_material: '購買原料',
+  buy_food: '購買食物',
+  sell_to_merchant: '販賣中',
+  sell_excess: '販賣中',
+  cook: '烹飪中',
+  shear_sheep: '剪羊毛',
+  buy_sheep: '購買羊',
+  slaughter_sheep: '屠宰羊',
+};
+
+// 職業中文翻譯
+export const OCCUPATION_NAMES = {
+  // 食物鏈
+  farmer: '農夫',
+  miller: '磨坊主',
+  butcher: '屠夫',
+  baker: '麵包師',
+  // 器具鏈
+  miner: '礦工',
+  lumberjack: '伐木工',
+  blacksmith: '鐵匠',
+  carpenter: '木匠',
+  // 服飾鏈
+  shepherd: '牧羊人',
+  weaver: '織工',
+  tanner: '皮革匠',
+  tailor: '裁縫',
+  // 特殊
+  merchant: '商人',
+  // 其他
+  house: '無業',
+};
+
 // 性格特質中文翻譯（7 維度 × 正反面）
 export const PERSONALITY_NAMES = {
   // 社交維度
