@@ -184,72 +184,80 @@ class VillagerAI:
             return self._rule_based_encounter(villager_a, villager_b)
     
     def _get_system_prompt(self, villager: dict, game_state) -> str:
-        """根據村民狀態動態生成系統提示詞"""
-        # 檢查是否有過剩物品可賣給商人
-        sell_action = self._get_sell_action(villager, game_state)
-        # 檢查是否可以工作（有原料或有供應商可以買）
-        can_work = self._can_work(villager, game_state)
-        # 檢查是否能買到食物
-        can_buy_food = self._can_buy_food(villager, game_state)
-        
-        # 食物鏈職業（農夫/磨坊主/麵包師）餓了時也能選擇工作
-        food_chain_jobs = ["farmer", "miller", "baker"]
-        occupation = villager.get("occupation", "")
-        stats = villager.get("stats", {})
-        hunger_value = 100 - stats.get("hunger", 0)  # 轉換成飽足度
-        is_hungry = hunger_value < 80
-        
-        # 動態生成行為列表
+        """固定的系統提示詞"""
+        return """你是中古世紀村莊模擬遊戲的村民 AI。
+根據村民的性格和當前狀態，選擇最符合角色個性的行為。
+
+【決策原則】
+1. 🚨 危急（<20%）：必須立即處理，無視性格
+2. ⚠️ 偏低（20-50%）：建議處理，可依性格延後
+3. 正常（>50%）：自由選擇
+
+【性格傾向】
+- extrovert（外向）：喜歡社交，常去市集
+- introvert（內向）：偏好獨處，專注工作
+- friendly（友善）：樂於助人，重視社交
+- grumpy（暴躁）：討厭被打擾，優先處理自己的事
+- brave（勇敢）：狀態偏低也敢繼續撐
+- timid（膽小）：狀態稍低就想處理
+- optimistic（樂觀）：傾向繼續工作
+- pessimistic（悲觀）：傾向先滿足需求
+- early_bird（早起）：白天更積極
+- night_owl（夜貓）：夜間也願意活動
+
+【職業特性】
+- 農夫/磨坊主/麵包師：工作可生產食物鏈物資，餓了也可選擇工作
+
+【回應格式】JSON
+{
+  "action": "行為類型（從可用行為中選擇）",
+  "reason": "第一人稱理由（繁體中文，15字內）",
+  "mood": "心情（如 content, tired, hungry, lonely, focused, anxious）"
+}"""
+    
+    def _get_status_tag(self, value: float) -> str:
+        """取得狀態標記"""
+        if value < 20:
+            return " 🚨 危急"
+        elif value < 50:
+            return " ⚠️ 偏低"
+        return ""
+    
+    def _build_action_list(self, villager: dict, game_state) -> str:
+        """建構可用行為列表"""
         action_list = []
         
-        # 【最高優先】有過剩物品要賣 → 放在最前面
+        # 檢查條件
+        sell_action = self._get_sell_action(villager, game_state)
+        can_work = self._can_work(villager, game_state)
+        can_buy_food = self._can_buy_food(villager, game_state)
+        occupation = villager.get("occupation", "")
+        food_chain_jobs = ["farmer", "miller", "baker"]
+        
+        # 1. 賣東西（有貨才顯示）
         if sell_action:
-            action_list.append(f"- sell_goods: {sell_action}")
+            action_list.append(f"- sell_goods：{sell_action}")
         
-        # 食物鏈職業（農夫/磨坊主/麵包師）餓了時也能選擇工作
-        if can_work and occupation in food_chain_jobs and is_hungry:
-            action_list.append("- go_work: 生產食物，肚子餓的選項")
-        
-        # 只有在能獲得食物時才顯示選項
+        # 2. 吃飯（能吃才顯示）
         if can_buy_food:
-            action_list.append("- buy_food: 買食物吃，肚子餓的選項")
+            action_list.append("- buy_food：買食物吃 (肚子餓的選擇)")
         
-        action_list.append("- go_home: 回家睡覺，體力不足的選項")
+        # 3. 休息
+        action_list.append("- go_home：回家休息 (體力不足的選擇)")
+        action_list.append("- sleep：原地休息 (體力不足的選擇)")
         
-        # 只有在能工作時才顯示選項（有原料或有錢買）
+        # 4. 工作（能工作才顯示，食物鏈職業加註）
         if can_work:
-            action_list.append("- go_work: 去工作地點工作")
+            if occupation in food_chain_jobs:
+                action_list.append("- go_work：去工作 (肚子餓的選擇，可生產食物)")
+            else:
+                action_list.append("- go_work：去工作 (賺錢的選擇)")
         
-        action_list.extend([
-            "- go_market: 去市集逛逛，社交選項",
-            "- sleep: 睡覺，體力不足的選項",
-            "- wander: 隨意閒逛",
-        ])
+        # 5. 社交/閒逛
+        action_list.append("- go_market：去市集 (社交不足的選擇)")
+        action_list.append("- wander：閒逛 (不符合任意條件的選擇)")
         
-        actions = "可用的行為類型：\n" + "\n".join(action_list)
-        
-        # 構建優先級提示
-        priority_hint = ""
-        if sell_action:
-            priority_hint = "\n【最高優先】有標註「優先處理」應該優先選擇！\n"
-        
-        return f"""你是一個中古世紀村莊模擬遊戲的 AI 系統。
-你需要根據村民的性格、狀態和環境，決定他們的下一步行為。
-
-【重要】你只能從下方「可用的行為類型」中選擇！
-【行為優先度】賣東西給商人 > 吃飽 > 睡飽 > 工作/社交；如果有重複選項則隨機挑選一個(例如兩個吃飽，擇機挑選一個吃飽)
-{priority_hint}
-{actions}
-
-回應必須是 JSON 格式:
-{{
-  "action": "行為類型（必須是上方列出的選項之一）",
-  "reason": "主觀的簡短理由（用繁體中文，10字以內）",
-  "mood": "當前心情"
-}}
-
-注意：不需要提供座標，系統會自動處理移動。
-只能選擇上方列出的行為！"""
+        return "\n".join(action_list)
     
     def _get_sell_action(self, villager: dict, game_state) -> str:
         """檢查村民是否有過剩物品可賣給商人
@@ -515,69 +523,38 @@ class VillagerAI:
 }"""
 
     def _build_decision_prompt(self, villager: dict, game_state) -> str:
-        time = game_state.get_time()
+        """建構 User Prompt"""
+        time_info = game_state.get_time()
         stats = villager["stats"]
         
-        # 計算飽足度（100 - 飢餓度）
+        # 計算狀態值
         satiety = 100 - stats.get('hunger', 0)
         energy = stats.get('energy', 100)
         social = stats.get('social', 100)
+        money = villager.get('money', 0)
         
-        # 生成狀態描述（標籤 + 百分比 + 優先級標記）
-        status_lines = self._build_status_description(energy, satiety, social)
+        # 取得職業名稱
+        occupation_name = self._get_occupation_name(villager.get('occupation', ''))
         
-        return f"""村民資訊:
-- 姓名: {villager['name']}
-- 職業: {villager['occupation']}
-- 性格: {', '.join(villager['personality'])}
+        # 建構可用行為列表
+        action_list = self._build_action_list(villager, game_state)
+        
+        return f"""【村民】{villager['name']}（{occupation_name}）
+【性格】{', '.join(villager['personality'])}
 
-當前狀態（優先處理標 ⚠️ 的項目）：
-{status_lines}
+【狀態】
+- 飽足度：{satiety:.0f}%{self._get_status_tag(satiety)}
+- 體力：{energy:.0f}%{self._get_status_tag(energy)}
+- 社交滿足度：{social:.0f}%{self._get_status_tag(social)}
+- 金錢：${money}
 
-時間: 第 {time['day']} 天 {time['hour']:02d}:{time['minute']:02d}
-最近記憶: {self._format_memories(villager.get('memories', []))}
+【可用行為】
+{action_list}
 
-請決定這個村民接下來應該做什麼。"""
-    
-    def _build_status_description(self, energy: float, satiety: float, social: float) -> str:
-        """生成狀態描述（標籤 + 百分比 + 優先級標記）"""
-        lines = []
-        
-        # 飽足度（最高優先）
-        if satiety <= 0:
-            lines.append(f"- 飽足度：{satiety:.0f}% 🚨 飢餓至極，必須立即進食！")
-        elif satiety < 10:
-            lines.append(f"- 飽足度：{satiety:.0f}% ⚠️ 非常飢餓，急需食物")
-        elif satiety < 30:
-            lines.append(f"- 飽足度：{satiety:.0f}% ⚠️ 飢餓")
-        elif satiety < 50:
-            lines.append(f"- 飽足度：{satiety:.0f}% 有點餓")
-        else:
-            lines.append(f"- 飽足度：{satiety:.0f}% 正常")
-        
-        # 體力（次高優先）
-        if energy < 5:
-            lines.append(f"- 體力：{energy:.0f}% ⚠️ 極度疲憊，即將暈倒")
-        elif energy < 15:
-            lines.append(f"- 體力：{energy:.0f}% ⚠️ 非常疲累，急需休息")
-        elif energy < 30:
-            lines.append(f"- 體力：{energy:.0f}% ⚠️ 疲累")
-        elif energy < 50:
-            lines.append(f"- 體力：{energy:.0f}% 有點累")
-        else:
-            lines.append(f"- 體力：{energy:.0f}% 精力充沛")
-        
-        # 社交（最低優先）
-        if social < 10:
-            lines.append(f"- 社交：{social:.0f}% ⚠️ 非常孤獨")
-        elif social < 30:
-            lines.append(f"- 社交：{social:.0f}% 孤獨")
-        elif social < 50:
-            lines.append(f"- 社交：{social:.0f}% 想找人聊聊")
-        else:
-            lines.append(f"- 社交：{social:.0f}% 正常")
-        
-        return "\n".join(lines)
+【時間】第 {time_info['day']} 天 {time_info['hour']:02d}:{time_info['minute']:02d}
+【記憶】{self._format_memories(villager.get('memories', []))}
+
+請選擇一個行為。"""
 
     def _build_dialogue_prompt(
         self,

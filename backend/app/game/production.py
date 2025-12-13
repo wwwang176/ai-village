@@ -243,29 +243,8 @@ class ProductionSystem:
                 )
             remaining -= deduct
         
-        # 生肉需要回家煮，先放到背包
-        if food_item == "meat_raw":
-            # 放到買家背包
-            location = self.inventory_system.add_item(buyer, food_item, quantity)
-            if "pending_food_trade" in buyer:
-                del buyer["pending_food_trade"]
-            return {
-                "success": True,
-                "food_name": food_info["name"],
-                "food_item": food_item,
-                "price": total_price,
-                "hunger_restore": 0,  # 還沒吃
-                "seller_name": seller_name,
-                "need_cook": True,
-                "location": location,
-                "seller_pos": {"x": seller.get("x", 0), "y": seller.get("y", 0)},
-                "buyer_pos": {"x": buyer.get("x", 0), "y": buyer.get("y", 0)}
-            }
-        
-        # 其他食物（如麵包）直接吃掉
-        stats = buyer.get("stats", {})
-        hunger_restore = food_info["hunger_restore"] * quantity
-        stats["hunger"] = max(0, stats.get("hunger", 50) - hunger_restore)
+        # 食物放到買家背包，由 AI 決定後續行動
+        location = self.inventory_system.add_item(buyer, food_item, quantity)
         
         if "pending_food_trade" in buyer:
             del buyer["pending_food_trade"]
@@ -275,9 +254,10 @@ class ProductionSystem:
             "food_name": food_info["name"],
             "food_item": food_item,
             "price": total_price,
-            "hunger_restore": hunger_restore,
+            "hunger_restore": 0,  # 還沒吃，由 AI 決定
             "seller_name": seller_name,
-            "need_cook": False,
+            "need_cook": food_item == "meat_raw",
+            "location": location,
             "seller_pos": {"x": seller.get("x", 0), "y": seller.get("y", 0)},
             "buyer_pos": {"x": buyer.get("x", 0), "y": buyer.get("y", 0)}
         }
