@@ -32,7 +32,7 @@ ITEM_TYPES = {
         category="material", stack_max=10, price=3
     ),
     "hide": ItemType(
-        id="hide", name="羊皮", icon="🐑",
+        id="hide", name="羊皮", icon="☁️",
         category="material", stack_max=10, price=4
     ),
     

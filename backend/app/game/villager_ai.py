@@ -228,21 +228,21 @@ class VillagerAI:
         
         # 2. 吃飯（能吃才顯示）
         if can_buy_food:
-            action_list.append("- buy_food：買食物吃 → 恢復飽足度")
+            action_list.append("- buy_food：買食物吃 → 恢復飽足度（無法恢復體力與社交滿足度）")
         
         # 3. 休息
-        action_list.append("- go_home：回家睡覺 → 恢復體力（無法恢復飽足度）")
+        action_list.append("- go_home：回家睡覺 → 恢復體力（無法恢復飽足度與社交滿足度）")
         
         # 4. 工作（能工作才顯示，食物鏈職業加註）
         if can_work:
             if occupation in food_chain_jobs:
-                action_list.append("- go_work：產生食物 → 恢復飽足度")
+                action_list.append("- go_work：產生食物 → 恢復飽足度（無法恢復體力與社交滿足度）")
             else:
                 action_list.append("- go_work：去工作 → 賺錢")
         
         # 5. 社交/閒逛
-        action_list.append("- go_market：去市集 → 社交互動，恢復社交滿足度")
-        action_list.append("- wander：閒逛 → 無特定目的")
+        action_list.append("- go_market：去市集 → 恢復社交滿足度（無法恢復飽足度與體力）")
+        action_list.append("- wander：閒逛 → 無特定目的（不恢復任何狀態）")
         
         return "\n".join(action_list)
     
@@ -301,17 +301,25 @@ class VillagerAI:
         if not excess_items:
             return ""
         
-        # 選擇數量最多的物品賣
-        excess_items.sort(key=lambda x: x[1], reverse=True)
-        best_item, best_qty, reason = excess_items[0]
+        from ..data.supply_chain import get_occupation_products
         
-        item_names = {
-            "grain": "穀物", "ore": "礦石", "wood": "木材", "wool": "羊毛",
-            "flour": "麵粉", "iron": "鐵錠", "cloth": "布料", "leather": "皮革",
-            "hide": "獸皮", "meat_raw": "生肉", "bread": "麵包", "meat": "肉品",
-            "furniture": "家具", "clothes": "衣服", "plank": "木板"
-        }
-        item_name = item_names.get(best_item, best_item)
+        occupation = villager.get("occupation", "")
+        own_products = get_occupation_products(occupation)
+        
+        # 優先找自己職業的產品
+        own_excess = [e for e in excess_items if e[0] in own_products]
+        if own_excess:
+            # 自己的產品中，選數量最多的
+            own_excess.sort(key=lambda x: x[1], reverse=True)
+            best_item, best_qty, reason = own_excess[0]
+        else:
+            # 沒有自己的產品，選數量最多的
+            excess_items.sort(key=lambda x: x[1], reverse=True)
+            best_item, best_qty, reason = excess_items[0]
+        
+        from ..data.items import ITEM_TYPES
+        item_type = ITEM_TYPES.get(best_item)
+        item_name = item_type.name if item_type else best_item
         
         if reason == "過剩":
             return f"賣{item_name}給商人（庫存 {best_qty} 個，過剩）←【優先處理】"

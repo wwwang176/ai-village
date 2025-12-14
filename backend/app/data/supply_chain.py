@@ -40,20 +40,26 @@ REQUIRED_MATERIALS = {
 }
 
 
-# 原料 → 生產者對應表
+# 物品 → 生產者對應表（包含原料、半成品、成品）
 MATERIAL_PRODUCERS = {
+    # L1 原料
     "grain": "farmer",          # 穀物 ← 農夫
-    # livestock 透過羊系統處理，不是物品
     "ore": "miner",             # 鐵礦 ← 礦工
     "wood": "lumberjack",       # 木材 ← 伐木工
     "wool": "shepherd",         # 羊毛 ← 牧羊人
+    # L2 半成品
     "hide": "butcher",          # 羊皮 ← 屠夫（宰殺羊獲得）
-    "flour": "miller",          # 麵粉 ← 磨坊主
     "meat_raw": "butcher",      # 生肉 ← 屠夫
+    "flour": "miller",          # 麵粉 ← 磨坊主
     "iron": "blacksmith",       # 鐵錠 ← 鐵匠
     "plank": "carpenter",       # 木板 ← 木匠
     "cloth": "weaver",          # 布料 ← 織工
     "leather": "tanner",        # 皮革 ← 皮革匠
+    # L3 成品
+    "bread": "baker",           # 麵包 ← 麵包師
+    "meat": "butcher",          # 熟肉 ← 屠夫
+    "furniture": "carpenter",   # 家具 ← 木匠
+    "clothes": "tailor",        # 衣服 ← 裁縫
 }
 
 
@@ -92,8 +98,13 @@ FOOD_SELLERS = [
 
 
 def get_supplier_occupation(material: str) -> Optional[str]:
-    """查詢誰生產這個原料"""
+    """查詢誰生產這個物品"""
     return MATERIAL_PRODUCERS.get(material)
+
+
+def get_occupation_products(occupation: str) -> List[str]:
+    """取得某職業生產的所有物品（反轉 MATERIAL_PRODUCERS）"""
+    return [item for item, occ in MATERIAL_PRODUCERS.items() if occ == occupation]
 
 
 def get_suppliers_for_occupation(occupation: str) -> List[str]:

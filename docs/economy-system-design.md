@@ -121,7 +121,7 @@ L2  ┌─────────────┐
     │   butcher   │
     └──────┬──────┘
            │ 🥩 meat_raw ×2 ($5)
-           │ 🐑 hide ×1 ($4)
+           │ ☁️ hide ×1 ($4)
            ↓
     [村民消費] / [皮革匠]
 ```
@@ -160,7 +160,7 @@ L1  ┌─────────────┐          L2  ┌────�
     │ 🐑 牧羊人   │              │ 🔪 屠夫     │
     │  shepherd   │              │   butcher   │
     └──────┬──────┘              └──────┬──────┘
-           │ 🧶 wool ×2                 │ 🐑 hide ×1
+           │ 🧶 wool ×2                 │ ☁️ hide ×1
            ↓                            ↓
 L2  ┌─────────────┐          L2  ┌─────────────┐
     │ 🧵 織工     │              │ 🟤 皮革匠   │
@@ -246,7 +246,7 @@ CONSUMER_SHOPS = {
 | 鐵礦 | ore | 🪨 | 礦工 |
 | 木材 | wood | 🪵 | 伐木工 |
 | 羊毛 | wool | 🧶 | 牧羊人（剪羊毛）|
-| 羊皮 | hide | 🐑 | 屠夫（宰殺羊）|
+| 羊皮 | hide | ☁️ | 屠夫（宰殺羊）|
 
 #### 半成品（L2 職業產出）
 
@@ -292,7 +292,7 @@ ITEMS = {
     "ore": {"name": "鐵礦", "icon": "🪨", "category": "material", "stack_max": 10},
     "wood": {"name": "木材", "icon": "🪵", "category": "material", "stack_max": 10},
     "wool": {"name": "羊毛", "icon": "🧶", "category": "material", "stack_max": 10},
-    "hide": {"name": "羊皮", "icon": "🐑", "category": "material", "stack_max": 10},
+    "hide": {"name": "羊皮", "icon": "☁️", "category": "material", "stack_max": 10},
     
     # 半成品
     "flour": {"name": "麵粉", "icon": "🌫️", "category": "material", "stack_max": 10},
@@ -332,7 +332,7 @@ ITEMS = {
 | 🪨 鐵礦 | ore | $3 | L1 | 礦工 |
 | 🪵 木材 | wood | $2 | L1 | 伐木工 |
 | 🧶 羊毛 | wool | $2 | L1 | 牧羊人 |
-| 🐑 羊皮 | hide | $4 | L2 | 屠夫 |
+| ☁️ 羊皮 | hide | $4 | L2 | 屠夫 |
 | 🌫️ 麵粉 | flour | $5 | L2 | 磨坊主 |
 | 🔩 鐵錠 | iron | $8 | L2 | 鐵匠 |
 | 🧵 布料 | cloth | $7 | L2 | 織工 |
@@ -356,7 +356,7 @@ ITEMS = {
 | 🔩 鐵錠 | iron | $8 | L2 | ≥ 10 |
 | 🧵 布料 | cloth | $7 | L2 | ≥ 10 |
 | 🟤 皮革 | leather | $10 | L2 | ≥ 10 |
-| 🐑 獸皮 | hide | $4 | L2 | ≥ 10 |
+| ☁️ 獸皮 | hide | $4 | L2 | ≥ 10 |
 | 🥩 生肉 | meat_raw | $5 | L2 | ≥ 10 |
 | 📏 木板 | plank | $6 | L2 | ≥ 10 |
 | 🍞 麵包 | bread | $4 | L3 | ≥ 15 |

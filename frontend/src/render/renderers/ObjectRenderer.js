@@ -12,7 +12,7 @@ export class ObjectRenderer extends BaseRenderer {
       'hoe': '⛏️', 'pickaxe': '⛏️', 'axe': '🪓', 'shears': '✂️',
       'cleaver': '🔪', 'hammer': '🔨', 'saw': '🪚', 'scraper': '🔪',
       'grain': '🌾', 'livestock': '🐄', 'ore': '🪨', 'wood': '🪵',
-      'wool': '🧶', 'hide': '🐑', 'flour': '🌫️', 'meat_raw': '🥩',
+      'wool': '🧶', 'hide': '☁️', 'flour': '🌫️', 'meat_raw': '🥩',
       'iron': '🔩', 'plank': '📏', 'cloth': '🧵', 'leather': '🟤',
       'bread': '🍞', 'meat': '🍖', 'clothes': '👕', 'furniture': '🪑'
     };
