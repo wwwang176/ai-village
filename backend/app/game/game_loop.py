@@ -107,7 +107,10 @@ class GameLoop:
         time_scale = self._get_time_scale()
         self.game_state.update_time(delta_time * time_scale)
         
-        # 1.5. 記錄歷史數據（每遊戲小時）
+        # 1.5. 更新天氣
+        self.game_state.update_weather()
+        
+        # 1.6. 記錄歷史數據（每遊戲小時）
         self.game_state.record_history_snapshot()
         
         # 2. 更新村民狀態
@@ -192,6 +195,12 @@ class GameLoop:
                 energy_rate *= 0.8 if is_daytime else 1.2  # 白天慢、晚上快
             elif "night_owl" in personality:
                 energy_rate *= 1.2 if is_daytime else 0.8  # 白天快、晚上慢
+            
+            # 天氣影響（室外時額外消耗體力）
+            weather_info = self.game_state.get_weather_info()
+            if weather_info["stamina_drain"] > 0 and self.game_state.is_villager_outdoor(villager):
+                energy_rate += weather_info["stamina_drain"] * 0.1  # 每 tick 額外消耗
+            
             stats["energy"] = max(0, stats.get("energy", 100) - delta_time * energy_rate)
         
         # 社交需求下降
@@ -550,6 +559,7 @@ class GameLoop:
             "type": "tick",
             "data": {
                 "time": self.game_state.get_time(),
+                "weather": self.game_state.get_weather_info(),
                 "villagers": [
                     {
                         "id": v["id"],

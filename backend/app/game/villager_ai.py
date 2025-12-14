@@ -534,6 +534,12 @@ class VillagerAI:
         # 建構可用行為列表
         action_list = self._build_action_list(villager, game_state)
         
+        # 取得天氣資訊
+        weather_info = game_state.get_weather_info()
+        weather_text = f"{weather_info['icon']} {weather_info['name']}"
+        if weather_info['stamina_drain'] > 0:
+            weather_text += "（室外活動消耗更多體力）"
+        
         return f"""【村民】{villager['name']}（{occupation_name}）
 【性格】{', '.join(villager['personality'])}
 
@@ -547,6 +553,7 @@ class VillagerAI:
 {action_list}
 
 【時間】第 {time_info['day']} 天 {time_info['hour']:02d}:{time_info['minute']:02d}
+【天氣】{weather_text}
 【記憶】{self._format_memories(villager.get('memories', []))}
 
 請選擇一個行為。"""

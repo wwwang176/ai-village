@@ -70,22 +70,28 @@ export class UIManager {
    * 更新時間顯示
    */
   updateTimeDisplay(timeSystem) {
-    if (!timeSystem || !this.timeDisplay) return;
+    if (!timeSystem) return;
     
-    this.timeDisplay.textContent = timeSystem.getTimeString();
+    // 更新時間文字（使用 #time-text span）
+    const timeText = document.getElementById('time-text');
+    if (timeText) {
+      timeText.textContent = timeSystem.getTimeString();
+    }
     
     // 根據時段改變顏色
-    const period = timeSystem.getPeriod();
-    switch (period) {
-      case 'night':
-        this.timeDisplay.style.color = '#8888ff';
-        break;
-      case 'dawn':
-      case 'evening':
-        this.timeDisplay.style.color = '#ffaa55';
-        break;
-      default:
-        this.timeDisplay.style.color = '#ffd700';
+    if (this.timeDisplay) {
+      const period = timeSystem.getPeriod();
+      switch (period) {
+        case 'night':
+          this.timeDisplay.style.color = '#8888ff';
+          break;
+        case 'dawn':
+        case 'evening':
+          this.timeDisplay.style.color = '#ffaa55';
+          break;
+        default:
+          this.timeDisplay.style.color = '#ffd700';
+      }
     }
   }
   

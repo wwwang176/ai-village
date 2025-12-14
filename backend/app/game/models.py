@@ -158,6 +158,11 @@ class GameTime:
             self.hour -= 24
             self.day += 1
     
+    @property
+    def total_hours(self) -> int:
+        """計算從第 1 天開始的總小時數"""
+        return (self.day - 1) * 24 + self.hour
+    
     def to_dict(self) -> dict:
         return {
             "day": self.day,

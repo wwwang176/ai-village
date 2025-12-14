@@ -74,6 +74,10 @@ class GameState:
         self.history: List[dict] = []
         self.last_history_hour = -1  # 上次記錄的小時
         
+        # 天氣系統
+        self.weather = "sunny"  # 當前天氣
+        self.weather_end_hour = 0  # 天氣結束的遊戲小時
+        
         # 存檔路徑
         self.save_dir = Path("saves")
         self.save_dir.mkdir(exist_ok=True)
@@ -122,6 +126,9 @@ class GameState:
         
         # 初始化目標解析器
         self.target_resolver = TargetResolver(self)
+        
+        # 初始化天氣
+        self._init_weather()
         
         self.initialized = True
         print(f"🎮 遊戲初始化完成 (種子: {self.seed})")
@@ -769,7 +776,9 @@ class GameState:
                 "time": self.game_time.to_dict(),
                 "seed": self.seed,
                 "player": self.player,
-                "villagers": self.villagers
+                "villagers": self.villagers,
+                "weather": self.weather,
+                "weather_end_hour": self.weather_end_hour
             }, f, ensure_ascii=False, indent=2)
         
         with open(save_path / "map.json", "w", encoding="utf-8") as f:
@@ -800,6 +809,10 @@ class GameState:
                 self.seed = data["seed"]
                 self.player = data["player"]
                 self.villagers = data["villagers"]
+                
+                # 讀取天氣狀態（相容舊存檔）
+                self.weather = data.get("weather", "sunny")
+                self.weather_end_hour = data.get("weather_end_hour", self.game_time.total_hours + 4)
             
             with open(save_path / "map.json", "r", encoding="utf-8") as f:
                 self.map_data = json.load(f)
@@ -1033,3 +1046,82 @@ class GameState:
             }
             for s in data
         ]
+    
+    # ============================================================
+    # 天氣系統
+    # ============================================================
+    
+    def _init_weather(self):
+        """初始化天氣"""
+        from ..data.weather import WEATHER_DURATION_MIN, WEATHER_DURATION_MAX
+        self.weather = "sunny"
+        # 設定第一次天氣變化的時間
+        duration = random.randint(WEATHER_DURATION_MIN, WEATHER_DURATION_MAX)
+        self.weather_end_hour = self.game_time.total_hours + duration
+    
+    def update_weather(self):
+        """更新天氣（每 tick 呼叫）"""
+        from ..data.weather import (
+            WEATHER_TYPES, WEATHER_TRANSITIONS,
+            WEATHER_DURATION_MIN, WEATHER_DURATION_MAX
+        )
+        
+        current_hour = self.game_time.total_hours
+        
+        # 還沒到變化時間
+        if current_hour < self.weather_end_hour:
+            return
+        
+        # 根據轉換機率決定下一個天氣
+        transitions = WEATHER_TRANSITIONS.get(self.weather, {})
+        if not transitions:
+            return
+        
+        # 加權隨機選擇
+        weather_ids = list(transitions.keys())
+        weights = list(transitions.values())
+        new_weather = random.choices(weather_ids, weights=weights, k=1)[0]
+        
+        if new_weather != self.weather:
+            old_weather = WEATHER_TYPES[self.weather]
+            new_weather_type = WEATHER_TYPES[new_weather]
+            print(f"🌤️ 天氣變化: {old_weather.icon} {old_weather.name} → {new_weather_type.icon} {new_weather_type.name}")
+        
+        self.weather = new_weather
+        
+        # 設定下次變化時間
+        duration = random.randint(WEATHER_DURATION_MIN, WEATHER_DURATION_MAX)
+        self.weather_end_hour = current_hour + duration
+    
+    def is_villager_outdoor(self, villager: dict) -> bool:
+        """檢查村民是否在室外"""
+        from ..data.weather import OUTDOOR_BUILDINGS
+        
+        vx, vy = villager.get("x", 0), villager.get("y", 0)
+        
+        # 找村民所在的建築物
+        for building in self.map_data.get("buildings", []):
+            bx, by = building.get("x", 0), building.get("y", 0)
+            bw, bh = building.get("width", 1), building.get("height", 1)
+            
+            # 村民在建築物範圍內
+            if bx <= vx < bx + bw and by <= vy < by + bh:
+                building_type = building.get("type", "")
+                # 開放式建築 = 室外
+                return building_type in OUTDOOR_BUILDINGS
+        
+        # 不在任何建築物內 = 室外（道路、空地）
+        return True
+    
+    def get_weather_info(self) -> dict:
+        """取得天氣資訊（供 API 和 AI 使用）"""
+        from ..data.weather import get_weather_type
+        
+        weather_type = get_weather_type(self.weather)
+        return {
+            "id": weather_type.id,
+            "name": weather_type.name,
+            "icon": weather_type.icon,
+            "stamina_drain": weather_type.stamina_drain,
+            "darkness": weather_type.darkness
+        }

@@ -132,6 +132,68 @@
       border-radius: 4px;
       color: #ffd700;
       font-size: 14px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    #weather-icon {
+      font-size: 18px;
+    }
+    
+    /* 天氣特效層 */
+    #weather-effects {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 5;
+    }
+    
+    /* 雨滴 */
+    .raindrop {
+      position: absolute;
+      width: 2px;
+      background: linear-gradient(to bottom, transparent, rgba(174, 194, 224, 0.8));
+      animation: rain-fall linear infinite;
+    }
+    @keyframes rain-fall {
+      0% { transform: translateY(-100px); }
+      100% { transform: translateY(100vh); }
+    }
+    
+    /* 閃電 */
+    .lightning {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.9);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .lightning.flash {
+      animation: lightning-flash 0.1s ease-out;
+    }
+    @keyframes lightning-flash {
+      0% { opacity: var(--flash-opacity, 0.5); }
+      100% { opacity: 0; }
+    }
+    
+    /* 天氣遮罩（調暗畫面）*/
+    #weather-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0);
+      pointer-events: none;
+      transition: background 2s ease;
+      z-index: 4;
     }
     
     /* 對話框 */
@@ -522,9 +584,18 @@
   <div id="game-container">
     <canvas id="game-canvas"></canvas>
     
+    <!-- 天氣遮罩（調暗畫面）-->
+    <div id="weather-overlay"></div>
+    
+    <!-- 天氣特效層 -->
+    <div id="weather-effects"></div>
+    
     <div id="ui-layer">
-      <!-- 時間顯示 -->
-      <div id="time-display">第 1 天 08:00</div>
+      <!-- 時間與天氣顯示 -->
+      <div id="time-display">
+        <span id="time-text">第 1 天 08:00</span>
+        <span id="weather-icon">☀️</span>
+      </div>
       
       <!-- 右上角控制區 -->
       <div id="top-right-controls">

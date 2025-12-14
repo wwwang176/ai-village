@@ -14,6 +14,7 @@ import { InputHandler } from './InputHandler.js';
 import { UIManager } from '../ui/UIManager.js';
 import { Dashboard } from '../ui/Dashboard.js';
 import { HistoryChart } from '../ui/HistoryChart.js';
+import { WeatherEffect } from '../ui/WeatherEffect.js';
 import { apiClient } from '../api/ApiClient.js';
 
 export class Game {
@@ -122,6 +123,9 @@ export class Game {
         }
       }, 30000);
     }
+    
+    // 初始化天氣特效
+    this.weatherEffect = new WeatherEffect();
     
     // 初始化縮放控制
     this.initZoomControls();
@@ -363,6 +367,11 @@ export class Game {
     // 同步羊群（帶位置插值）
     if (data.sheep && this.map) {
       this.syncSheep(data.sheep);
+    }
+    
+    // 更新天氣特效
+    if (data.weather && this.weatherEffect) {
+      this.weatherEffect.update(data.weather);
     }
   }
   
