@@ -477,18 +477,18 @@ export class ObjectRenderer extends BaseRenderer {
     // 陰影
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
     this.ctx.beginPath();
-    this.ctx.ellipse(screenX + size / 2, screenY + size - 4, size * 0.3, size * 0.12, 0, 0, Math.PI * 2);
+    this.ctx.ellipse(screenX + size / 2, screenY + size - 6, size * 0.3, size * 0.12, 0, 0, Math.PI * 2);
     this.ctx.fill();
     
-    // 物品圖示（不透明）
+    // 物品圖示
     this.ctx.font = `${size * 0.7}px sans-serif`;
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
-    this.ctx.fillText(icon, screenX + size / 2, screenY + size / 2 - 4);
+    this.ctx.fillText(icon, screenX + size / 2, screenY + size / 2 - 3);
     
     // 數量（右下角）
     if (item.quantity > 1) {
-      this.ctx.font = 'bold 9px sans-serif';
+      this.ctx.font = 'bold 6px sans-serif';
       this.ctx.fillStyle = '#fff';
       this.ctx.strokeStyle = '#000';
       this.ctx.lineWidth = 2;
@@ -499,12 +499,12 @@ export class ObjectRenderer extends BaseRenderer {
     
     // 物品標籤（下方顯示「XXX的XX」）
     const label = item.owner_name ? `${item.owner_name}的${itemName}` : itemName;
-    this.ctx.font = '8px sans-serif';
+    this.ctx.font = '6px sans-serif';
     this.ctx.textAlign = 'center';
     this.ctx.fillStyle = '#fff';
     this.ctx.strokeStyle = '#000';
     this.ctx.lineWidth = 2;
-    this.ctx.strokeText(label, screenX + size / 2, screenY + size + 8);
-    this.ctx.fillText(label, screenX + size / 2, screenY + size + 8);
+    this.ctx.strokeText(label, screenX + size / 2, screenY + size + 0);
+    this.ctx.fillText(label, screenX + size / 2, screenY + size + 0);
   }
 }
