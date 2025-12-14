@@ -131,11 +131,9 @@ export class Renderer {
     
     // 收集村民
     for (const villager of villagers) {
-      // 睡覺時 sortY +0.5，讓村民顯示在床上面
-      const isSleeping = villager.state === 'sleeping';
       renderables.push({
         type: 'villager',
-        sortY: villager.y + (isSleeping ? 0.5 : 0),
+        sortY: villager.y,
         data: { villager, isSelected: villager === selectedVillager }
       });
     }
@@ -144,7 +142,7 @@ export class Renderer {
     for (const item of furniture) {
       renderables.push({
         type: 'furniture',
-        sortY: item.y,
+        sortY: item.y - 0.1,
         data: item
       });
     }

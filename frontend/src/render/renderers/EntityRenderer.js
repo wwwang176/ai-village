@@ -65,6 +65,7 @@ export class EntityRenderer extends BaseRenderer {
     this.ctx.fillStyle = isSelected ? '#ffff66' : '#fff';
     this.ctx.font = isSelected ? 'bold 9px sans-serif' : '8px sans-serif';
     this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
     this.ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
     this.ctx.shadowBlur = 2;
     this.ctx.shadowOffsetX = 1;
