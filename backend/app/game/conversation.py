@@ -353,9 +353,9 @@ class ConversationSystem:
             villager_b["state"] = "idle"
         
         # 增加社交值
-        villager_a.get("stats", {})["social"] = min(100, villager_a.get("stats", {}).get("social", 50) + 25)
-        villager_b.get("stats", {})["social"] = min(100, villager_b.get("stats", {}).get("social", 50) + 25)
-        logger.info(f"💬 {villager_a['name']} 和 {villager_b['name']} 社交值 +25")
+        villager_a.get("stats", {})["social"] = min(100, villager_a.get("stats", {}).get("social", 50) + 45)
+        villager_b.get("stats", {})["social"] = min(100, villager_b.get("stats", {}).get("social", 50) + 45)
+        logger.info(f"💬 {villager_a['name']} 和 {villager_b['name']} 社交值 +45")
         
         # 生成總結並存入記憶，同時判斷好感變化
         if len(conv.history) >= 2:

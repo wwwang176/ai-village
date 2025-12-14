@@ -204,7 +204,7 @@ class GameLoop:
             stats["energy"] = max(0, stats.get("energy", 100) - delta_time * energy_rate)
         
         # 社交需求下降
-        social_rate = 0.1
+        social_rate = 0.05  # 降低速率，約 33 分鐘從 100→0
         # extrovert/introvert 影響社交下降速度
         if "extrovert" in personality:
             social_rate *= 1.5  # 外向者社交需求下降更快

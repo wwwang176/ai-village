@@ -25,7 +25,7 @@ OCCUPATIONS = {
         building="mill",
         required_tool=None,
         input_materials=[("grain", 1)],
-        output_product="flour", output_quantity=1, work_time=2,
+        output_product="flour", output_quantity=2, work_time=2,
     ),
     "butcher": OccupationType(
         id="butcher", name="屠夫", tier=2, chain="food",
