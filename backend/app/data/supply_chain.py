@@ -144,8 +144,8 @@ MERCHANT_BUY_PRICES = {
     # L3 成品
     "bread": 4,         # 麵包
     "meat": 6,          # 熟肉
-    "furniture": 18,    # 家具
-    "clothes": 23,      # 衣服
+    "furniture": 34,    # 家具
+    "clothes": 35,      # 衣服
 }
 
 # 過剩門檻（分層設計）- 達到門檻時會賣給商人

@@ -226,9 +226,14 @@ class VillagerAI:
         if sell_action:
             action_list.append(f"- sell_goods：{sell_action}")
         
-        # 2. 吃飯（能吃才顯示）
+        # 2. 吃飯（能吃才顯示，食物鏈職業要很餓才買）
         if can_buy_food:
-            action_list.append("- buy_food：買食物吃 → 恢復飽足度（無法恢復體力與社交滿足度）")
+            if occupation in food_chain_jobs:
+                hunger = villager.get("stats", {}).get("hunger", 0)
+                if hunger >= 60:  # 食物鏈職業：飢餓度 >= 60% 才買食物
+                    action_list.append("- buy_food：買食物吃 → 恢復飽足度（無法恢復體力與社交滿足度）")
+            else:
+                action_list.append("- buy_food：買食物吃 → 恢復飽足度（無法恢復體力與社交滿足度）")
         
         # 3. 休息（很餓時不顯示，強迫先吃飯）
         hunger = villager.get("stats", {}).get("hunger", 0)
@@ -393,10 +398,11 @@ class VillagerAI:
         SHEEP_PRICE = 10
         money = villager.get("money", 0)
         
-        # 1. 屠夫已有羊 → 可以工作（去宰羊）
+        # 1. 屠夫已有成羊 → 可以工作（去宰羊）
         owned_sheep = game_state.get_sheep_by_owner(villager["id"])
-        if owned_sheep:
-            logger.info(f"🔍 _can_work: {villager['name']}(butcher) 有 {len(owned_sheep)} 隻羊可宰")
+        adult_owned = [s for s in owned_sheep if s.get("is_adult")]
+        if adult_owned:
+            logger.info(f"🔍 _can_work: {villager['name']}(butcher) 有 {len(adult_owned)} 隻成羊可宰")
             return True
         
         # 2. 沒有羊，檢查有沒有錢買羊

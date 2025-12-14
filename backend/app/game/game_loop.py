@@ -274,6 +274,8 @@ class GameLoop:
             completed = self.process_move_task(villager, current_task, delta_time)
         elif task_type == "move_to_villager":
             completed = self.process_move_to_villager_task(villager, current_task, delta_time)
+        elif task_type == "slaughter_sheep":
+            completed = self.process_slaughter_sheep_task(villager, current_task, delta_time)
         elif task_type == "initiate_chat":
             completed = self.process_initiate_chat_task(villager, current_task)
         else:
@@ -429,6 +431,44 @@ class GameLoop:
         # 使用一般移動邏輯
         return self.process_move_task(villager, task, delta_time)
     
+    def process_slaughter_sheep_task(self, villager: dict, task: dict, delta_time: float) -> bool:
+        """處理宰殺羊任務（整合移動+宰殺）"""
+        sheep_id = task.get("sheep_id")
+        duration = task.get("duration", 6)
+        
+        # 取得目標羊
+        sheep = self.game_state.sheep.get(sheep_id)
+        if not sheep:
+            logger.warning(f"⚠️ {villager['name']}: 找不到羊 {sheep_id}")
+            return True
+        
+        # 計算距離
+        dx = sheep["x"] - villager["x"]
+        dy = sheep["y"] - villager["y"]
+        dist = (dx**2 + dy**2) ** 0.5
+        
+        # 太遠 → 移動靠近（動態追蹤）
+        if dist > 1.5:
+            villager["state"] = "walking"
+            task["target"] = (sheep["x"], sheep["y"])
+            self.process_move_task(villager, task, delta_time)
+            return False
+        
+        # 夠近了 → 執行宰殺
+        villager["state"] = "slaughter_sheep"
+        elapsed = task.get("elapsed", 0) + delta_time
+        task["elapsed"] = elapsed
+        
+        if elapsed >= duration:
+            # 執行效果
+            success = self.apply_task_effect(villager, task)
+            if not success:
+                villager["task_queue"] = []
+                villager["state"] = "idle"
+            return True
+        
+        return False
+    
     def process_initiate_chat_task(self, villager: dict, task: dict) -> bool:
         """處理發起對話的任務"""
         target_villager_id = task.get("target_villager_id")
@@ -538,8 +578,8 @@ class GameLoop:
         task_queue = villager.get("task_queue", [])
         for task in task_queue:
             task_type = task.get("type")
-            # move 和 move_to_villager 都需要顯示路徑
-            if task_type in ["move", "move_to_villager"]:
+            # move、move_to_villager、slaughter_sheep 都需要顯示路徑
+            if task_type in ["move", "move_to_villager", "slaughter_sheep"]:
                 # move_to_villager 需要動態取得目標村民位置
                 if task_type == "move_to_villager":
                     target_id = task.get("target_villager_id")
@@ -547,6 +587,13 @@ class GameLoop:
                         target_v = self.game_state.villagers.get(target_id)
                         if target_v:
                             return (target_v["x"], target_v["y"])
+                # slaughter_sheep 需要動態取得目標羊位置
+                elif task_type == "slaughter_sheep":
+                    sheep_id = task.get("sheep_id")
+                    if sheep_id:
+                        sheep = self.game_state.sheep.get(sheep_id)
+                        if sheep:
+                            return (sheep["x"], sheep["y"])
                 return task.get("target")
         return None
     

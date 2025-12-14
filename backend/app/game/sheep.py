@@ -137,17 +137,12 @@ class SheepSystem:
         # 檢查屠夫是否已經擁有羊（買過但還沒殺）
         owned_sheep = self.game_state.get_sheep_by_owner(villager["id"])
         
-        if owned_sheep:
-            # 有羊，去殺羊
-            sheep = owned_sheep[0]
-            sheep_pos = (sheep["x"], sheep["y"])
-            current = (villager["x"], villager["y"])
-            dx = sheep_pos[0] - current[0]
-            dy = sheep_pos[1] - current[1]
-            dist = (dx**2 + dy**2) ** 0.5
-            
-            if dist > 1.5:
-                tasks.append({"type": "move", "target": sheep_pos})
+        # 過濾出成羊
+        adult_sheep = [s for s in owned_sheep if s.get("is_adult")]
+        
+        if adult_sheep:
+            # 有成羊，去殺羊（slaughter_sheep 任務會自動處理移動）
+            sheep = adult_sheep[0]
             
             tasks.append({
                 "type": "slaughter_sheep",
@@ -191,15 +186,13 @@ class SheepSystem:
             logger.info(f"🐑 牧羊人 {shepherd['name']} 羊不夠（需 > 2 隻成羊），無法出售")
             return tasks
         
-        # 走到牧羊人位置
+        # 走到牧羊人位置（動態追蹤）
         shepherd_pos = (shepherd["x"], shepherd["y"])
-        current = (buyer["x"], buyer["y"])
-        dx = shepherd_pos[0] - current[0]
-        dy = shepherd_pos[1] - current[1]
-        dist = (dx**2 + dy**2) ** 0.5
-        
-        if dist > 2:
-            tasks.append({"type": "move", "target": shepherd_pos})
+        tasks.append({
+            "type": "move_to_villager",
+            "target": shepherd_pos,
+            "target_villager_id": shepherd["id"]
+        })
         
         # 購買活羊任務
         tasks.append({
