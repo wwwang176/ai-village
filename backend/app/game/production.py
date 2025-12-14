@@ -30,7 +30,7 @@ MATERIAL_PRICES = {
     # L1 產出
     "grain": 2, "ore": 3, "wood": 2, "wool": 2,
     # L2 產出
-    "flour": 5, "iron": 8, "cloth": 7, "leather": 10,
+    "flour": 3, "iron": 8, "cloth": 7, "leather": 10,
     "hide": 4, "meat_raw": 5,
     # L3 產出（麵包師 $80/分，因為食物是生存必需）
     "bread": 4,

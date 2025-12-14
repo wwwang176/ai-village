@@ -134,7 +134,7 @@ MERCHANT_BUY_PRICES = {
     "wood": 2,          # 木材
     "wool": 2,          # 羊毛
     # L2 半成品
-    "flour": 5,         # 麵粉
+    "flour": 3,         # 麵粉
     "iron": 8,          # 鐵錠
     "cloth": 7,         # 布料
     "leather": 10,      # 皮革

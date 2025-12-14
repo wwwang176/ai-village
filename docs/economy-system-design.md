@@ -98,7 +98,7 @@ L2  ┌─────────────┐
     │ 🌾 磨坊主   │
     │   miller    │
     └──────┬──────┘
-           │ 🌫️ flour ×1
+           │ 🌫️ flour ×2
            ↓
 L3  ┌─────────────┐
     │ 🍞 麵包師   │
@@ -333,7 +333,7 @@ ITEMS = {
 | 🪵 木材 | wood | $2 | L1 | 伐木工 |
 | 🧶 羊毛 | wool | $2 | L1 | 牧羊人 |
 | ☁️ 羊皮 | hide | $4 | L2 | 屠夫 |
-| 🌫️ 麵粉 | flour | $5 | L2 | 磨坊主 |
+| 🌫️ 麵粉 | flour | $3 | L2 | 磨坊主 |
 | 🔩 鐵錠 | iron | $8 | L2 | 鐵匠 |
 | 🧵 布料 | cloth | $7 | L2 | 織工 |
 | 🟤 皮革 | leather | $10 | L2 | 皮革匠 |
@@ -352,7 +352,7 @@ ITEMS = {
 | 🪨 礦石 | ore | $3 | L1 | ≥ 20 |
 | 🪵 木材 | wood | $2 | L1 | ≥ 20 |
 | 🧶 羊毛 | wool | $2 | L1 | ≥ 20 |
-| 🌫️ 麵粉 | flour | $5 | L2 | ≥ 10 |
+| 🌫️ 麵粉 | flour | $3 | L2 | ≥ 10 |
 | 🔩 鐵錠 | iron | $8 | L2 | ≥ 10 |
 | 🧵 布料 | cloth | $7 | L2 | ≥ 10 |
 | 🟤 皮革 | leather | $10 | L2 | ≥ 10 |
@@ -1314,7 +1314,7 @@ OCCUPATIONS = {
         building="mill",
         required_tool=None,
         input_materials=[("grain", 1)],
-        output_product="flour", output_quantity=1, work_time=2,
+        output_product="flour", output_quantity=2, work_time=2,
     ),
     
     # === 食物鏈 L3 ===
