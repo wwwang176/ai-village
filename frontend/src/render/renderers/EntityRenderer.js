@@ -24,6 +24,13 @@ export class EntityRenderer extends BaseRenderer {
   }
   
   /**
+   * 渲染單一村民（用於 Y-sort）
+   */
+  renderSingleVillager(villager, isSelected = false) {
+    this.renderVillager(villager, isSelected);
+  }
+  
+  /**
    * 渲染單一村民
    */
   renderVillager(villager, isSelected = false) {

@@ -50,6 +50,13 @@ export class ObjectRenderer extends BaseRenderer {
   }
   
   /**
+   * 渲染單一物件（用於 Y-sort）
+   */
+  renderSingleObject(obj) {
+    this.renderObject(obj);
+  }
+  
+  /**
    * 渲染地上物品
    */
   renderWorldItems(items) {

@@ -20,6 +20,13 @@ export class FurnitureRenderer extends BaseRenderer {
   }
   
   /**
+   * 渲染單一家具（用於 Y-sort）
+   */
+  renderSingle(item) {
+    this.renderItem(item);
+  }
+  
+  /**
    * 渲染單一家具
    */
   renderItem(item) {

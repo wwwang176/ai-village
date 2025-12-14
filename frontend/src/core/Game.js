@@ -717,21 +717,21 @@ export class Game {
     this.renderer.renderMap(this.map);
     
     // 渲染家具（灶台、床）
-    this.renderer.renderFurniture(this.furniture);
-    
     // 渲染選中村民的路徑
     if (this.selectedVillager) {
       this.renderer.renderVillagerPath(this.selectedVillager);
     }
     
-    // 渲染村民
-    this.renderer.renderVillagers(this.villagerManager.villagers, this.selectedVillager);
+    // 統一 Y-sorting 渲染（村民、家具、建築物牆面、矮牆、對話框）
+    this.renderer.renderYSorted(
+      this.map, 
+      this.villagerManager.villagers, 
+      this.selectedVillager,
+      this.furniture
+    );
     
     // 渲染飛行物品（交易動畫）
     this.renderFlyingItems();
-    
-    // 渲染建築物頂部（2.5D：正面牆壁 + 屋頂，有村民進入時透明）
-    this.renderer.renderBuildingTops(this.map, this.villagerManager.villagers);
     
     // 還原縮放
     this.ctx.restore();
