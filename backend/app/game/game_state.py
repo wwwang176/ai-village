@@ -70,6 +70,10 @@ class GameState:
         # 事件佇列
         self.events: List[dict] = []
         
+        # 歷史數據（每小時快照）
+        self.history: List[dict] = []
+        self.last_history_hour = -1  # 上次記錄的小時
+        
         # 存檔路徑
         self.save_dir = Path("saves")
         self.save_dir.mkdir(exist_ok=True)
@@ -917,3 +921,115 @@ class GameState:
         if not self.pathfinder:
             return None
         return self.pathfinder.find_path(start, goal)
+    
+    # ==================== 歷史數據記錄 ====================
+    
+    def record_history_snapshot(self):
+        """記錄當前狀態快照（每遊戲小時呼叫一次）"""
+        current_hour = self.game_time.hour
+        current_day = self.game_time.day
+        
+        # 避免同一小時重複記錄
+        time_key = current_day * 24 + current_hour
+        if time_key == self.last_history_hour:
+            return
+        self.last_history_hour = time_key
+        
+        # 計算村民統計數據
+        villager_list = list(self.villagers.values())
+        if not villager_list:
+            return
+        
+        # 計算平均值
+        total_satiety = 0  # 飽足度 = 100 - hunger
+        total_energy = 0
+        total_social = 0
+        total_money = 0
+        
+        # 個人數據
+        individual_data = {}
+        
+        for v in villager_list:
+            stats = v.get("stats", {})
+            satiety = 100 - stats.get("hunger", 0)  # 飽足度 = 100 - 飢餓度
+            energy = stats.get("energy", 100)
+            social = stats.get("social", 50)
+            money = v.get("money", 0)
+            
+            total_satiety += satiety
+            total_energy += energy
+            total_social += social
+            total_money += money
+            
+            individual_data[v["id"]] = {
+                "name": v["name"],
+                "satiety": round(satiety, 1),
+                "energy": round(energy, 1),
+                "social": round(social, 1),
+                "money": money
+            }
+        
+        count = len(villager_list)
+        snapshot = {
+            "day": current_day,
+            "hour": current_hour,
+            "time_key": time_key,  # 用於 X 軸排序
+            "avg_satiety": round(total_satiety / count, 1),
+            "avg_energy": round(total_energy / count, 1),
+            "avg_social": round(total_social / count, 1),
+            "total_money": total_money,
+            "villagers": individual_data
+        }
+        
+        self.history.append(snapshot)
+        
+        # 限制歷史記錄數量（最多保留 720 筆 = 30 天）
+        if len(self.history) > 720:
+            self.history = self.history[-720:]
+    
+    def get_history(self, hours: int = None, villager_id: str = None) -> List[dict]:
+        """取得歷史數據
+        
+        Args:
+            hours: 取最近幾小時的數據，None 表示全部
+            villager_id: 指定村民 ID，None 表示全體平均
+        
+        Returns:
+            歷史數據列表
+        """
+        data = self.history
+        
+        # 篩選時間範圍
+        if hours and len(data) > hours:
+            data = data[-hours:]
+        
+        # 如果指定村民，轉換格式
+        if villager_id:
+            result = []
+            for snapshot in data:
+                villager_data = snapshot.get("villagers", {}).get(villager_id)
+                if villager_data:
+                    result.append({
+                        "day": snapshot["day"],
+                        "hour": snapshot["hour"],
+                        "time_key": snapshot["time_key"],
+                        "satiety": villager_data["satiety"],
+                        "energy": villager_data["energy"],
+                        "social": villager_data["social"],
+                        "money": villager_data["money"]
+                    })
+            return result
+        
+        # 全體平均數據（不含個人詳細）
+        return [
+            {
+                "day": s["day"],
+                "hour": s["hour"],
+                "time_key": s["time_key"],
+                "avg_satiety": s["avg_satiety"],
+                "avg_energy": s["avg_energy"],
+                "avg_social": s["avg_social"],
+                "total_money": s["total_money"]
+            }
+            for s in data
+        ]

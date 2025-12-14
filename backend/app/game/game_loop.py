@@ -107,6 +107,9 @@ class GameLoop:
         time_scale = self._get_time_scale()
         self.game_state.update_time(delta_time * time_scale)
         
+        # 1.5. 記錄歷史數據（每遊戲小時）
+        self.game_state.record_history_snapshot()
+        
         # 2. 更新村民狀態
         self.update_villagers(delta_time)
         

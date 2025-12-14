@@ -13,6 +13,7 @@ import { Player } from '../entities/Player.js';
 import { InputHandler } from './InputHandler.js';
 import { UIManager } from '../ui/UIManager.js';
 import { Dashboard } from '../ui/Dashboard.js';
+import { HistoryChart } from '../ui/HistoryChart.js';
 import { apiClient } from '../api/ApiClient.js';
 
 export class Game {
@@ -109,6 +110,18 @@ export class Game {
         this.dashboard.update();
       }
     }, 500);
+    
+    // 初始化歷史圖表（僅後端模式）
+    if (this.config.useBackend) {
+      this.historyChart = new HistoryChart(this.api);
+      
+      // 每 30 秒自動更新圖表
+      setInterval(() => {
+        if (this.historyChart) {
+          this.historyChart.update();
+        }
+      }, 30000);
+    }
     
     // 初始化縮放控制
     this.initZoomControls();

@@ -89,3 +89,33 @@ async def game_tick(request: Request, delta_time: float = 0.1):
         "decisions": decisions,
         "events": game_state.pop_events()
     }
+
+
+@router.get("/history")
+async def get_history(
+    request: Request, 
+    hours: Optional[int] = None, 
+    villager_id: Optional[str] = None
+):
+    """取得歷史數據
+    
+    Args:
+        hours: 取最近幾小時的數據（24=1天, 168=7天），不填則全部
+        villager_id: 指定村民 ID，不填則全體平均
+    
+    Returns:
+        歷史數據列表，包含時間和各項指標
+    """
+    game_state = request.app.state.game_state
+    
+    # 取得村民列表（用於前端下拉選單）
+    villagers = [
+        {"id": v["id"], "name": v["name"]}
+        for v in game_state.villagers.values()
+    ]
+    
+    return {
+        "success": True,
+        "data": game_state.get_history(hours=hours, villager_id=villager_id),
+        "villagers": villagers
+    }

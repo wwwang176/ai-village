@@ -182,6 +182,24 @@ export class ApiClient {
   async saveGame() {
     return this.post('/game/save', {});
   }
+
+  async getHistory(hours = null, villagerId = null) {
+    let endpoint = '/game/history';
+    const params = [];
+    
+    if (hours) {
+      params.push(`hours=${hours}`);
+    }
+    if (villagerId) {
+      params.push(`villager_id=${villagerId}`);
+    }
+    
+    if (params.length > 0) {
+      endpoint += '?' + params.join('&');
+    }
+    
+    return this.get(endpoint);
+  }
 }
 
 // 單例
