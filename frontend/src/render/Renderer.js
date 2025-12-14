@@ -72,10 +72,29 @@ export class Renderer {
   }
   
   /**
-   * 渲染建築物頂部（屋頂）
+   * 渲染建築物頂部（2.5D：正面牆壁 + 屋頂）
+   * @param {Object} map - 地圖物件
+   * @param {Array} villagers - 村民列表（用於判斷透明度）
    */
-  renderBuildingTops(map) {
-    this.building.renderTops(map.buildings);
+  renderBuildingTops(map, villagers = []) {
+    // 判斷每個村民是否在某個建築物內（根據座標）
+    const villagersInBuildings = [];
+    
+    for (const villager of villagers) {
+      const vx = Math.floor(villager.x);
+      const vy = Math.floor(villager.y);
+      
+      for (const building of map.buildings) {
+        // 檢查村民是否在建築物地板範圍內
+        if (vx >= building.x && vx < building.x + building.width &&
+            vy >= building.y && vy < building.y + building.height) {
+          villagersInBuildings.push({ buildingId: building.id });
+          break;
+        }
+      }
+    }
+    
+    this.building.renderTops(map.buildings, villagersInBuildings);
   }
   
   /**

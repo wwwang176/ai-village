@@ -730,8 +730,8 @@ export class Game {
     // 渲染飛行物品（交易動畫）
     this.renderFlyingItems();
     
-    // 渲染建築物頂部（遮擋效果）
-    this.renderer.renderBuildingTops(this.map);
+    // 渲染建築物頂部（2.5D：正面牆壁 + 屋頂，有村民進入時透明）
+    this.renderer.renderBuildingTops(this.map, this.villagerManager.villagers);
     
     // 還原縮放
     this.ctx.restore();
