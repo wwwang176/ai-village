@@ -228,21 +228,21 @@ class VillagerAI:
         
         # 2. 吃飯（能吃才顯示）
         if can_buy_food:
-            action_list.append("- buy_food：買食物吃 (肚子餓的選擇)")
+            action_list.append("- buy_food：買食物吃 → 恢復飽足度")
         
         # 3. 休息
-        action_list.append("- go_home：回家睡覺 (體力不足的選擇)")
+        action_list.append("- go_home：回家睡覺 → 恢復體力（無法恢復飽足度）")
         
         # 4. 工作（能工作才顯示，食物鏈職業加註）
         if can_work:
             if occupation in food_chain_jobs:
-                action_list.append("- go_work：去工作 (肚子餓的選擇，可生產食物)")
+                action_list.append("- go_work：產生食物 → 恢復飽足度")
             else:
-                action_list.append("- go_work：去工作 (賺錢的選擇)")
+                action_list.append("- go_work：去工作 → 賺錢")
         
         # 5. 社交/閒逛
-        action_list.append("- go_market：去市集 (社交不足的選擇)")
-        action_list.append("- wander：閒逛 (不符合任意條件的選擇)")
+        action_list.append("- go_market：去市集 → 社交互動，恢復社交滿足度")
+        action_list.append("- wander：閒逛 → 無特定目的")
         
         return "\n".join(action_list)
     
