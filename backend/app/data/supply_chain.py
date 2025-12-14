@@ -153,10 +153,10 @@ EXCESS_THRESHOLDS = {
     # L1 原料：容易大量生產
     "grain": 20, "ore": 20, "wood": 20, "wool": 20,
     # L2 半成品：受供應鏈限制
-    "flour": 10, "iron": 10, "cloth": 10, "leather": 10,
+    "flour": 20, "iron": 10, "cloth": 10, "leather": 10,
     "hide": 10, "meat_raw": 10, "plank": 10,
     # L3 成品：生產慢，應積極賣出
-    "bread": 15,      # 基本需求，保留較多
+    "bread": 50,      # 基本需求，保留較多
     "meat": 10,       # 食物
     "furniture": 1,   # 高價值，立即賣
     "clothes": 1,     # 高價值，立即賣

@@ -65,11 +65,11 @@ ITEM_TYPES = {
     # ========== 成品（消費品）==========
     "bread": ItemType(
         id="bread", name="麵包", icon="🍞",
-        category="food", stack_max=10, price=3, hunger_restore=30
+        category="food", stack_max=10, price=3, hunger_restore=40
     ),
     "meat": ItemType(
         id="meat", name="肉品", icon="🍖",
-        category="food", stack_max=10, price=6, hunger_restore=50
+        category="food", stack_max=10, price=6, hunger_restore=60
     ),
     "clothes": ItemType(
         id="clothes", name="衣服", icon="👕",

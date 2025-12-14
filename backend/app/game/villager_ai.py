@@ -230,8 +230,10 @@ class VillagerAI:
         if can_buy_food:
             action_list.append("- buy_food：買食物吃 → 恢復飽足度（無法恢復體力與社交滿足度）")
         
-        # 3. 休息
-        action_list.append("- go_home：回家睡覺 → 恢復體力（無法恢復飽足度與社交滿足度）")
+        # 3. 休息（很餓時不顯示，強迫先吃飯）
+        hunger = villager.get("stats", {}).get("hunger", 0)
+        if hunger < 90:  # 飢餓度 < 90% 才能回家睡覺
+            action_list.append("- go_home：回家睡覺 → 恢復體力（無法恢復飽足度與社交滿足度）")
         
         # 4. 工作（能工作才顯示，食物鏈職業加註）
         if can_work:

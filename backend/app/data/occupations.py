@@ -41,7 +41,7 @@ OCCUPATIONS = {
         building="bakery",
         required_tool=None,
         input_materials=[("flour", 1)],
-        output_product="bread", output_quantity=2, work_time=2,
+        output_product="bread", output_quantity=3, work_time=2,
     ),
     
     # ========== 器具鏈 L1 ==========
