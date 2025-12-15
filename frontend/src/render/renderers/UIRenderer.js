@@ -9,15 +9,23 @@ export class UIRenderer extends BaseRenderer {
   }
   
   /**
-   * 渲染村民的對話泡泡
+   * 渲染村民的對話泡泡（舊方法，保留相容性）
    */
   renderVillagerBubbles(villagers) {
     for (const villager of villagers) {
       if (villager.bubble) {
-        const { x: screenX, y: screenY } = this.toScreen(villager.x, villager.y);
-        this.renderBubble(screenX + this.tileSize / 2, screenY - 8, villager.bubble);
+        this.renderSingleBubble(villager);
       }
     }
+  }
+  
+  /**
+   * 渲染單一村民的對話泡泡（用於 Y-sorting）
+   */
+  renderSingleBubble(villager) {
+    if (!villager.bubble) return;
+    const { x: screenX, y: screenY } = this.toScreen(villager.x, villager.y);
+    this.renderBubble(screenX + this.tileSize / 2, screenY - 8, villager.bubble);
   }
   
   /**

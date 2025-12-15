@@ -24,49 +24,155 @@ export class EntityRenderer extends BaseRenderer {
   }
   
   /**
+   * 渲染單一村民（用於 Y-sort）
+   */
+  renderSingleVillager(villager, isSelected = false) {
+    this.renderVillager(villager, isSelected);
+  }
+  
+  /**
    * 渲染單一村民
    */
   renderVillager(villager, isSelected = false) {
-    const { x: screenX, y: screenY } = this.toScreen(villager.x, villager.y);
+    const screen = this.toScreen(villager.x, villager.y);
+    const screenX = screen.x;
+    const screenY = screen.y - 8; // 往上偏移，讓腳對齊格子中央
     const size = this.tileSize;
+    const cx = screenX + size / 2;
     
     // 選中效果：發光圈
     if (isSelected) {
-      this.ctx.fillStyle = 'rgba(255, 255, 100, 0.3)';
+      this.ctx.fillStyle = 'rgba(255, 255, 100, 0.25)';
       this.ctx.beginPath();
-      this.ctx.arc(screenX + size / 2, screenY + size / 2, size * 0.8, 0, Math.PI * 2);
+      this.ctx.arc(cx, screenY + size / 2 + 2, size * 0.7, 0, Math.PI * 2);
       this.ctx.fill();
       
-      this.ctx.strokeStyle = 'rgba(255, 255, 100, 0.8)';
+      this.ctx.strokeStyle = 'rgba(255, 220, 100, 0.9)';
       this.ctx.lineWidth = 2;
       this.ctx.beginPath();
-      this.ctx.arc(screenX + size / 2, screenY + size / 2, size * 0.8, 0, Math.PI * 2);
+      this.ctx.arc(cx, screenY + size / 2 + 2, size * 0.7, 0, Math.PI * 2);
       this.ctx.stroke();
     }
     
-    // 身體
-    this.ctx.fillStyle = villager.color || '#e0c080';
-    this.ctx.fillRect(screenX + 3, screenY + 4, size - 6, size - 4);
-    
-    // 頭
-    this.ctx.fillStyle = '#ffd5b4';
+    // 陰影（橢圓形）
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
     this.ctx.beginPath();
-    this.ctx.arc(screenX + size / 2, screenY + 4, 4, 0, Math.PI * 2);
+    this.ctx.ellipse(cx, screenY + size - 1, 5, 2, 0, 0, Math.PI * 2);
     this.ctx.fill();
+    
+    // 服裝顏色
+    const clothColor = villager.color || '#5b8dd9';
+    const clothDark = this.darkenColor(clothColor, 0.3);
+    const clothLight = this.lightenColor(clothColor, 0.2);
+    
+    // 膚色
+    const skinColor = '#f5d5c0';
+    const skinDark = '#e0b8a0';
+    
+    // 頭髮顏色（根據村民 ID 決定）
+    const hairColors = ['#2c1810', '#4a3728', '#8b6914', '#1a1a1a', '#6b4423', '#c4a882'];
+    const hairColor = hairColors[Math.abs(villager.id?.charCodeAt(0) || 0) % hairColors.length];
+    const hairDark = this.darkenColor(hairColor, 0.3);
+    
+    const isMale = villager.gender === 'male';
+    
+    // === 身體（2.5D 風格）===
+    
+    // 身體主體
+    this.ctx.fillStyle = clothColor;
+    this.ctx.fillRect(cx - 4, screenY + 6, 8, 8);
+    
+    // 身體右側陰影
+    this.ctx.fillStyle = clothDark;
+    this.ctx.fillRect(cx + 2, screenY + 6, 2, 8);
+    
+    // 身體底部陰影
+    this.ctx.fillStyle = clothDark;
+    this.ctx.fillRect(cx - 4, screenY + 12, 8, 2);
+    
+    // 領口
+    this.ctx.fillStyle = skinColor;
+    this.ctx.fillRect(cx - 2, screenY + 5, 4, 2);
+    
+    // === 頭部 ===
+    
+    // 頭部主體
+    this.ctx.fillStyle = skinColor;
+    this.ctx.beginPath();
+    this.ctx.arc(cx, screenY + 3, 4, 0, Math.PI * 2);
+    this.ctx.fill();
+    
+    // 頭部右側陰影
+    this.ctx.fillStyle = skinDark;
+    this.ctx.beginPath();
+    this.ctx.arc(cx + 1, screenY + 3, 4, -0.3, 1.2);
+    this.ctx.lineTo(cx + 1, screenY + 3);
+    this.ctx.fill();
+    
+    // === 頭髮 ===
+    if (isMale) {
+      // 男性：短髮
+      this.ctx.fillStyle = hairColor;
+      this.ctx.beginPath();
+      this.ctx.arc(cx, screenY + 2, 4, Math.PI, 0);
+      this.ctx.fill();
+      // 頭髮陰影
+      this.ctx.fillStyle = hairDark;
+      this.ctx.fillRect(cx + 1, screenY - 1, 3, 2);
+    } else {
+      // 女性：長髮
+      this.ctx.fillStyle = hairColor;
+      this.ctx.beginPath();
+      this.ctx.arc(cx, screenY + 2, 4, Math.PI, 0);
+      this.ctx.fill();
+      // 側邊長髮
+      this.ctx.fillRect(cx - 5, screenY + 1, 2, 6);
+      this.ctx.fillRect(cx + 3, screenY + 1, 2, 6);
+      // 頭髮陰影
+      this.ctx.fillStyle = hairDark;
+      this.ctx.fillRect(cx + 2, screenY - 1, 2, 2);
+    }
+    
+    // === 眼睛 ===
+    this.ctx.fillStyle = '#1a1a1a';
+    this.ctx.fillRect(cx - 2, screenY + 2, 1, 2);
+    this.ctx.fillRect(cx + 1, screenY + 2, 1, 2);
+    
+    // === 腿部 ===
+    this.ctx.fillStyle = '#3d3d5c';
+    this.ctx.fillRect(cx - 3, screenY + 14, 2, 2);
+    this.ctx.fillRect(cx + 1, screenY + 14, 2, 2);
     
     // 名字
     this.ctx.fillStyle = isSelected ? '#ffff66' : '#fff';
     this.ctx.font = isSelected ? 'bold 9px sans-serif' : '8px sans-serif';
     this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
     this.ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
     this.ctx.shadowBlur = 2;
     this.ctx.shadowOffsetX = 1;
     this.ctx.shadowOffsetY = 1;
-    this.ctx.fillText(villager.name, screenX + size / 2, screenY + size + 8);
+    this.ctx.fillText(villager.name, cx, screenY + size + 8);
     this.ctx.shadowColor = 'transparent';
     this.ctx.shadowBlur = 0;
     this.ctx.shadowOffsetX = 0;
     this.ctx.shadowOffsetY = 0;
+  }
+  
+  darkenColor(hex, amount) {
+    const num = parseInt(hex.slice(1), 16);
+    const r = Math.max(0, (num >> 16) - Math.round(255 * amount));
+    const g = Math.max(0, ((num >> 8) & 0x00FF) - Math.round(255 * amount));
+    const b = Math.max(0, (num & 0x0000FF) - Math.round(255 * amount));
+    return `rgb(${r},${g},${b})`;
+  }
+  
+  lightenColor(hex, amount) {
+    const num = parseInt(hex.slice(1), 16);
+    const r = Math.min(255, (num >> 16) + Math.round(255 * amount));
+    const g = Math.min(255, ((num >> 8) & 0x00FF) + Math.round(255 * amount));
+    const b = Math.min(255, (num & 0x0000FF) + Math.round(255 * amount));
+    return `rgb(${r},${g},${b})`;
   }
   
   /**
@@ -123,62 +229,121 @@ export class EntityRenderer extends BaseRenderer {
     // 使用 displayX/displayY 做插值動畫
     const posX = sheep.displayX ?? sheep.x;
     const posY = sheep.displayY ?? sheep.y;
-    const { x: screenX, y: screenY } = this.toScreen(posX, posY);
+    const screen = this.toScreen(posX, posY);
+    const screenX = screen.x;
+    const screenY = screen.y - 8; // 往上偏移，讓腳對齊格子中央
     const size = this.tileSize;
     
-    const headColor = '#2f2f2f';
-    
     // 根據羊毛狀態決定顏色和大小
-    let bodyColor, bodyScale;
+    let bodyColor, bodyColorDark, bodyScale;
     if (sheep.wool_ready) {
-      // 有羊毛：較白、較蓬鬆
       bodyColor = '#ffffff';
+      bodyColorDark = '#e8e8e8';
       bodyScale = 1.15;
     } else {
-      // 剪過羊毛：偏灰、較瘦
       bodyColor = sheep.is_adult ? '#d0d0d0' : '#e0e0e0';
+      bodyColorDark = sheep.is_adult ? '#b8b8b8' : '#c8c8c8';
       bodyScale = 1.0;
     }
     
-    const baseBodyW = sheep.is_adult ? size * 0.7 : size * 0.5;
-    const baseBodyH = sheep.is_adult ? size * 0.5 : size * 0.35;
+    const isAdult = sheep.is_adult;
+    const baseBodyW = isAdult ? size * 0.75 : size * 0.5;
+    const baseBodyH = isAdult ? size * 0.5 : size * 0.35;
     const bodyW = baseBodyW * bodyScale;
     const bodyH = baseBodyH * bodyScale;
     
     const centerX = screenX + size / 2;
     const centerY = screenY + size / 2 + 2;
     
-    // 有羊毛時：畫毛茸茸的波浪邊緣
+    // === 陰影 ===
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+    this.ctx.beginPath();
+    this.ctx.ellipse(centerX, screenY + size - 1, bodyW / 2.5, 2, 0, 0, Math.PI * 2);
+    this.ctx.fill();
+    
+    // === 腿部（4隻腳）===
+    const legColor = '#2a2a2a';
+    const legW = isAdult ? 2 : 1.5;
+    const legH = isAdult ? 4 : 3;
+    this.ctx.fillStyle = legColor;
+    // 後腿
+    this.ctx.fillRect(centerX - bodyW / 3, centerY + bodyH / 3, legW, legH);
+    this.ctx.fillRect(centerX + bodyW / 4 - legW, centerY + bodyH / 3, legW, legH);
+    // 前腿
+    this.ctx.fillRect(centerX - bodyW / 2.5, centerY + bodyH / 4, legW, legH);
+    this.ctx.fillRect(centerX + bodyW / 3.5 - legW, centerY + bodyH / 4, legW, legH);
+    
+    // === 毛茸茸邊緣（有羊毛時）===
     if (sheep.wool_ready) {
-      this.ctx.fillStyle = '#f8f8f8';
-      const fluffCount = 8;
+      this.ctx.fillStyle = '#f0f0f0';
+      const fluffCount = 10;
       for (let i = 0; i < fluffCount; i++) {
         const angle = (i / fluffCount) * Math.PI * 2;
-        const fluffX = centerX + Math.cos(angle) * (bodyW / 2) * 0.9;
-        const fluffY = centerY + Math.sin(angle) * (bodyH / 2) * 0.9;
+        const fluffX = centerX + Math.cos(angle) * (bodyW / 2) * 0.85;
+        const fluffY = centerY + Math.sin(angle) * (bodyH / 2) * 0.85;
         this.ctx.beginPath();
-        this.ctx.arc(fluffX, fluffY, size * 0.12, 0, Math.PI * 2);
+        this.ctx.arc(fluffX, fluffY, isAdult ? 3 : 2, 0, Math.PI * 2);
         this.ctx.fill();
       }
     }
     
-    // 羊身體（橢圓）
+    // === 身體主體（橢圓）===
     this.ctx.fillStyle = bodyColor;
     this.ctx.beginPath();
     this.ctx.ellipse(centerX, centerY, bodyW / 2, bodyH / 2, 0, 0, Math.PI * 2);
     this.ctx.fill();
     
-    // 羊頭
+    // 身體底部陰影
+    this.ctx.fillStyle = bodyColorDark;
+    this.ctx.beginPath();
+    this.ctx.ellipse(centerX, centerY + bodyH / 4, bodyW / 2.5, bodyH / 4, 0, 0, Math.PI);
+    this.ctx.fill();
+    
+    // === 頭部 ===
+    const headColor = '#3d3d3d';
+    const headColorLight = '#4a4a4a';
+    const headSize = isAdult ? size * 0.22 : size * 0.16;
+    const headX = centerX - bodyW / 2.5;
+    const headY = centerY - bodyH / 6;
+    
+    // 頭部主體
     this.ctx.fillStyle = headColor;
     this.ctx.beginPath();
-    const headSize = sheep.is_adult ? size * 0.2 : size * 0.15;
-    this.ctx.arc(
-      centerX - bodyW / 3,
-      centerY,
-      headSize,
-      0, Math.PI * 2
-    );
+    this.ctx.ellipse(headX, headY, headSize, headSize * 0.85, 0, 0, Math.PI * 2);
     this.ctx.fill();
+    
+    // 頭部高光
+    this.ctx.fillStyle = headColorLight;
+    this.ctx.beginPath();
+    this.ctx.arc(headX - 1, headY - 1, headSize * 0.4, 0, Math.PI * 2);
+    this.ctx.fill();
+    
+    // === 耳朵 ===
+    this.ctx.fillStyle = headColor;
+    // 左耳
+    this.ctx.beginPath();
+    this.ctx.ellipse(headX - headSize * 0.7, headY - headSize * 0.3, 2, 3, -0.5, 0, Math.PI * 2);
+    this.ctx.fill();
+    // 右耳
+    this.ctx.beginPath();
+    this.ctx.ellipse(headX - headSize * 0.2, headY - headSize * 0.8, 2, 3, 0.3, 0, Math.PI * 2);
+    this.ctx.fill();
+    
+    // === 眼睛 ===
+    this.ctx.fillStyle = '#1a1a1a';
+    this.ctx.fillRect(headX - 2, headY - 1, 1, 2);
+    
+    // === 鼻子 ===
+    this.ctx.fillStyle = '#e8b4b4';
+    this.ctx.fillRect(headX - headSize - 1, headY + 1, 2, 2);
+    
+    // === 尾巴（小圓球）===
+    if (sheep.wool_ready) {
+      this.ctx.fillStyle = '#f8f8f8';
+      this.ctx.beginPath();
+      this.ctx.arc(centerX + bodyW / 2 - 1, centerY, isAdult ? 3 : 2, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
   }
   
   // ==================== 玩家 ====================

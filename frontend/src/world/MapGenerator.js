@@ -32,6 +32,9 @@ export class MapGenerator {
     const buildings = [];
     const objects = [];
     
+    // 生成河流（在建築之前）
+    this.generateRiver(terrain, collision);
+    
     // 放置必要建築
     this.placeRequiredBuildings(buildings, terrain, collision);
     
@@ -40,6 +43,9 @@ export class MapGenerator {
     
     // 生成道路連接建築物
     this.generateRoads(buildings, terrain);
+    
+    // 生成橋樑（跨越河流的道路）
+    this.generateBridges(terrain, collision, objects);
     
     // 放置水井（公共設施）
     this.placeWell(objects, buildings, terrain, collision);
@@ -217,6 +223,70 @@ export class MapGenerator {
   }
   
   /**
+   * 生成河流
+   */
+  generateRiver(terrain, collision) {
+    // 河流從地圖上方流向下方，有蜿蜒效果
+    const riverWidth = 2;
+    let riverX = Math.floor(this.width * 0.7); // 河流起始 X 位置（偏右）
+    
+    for (let y = 0; y < this.height; y++) {
+      // 蜿蜒效果
+      if (y % 8 === 0) {
+        const direction = Math.random() > 0.5 ? 1 : -1;
+        riverX += direction * 2;
+        // 確保河流不會太靠近邊緣或中心
+        riverX = Math.max(this.width * 0.55, Math.min(this.width * 0.85, riverX));
+      }
+      
+      // 繪製河流寬度
+      for (let dx = 0; dx < riverWidth; dx++) {
+        const x = Math.floor(riverX) + dx;
+        if (x >= 0 && x < this.width) {
+          terrain[y][x] = 2; // 水
+          collision[y][x] = 1; // 不可通行
+        }
+      }
+      
+      // 河岸（淺色泥土）- 可選，暫時不加
+    }
+    
+    // 記錄河流位置供橋樑使用
+    this.riverX = Math.floor(riverX);
+    this.riverWidth = riverWidth;
+  }
+  
+  /**
+   * 生成橋樑
+   */
+  generateBridges(terrain, collision, objects) {
+    if (!this.riverX) return;
+    
+    // 在主幹道位置建橋
+    const centerY = Math.floor(this.height / 2);
+    const bridgeYPositions = [centerY, centerY + 1]; // 橋的 Y 範圍
+    
+    for (const y of bridgeYPositions) {
+      for (let dx = -1; dx <= this.riverWidth; dx++) {
+        const x = this.riverX + dx;
+        if (x >= 0 && x < this.width && y >= 0 && y < this.height) {
+          terrain[y][x] = 9; // 新地形類型：橋
+          collision[y][x] = 0; // 可通行
+        }
+      }
+    }
+    
+    // 添加橋的裝飾物件
+    objects.push({
+      id: 'bridge_1',
+      type: 'bridge_railing',
+      name: '橋欄杆',
+      x: this.riverX - 1,
+      y: centerY - 1
+    });
+  }
+  
+  /**
    * 生成道路
    */
   generateRoads(buildings, terrain) {
@@ -278,25 +348,25 @@ export class MapGenerator {
    */
   placeDecorations(objects, terrain, collision) {
     // 在地圖邊緣放置樹木
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 40; i++) {
       const edge = Math.floor(Math.random() * 4);
       let x, y;
       
       switch (edge) {
         case 0: // 上
           x = Math.floor(Math.random() * (this.width - 4)) + 2;
-          y = Math.floor(Math.random() * 5) + 1;
+          y = Math.floor(Math.random() * 6) + 1;
           break;
         case 1: // 下
           x = Math.floor(Math.random() * (this.width - 4)) + 2;
-          y = this.height - Math.floor(Math.random() * 5) - 2;
+          y = this.height - Math.floor(Math.random() * 6) - 2;
           break;
         case 2: // 左
-          x = Math.floor(Math.random() * 5) + 1;
+          x = Math.floor(Math.random() * 6) + 1;
           y = Math.floor(Math.random() * (this.height - 4)) + 2;
           break;
         case 3: // 右
-          x = this.width - Math.floor(Math.random() * 5) - 2;
+          x = this.width - Math.floor(Math.random() * 6) - 2;
           y = Math.floor(Math.random() * (this.height - 4)) + 2;
           break;
       }
@@ -310,6 +380,88 @@ export class MapGenerator {
           y: y
         });
         collision[y][x] = 1;
+      }
+    }
+    
+    // 放置小石頭（不影響碰撞）
+    for (let i = 0; i < 25; i++) {
+      const x = Math.floor(Math.random() * (this.width - 4)) + 2;
+      const y = Math.floor(Math.random() * (this.height - 4)) + 2;
+      
+      if (terrain[y][x] === 0) { // 只在草地上
+        objects.push({
+          id: `rock_${i}`,
+          type: 'rock',
+          name: '石頭',
+          x: x,
+          y: y
+        });
+      }
+    }
+    
+    // 放置灌木
+    for (let i = 0; i < 15; i++) {
+      const x = Math.floor(Math.random() * (this.width - 4)) + 2;
+      const y = Math.floor(Math.random() * (this.height - 4)) + 2;
+      
+      if (collision[y][x] === 0 && terrain[y][x] === 0) {
+        objects.push({
+          id: `bush_${i}`,
+          type: 'bush',
+          name: '灌木',
+          x: x,
+          y: y
+        });
+        collision[y][x] = 1; // 灌木有碰撞
+      }
+    }
+    
+    // 放置高草（不影響碰撞）
+    for (let i = 0; i < 20; i++) {
+      const x = Math.floor(Math.random() * (this.width - 4)) + 2;
+      const y = Math.floor(Math.random() * (this.height - 4)) + 2;
+      
+      if (terrain[y][x] === 0) {
+        objects.push({
+          id: `tallgrass_${i}`,
+          type: 'tallgrass',
+          name: '草叢',
+          x: x,
+          y: y
+        });
+      }
+    }
+    
+    // 放置樹樁（少量）
+    for (let i = 0; i < 5; i++) {
+      const x = Math.floor(Math.random() * (this.width - 6)) + 3;
+      const y = Math.floor(Math.random() * (this.height - 6)) + 3;
+      
+      if (collision[y][x] === 0 && terrain[y][x] === 0) {
+        objects.push({
+          id: `stump_${i}`,
+          type: 'stump',
+          name: '樹樁',
+          x: x,
+          y: y
+        });
+        collision[y][x] = 1;
+      }
+    }
+    
+    // 放置蘑菇（少量，通常在樹旁）
+    for (let i = 0; i < 8; i++) {
+      const x = Math.floor(Math.random() * (this.width - 4)) + 2;
+      const y = Math.floor(Math.random() * (this.height - 4)) + 2;
+      
+      if (terrain[y][x] === 0) {
+        objects.push({
+          id: `mushroom_${i}`,
+          type: 'mushroom',
+          name: '蘑菇',
+          x: x,
+          y: y
+        });
       }
     }
   }
