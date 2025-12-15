@@ -158,7 +158,8 @@ class ProductionSystem:
         
         return {
             "success": True,
-            "product": occupation.name + "產品",
+            "product": output_item,  # 返回物品 ID，用於取得 icon
+            "product_name": occupation.name + "產品",  # 顯示名稱
             "quantity": output_qty,
             "location": location
         }

@@ -123,6 +123,25 @@ class WorkEffect(TaskEffect):
             quantity = production_result["quantity"]
             location = production_result["location"]
             
+            # 觸發生產動畫（物品從自己飛到自己）
+            from ..data.items import ITEM_TYPES
+            item_type = ITEM_TYPES.get(product)
+            icon = item_type.icon if item_type else "📦"
+            
+            villager_x = villager.get("x", 0)
+            villager_y = villager.get("y", 0)
+            
+            ctx.queue_broadcast({
+                "type": "trade_animation",
+                "data": {
+                    "from_pos": {"x": villager_x, "y": villager_y - 1},  # 從頭頂飛出
+                    "to_pos": {"x": villager_x, "y": villager_y},
+                    "item_id": product,
+                    "icon": icon,
+                    "quantity": quantity
+                }
+            })
+            
             if tool_result == "broken":
                 logger.info(f"⚒️ {villager['name']} 生產了 {product} x{quantity}（{location}），工具損壞！")
             else:
@@ -303,6 +322,35 @@ class SlaughterSheepEffect(TaskEffect):
         if result["success"]:
             loc1 = ctx.inventory.add_item(villager, "meat_raw", result["meat_qty"])
             loc2 = ctx.inventory.add_item(villager, "hide", result["hide_qty"])
+            
+            # 觸發動畫（生肉和羊皮從羊的位置飛到屠夫）
+            villager_x = villager.get("x", 0)
+            villager_y = villager.get("y", 0)
+            
+            # 生肉動畫
+            ctx.queue_broadcast({
+                "type": "trade_animation",
+                "data": {
+                    "from_pos": {"x": villager_x, "y": villager_y - 1},
+                    "to_pos": {"x": villager_x, "y": villager_y},
+                    "item_id": "meat_raw",
+                    "icon": "🥩",
+                    "quantity": result["meat_qty"]
+                }
+            })
+            
+            # 羊皮動畫（稍微延遲顯示）
+            ctx.queue_broadcast({
+                "type": "trade_animation",
+                "data": {
+                    "from_pos": {"x": villager_x + 0.5, "y": villager_y - 1},
+                    "to_pos": {"x": villager_x, "y": villager_y},
+                    "item_id": "hide",
+                    "icon": "☁️",
+                    "quantity": result["hide_qty"]
+                }
+            })
+            
             logger.info(f"🔪 {villager['name']} 宰殺了羊 {sheep_id}，獲得生肉 x{result['meat_qty']}、羊皮 x{result['hide_qty']}（肉:{loc1}, 皮:{loc2}）")
             return True
         else:
