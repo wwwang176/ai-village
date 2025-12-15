@@ -96,35 +96,57 @@ export class Renderer {
       }
     }
     
+    // 漸變速度（每幀變化量）
+    const fadeSpeed = 0.08;
+    
     // 收集建築物牆面（非開放式建築）
     for (const building of map.buildings) {
       if (this.openBuildings.includes(building.type)) continue;
       
       const hasOccupants = villagersInBuildingIds.has(building.id);
       
-      if (hasOccupants) {
-        // 有人在內：渲染北邊內部牆面
+      // 初始化 currentOpacity（1.0 = 外部完全顯示，0.0 = 內部完全顯示）
+      if (building.currentOpacity === undefined) {
+        building.currentOpacity = 1.0;
+      }
+      
+      // 計算目標透明度
+      const targetOpacity = hasOccupants ? 0.0 : 1.0;
+      
+      // 漸變更新 currentOpacity
+      if (building.currentOpacity < targetOpacity) {
+        building.currentOpacity = Math.min(building.currentOpacity + fadeSpeed, targetOpacity);
+      } else if (building.currentOpacity > targetOpacity) {
+        building.currentOpacity = Math.max(building.currentOpacity - fadeSpeed, targetOpacity);
+      }
+      
+      const opacity = building.currentOpacity;
+      
+      // 內部北牆（透明度 = 1 - opacity）
+      if (opacity < 1.0) {
         renderables.push({
           type: 'north_wall',
           sortY: building.y,
-          data: building
+          data: { building, opacity: 1.0 - opacity }
         });
         
-        // 收集矮牆物件
+        // 收集矮牆物件（也需要漸變）
         const lowWalls = this.building.getLowWallPositions(building);
         for (const wall of lowWalls) {
           renderables.push({
             type: 'low_wall',
             sortY: wall.y,
-            data: wall
+            data: { ...wall, opacity: 1.0 - opacity }
           });
         }
-      } else {
-        // 沒人在內：渲染南邊外部牆面 + 屋頂
+      }
+      
+      // 外部建築（透明度 = opacity）
+      if (opacity > 0.0) {
         renderables.push({
           type: 'south_wall',
           sortY: building.y + building.height,
-          data: building
+          data: { building, opacity }
         });
       }
     }
@@ -190,13 +212,13 @@ export class Renderer {
     for (const item of renderables) {
       switch (item.type) {
         case 'north_wall':
-          this.building.renderInteriorNorthWallOnly(item.data);
+          this.building.renderInteriorNorthWall(item.data.building, item.data.opacity);
           break;
         case 'south_wall':
-          this.building.renderBuilding2_5D(item.data, 1.0);
+          this.building.renderBuilding2_5D(item.data.building, item.data.opacity);
           break;
         case 'low_wall':
-          this.building.renderSingleLowWall(item.data);
+          this.building.renderSingleLowWall(item.data, item.data.opacity);
           break;
         case 'villager':
           this.entity.renderSingleVillager(item.data.villager, item.data.isSelected);

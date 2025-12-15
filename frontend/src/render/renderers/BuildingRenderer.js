@@ -69,6 +69,9 @@ export class BuildingRenderer extends BaseRenderer {
     // 按 Y 座標排序（Y 小的先畫，Y 大的後畫覆蓋）
     const sortedBuildings = [...buildings].sort((a, b) => a.y - b.y);
     
+    // 漸變速度（每幀變化量）
+    const fadeSpeed = 0.08;
+    
     for (const building of sortedBuildings) {
       // 跳過戶外工作場所
       if (this.openBuildings.includes(building.type)) continue;
@@ -76,20 +79,41 @@ export class BuildingRenderer extends BaseRenderer {
       // 檢查是否有村民在此建築內
       const hasOccupants = villagersInBuildings.some(v => v.buildingId === building.id);
       
-      if (hasOccupants) {
-        // 有村民時：完全透明，只畫北邊內部牆面
-        this.renderInteriorNorthWall(building);
-      } else {
-        // 無村民時：正常渲染外部結構
-        this.renderBuilding2_5D(building, 1.0);
+      // 初始化 currentOpacity（1.0 = 外部完全顯示，0.0 = 內部完全顯示）
+      if (building.currentOpacity === undefined) {
+        building.currentOpacity = 1.0;
+      }
+      
+      // 計算目標透明度
+      const targetOpacity = hasOccupants ? 0.0 : 1.0;
+      
+      // 漸變更新 currentOpacity
+      if (building.currentOpacity < targetOpacity) {
+        building.currentOpacity = Math.min(building.currentOpacity + fadeSpeed, targetOpacity);
+      } else if (building.currentOpacity > targetOpacity) {
+        building.currentOpacity = Math.max(building.currentOpacity - fadeSpeed, targetOpacity);
+      }
+      
+      const opacity = building.currentOpacity;
+      
+      // 內部北牆（透明度 = 1 - opacity）
+      if (opacity < 1.0) {
+        this.renderInteriorNorthWall(building, 1.0 - opacity);
+      }
+      
+      // 外部建築（透明度 = opacity）
+      if (opacity > 0.0) {
+        this.renderBuilding2_5D(building, opacity);
       }
     }
   }
   
   /**
    * 渲染北邊內部牆面（村民在建築內時顯示）
+   * @param {Object} building - 建築物
+   * @param {number} opacity - 透明度 (0.0 ~ 1.0)
    */
-  renderInteriorNorthWall(building) {
+  renderInteriorNorthWall(building, opacity = 1.0) {
     const { x: screenX, y: screenY } = this.toScreen(building.x, building.y);
     const width = building.width * this.tileSize;
     const height = building.height * this.tileSize;
@@ -98,6 +122,9 @@ export class BuildingRenderer extends BaseRenderer {
     
     const wallHeight = this.wallHeight;
     const gableHeight = this.roofHeight;
+    
+    // 設置透明度
+    this.ctx.globalAlpha = opacity;
     
     // 北邊牆壁位置（建築物地板北端，向上延伸）
     const wallBottom = screenY; // 牆壁底部對齊地板北端
@@ -144,6 +171,9 @@ export class BuildingRenderer extends BaseRenderer {
       this.renderWindow(screenX + ts, windowY);
       this.renderWindow(screenX + width - ts * 2, windowY);
     }
+    
+    // 恢復透明度
+    this.ctx.globalAlpha = 1.0;
     
     // 渲染內部外圈矮牆（舊方法，矮牆現在由 Y-sort 處理）
     // this.renderInteriorLowWalls(building);
@@ -247,8 +277,10 @@ export class BuildingRenderer extends BaseRenderer {
   
   /**
    * 渲染單一矮牆（用於 Y-sort）
+   * @param {Object} wallData - 矮牆資料
+   * @param {number} opacity - 透明度 (0.0 ~ 1.0)
    */
-  renderSingleLowWall(wallData) {
+  renderSingleLowWall(wallData, opacity = 1.0) {
     const { x, y, building, isNorthRow, isSouthRow } = wallData;
     const { x: screenX, y: screenY } = this.toScreen(building.x, building.y);
     const ts = this.tileSize;
@@ -256,6 +288,9 @@ export class BuildingRenderer extends BaseRenderer {
     const colors = this.colors[building.type] || this.colors.house;
     const wallColor = colors.wallDark || '#6b5b4b';
     const wallColorDark = '#4b3b2b';
+    
+    // 設置透明度
+    this.ctx.globalAlpha = opacity;
     
     const blockScreenX = screenX + (x - building.x) * ts;
     // 往北移動 lowWallHeight 像素，讓南面牆壁底部對齊格子底部
@@ -284,6 +319,9 @@ export class BuildingRenderer extends BaseRenderer {
       this.ctx.fillRect(blockScreenX, wallTop, 1, lowWallHeight);
       this.ctx.fillRect(blockScreenX + ts - 1, wallTop, 1, lowWallHeight);
     }
+    
+    // 恢復透明度
+    this.ctx.globalAlpha = 1.0;
   }
   
   /**
