@@ -523,11 +523,10 @@ export class BuildingRenderer extends BaseRenderer {
     // 屋頂覆蓋在建築物上方（牆壁頂部以上）
     // 屋脊在中央（南北向），左右兩片斜面向東西傾斜
     
-    // 牆壁頂部位置
-    const wallTop = screenY + height - wallHeight;
-    
-    const roofTop = screenY - 2; // 屋頂北側
-    const roofBottom = wallTop; // 屋頂南側對齊牆壁頂部
+    // 屋頂覆蓋整個建築物地板區域（往北移動一格）
+    const ts = this.tileSize;
+    const roofTop = screenY - 2 - ts; // 屋頂北側（往北一格）
+    const roofBottom = screenY + height - ts; // 屋頂南側（往北一格）
     const roofLeft = screenX - roofOverhang;
     const roofRight = screenX + width + roofOverhang;
     const roofCenterX = screenX + width / 2;
