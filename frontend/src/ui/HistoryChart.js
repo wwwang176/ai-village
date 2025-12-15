@@ -1,3 +1,5 @@
+import { OCCUPATION_NAMES } from '../entities/Villager.js';
+
 /**
  * 歷史數據圖表組件
  */
@@ -84,7 +86,8 @@ export class HistoryChart {
     for (const v of villagers) {
       const option = document.createElement('option');
       option.value = v.id;
-      option.textContent = v.name;
+      const occupationText = OCCUPATION_NAMES[v.occupation] || v.occupation || '';
+      option.textContent = occupationText ? `${v.name} (${occupationText})` : v.name;
       this.targetSelect.appendChild(option);
     }
     
