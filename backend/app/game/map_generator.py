@@ -9,8 +9,8 @@ from typing import List, Dict
 # 河流設定（地圖右邊 1/3 位置）
 RIVER_X = 64  # 河流中心 X 座標
 RIVER_WIDTH = 4  # 河流寬度
-BRIDGE_Y = 48  # 橋樑 Y 座標（主幹道位置）
-BRIDGE_HEIGHT = 4  # 橋樑高度
+BRIDGE_Y = 49  # 橋樑 Y 座標（主幹道位置，往南一格）
+BRIDGE_HEIGHT = 4  # 橋樑高度（2 格寬）
 
 # 工作建築定義（職業對應建築）
 # 河流在 x=62~66，建築物需避開
@@ -94,8 +94,8 @@ def generate_map(seed: int, width: int = 96, height: int = 96) -> dict:
         buildings, width, height
     )
     
-    # 添加河流和橋樑
-    _add_river(terrain, collision, width, height)
+    # 添加河流和橋樑（避開建築物周圍 2 格）
+    _add_river(terrain, collision, buildings, width, height)
     
     # 添加道路（連接所有建築）
     _add_roads(terrain, collision, buildings, width, height)
@@ -228,11 +228,20 @@ def _generate_terrain_and_collision(
     return terrain, collision
 
 
-def _add_river(terrain: List[List[int]], collision: List[List[int]], width: int, height: int):
-    """添加彎曲河流和橋樑"""
+def _add_river(terrain: List[List[int]], collision: List[List[int]], buildings: List[dict], width: int, height: int):
+    """添加彎曲河流和橋樑（避開建築物周圍 2 格）"""
     
-    bridge_start = BRIDGE_Y - BRIDGE_HEIGHT // 2
-    bridge_end = BRIDGE_Y + BRIDGE_HEIGHT // 2
+    bridge_start = BRIDGE_Y - 1
+    bridge_end = bridge_start + BRIDGE_HEIGHT
+    
+    # 建立建築物保護區（建築物 + 周圍 2 格）
+    protected = set()
+    margin = 2
+    for b in buildings:
+        bx, by, bw, bh = b["x"], b["y"], b["width"], b["height"]
+        for dy in range(-margin, bh + margin):
+            for dx in range(-margin, bw + margin):
+                protected.add((bx + dx, by + dy))
     
     # 河流從地圖上方流向下方，有蜿蜒效果
     river_x = RIVER_X  # 河流起始 X 位置
@@ -252,6 +261,9 @@ def _add_river(terrain: List[List[int]], collision: List[List[int]], width: int,
         for dx in range(RIVER_WIDTH):
             x = int(river_x) + dx
             if 0 <= x < width:
+                # 跳過建築物保護區
+                if (x, y) in protected:
+                    continue
                 # 檢查是否是橋樑區域
                 if bridge_start <= y < bridge_end:
                     terrain[y][x] = TERRAIN_TYPES["bridge"]
