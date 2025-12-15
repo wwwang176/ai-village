@@ -64,12 +64,42 @@ export class TileRenderer extends BaseRenderer {
   }
   
   /**
-   * 渲染所有地形
+   * 渲染所有地形（視窗裁剪優化）
    */
   render(map) {
     this.currentMap = map; // 保存地圖引用，供邊界檢測使用
-    for (let y = 0; y < map.height; y++) {
-      for (let x = 0; x < map.width; x++) {
+    
+    // 視窗裁剪：只渲染可見範圍（考慮縮放，縮放中心是螢幕中心）
+    const camX = this.camera.x;
+    const camY = this.camera.y;
+    const zoom = this.camera.zoom || 1;
+    const vpW = this.camera.viewportWidth;
+    const vpH = this.camera.viewportHeight;
+    const ts = this.tileSize;
+    
+    // 縮放以螢幕中心為中心，計算實際可見的世界範圍
+    const centerX = vpW / 2;
+    const centerY = vpH / 2;
+    
+    // 螢幕左上角對應的世界座標
+    const worldLeftTop = {
+      x: camX + centerX * (1 - 1/zoom),
+      y: camY + centerY * (1 - 1/zoom)
+    };
+    
+    // 可見範圍大小
+    const viewW = vpW / zoom;
+    const viewH = vpH / zoom;
+    
+    // 計算可見格子範圍（加 2 格緩衝避免邊緣閃爍）
+    const startX = Math.max(0, Math.floor(worldLeftTop.x / ts) - 2);
+    const startY = Math.max(0, Math.floor(worldLeftTop.y / ts) - 2);
+    const endX = Math.min(map.width, Math.ceil((worldLeftTop.x + viewW) / ts) + 2);
+    const endY = Math.min(map.height, Math.ceil((worldLeftTop.y + viewH) / ts) + 2);
+    
+    // 只渲染可見範圍
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
         const terrain = map.getTerrain(x, y);
         this.renderTile(x, y, terrain);
       }
@@ -212,16 +242,20 @@ export class TileRenderer extends BaseRenderer {
   }
   
   /**
-   * 渲染草地 - 多層次像素風格
+   * 渲染草地 - 多層次像素風格（含 LOD）
    */
   renderGrass(screenX, screenY, tileX, tileY) {
     const size = this.tileSize;
     const rand = this.seededRandom(tileX, tileY);
+    const zoom = this.camera.zoom || 1;
     
     // 基底顏色（從多種綠色中選擇）
     const colorIndex = Math.floor(rand * this.grassColors.length);
     this.ctx.fillStyle = this.grassColors[colorIndex];
     this.ctx.fillRect(screenX, screenY, size, size);
+    
+    // LOD: 遠景只渲染基底色
+    if (zoom < 0.5) return;
     
     // 添加草地紋理變化（小色塊）
     const rand2 = this.seededRandom(tileX, tileY, 1);
@@ -243,6 +277,17 @@ export class TileRenderer extends BaseRenderer {
       this.ctx.fillRect(screenX + spotX, screenY + spotY, 2, 2);
     }
     
+    // 河岸處理（中景以上）
+    if (this.isNearTerrain(tileX, tileY, 9)) {
+      this.renderRiverbank(screenX, screenY, tileX, tileY);
+    }
+    
+    // 道路邊界過渡（中景以上）
+    this.renderEdgeDithering(screenX, screenY, tileX, tileY, 0, 1, '#6b5a45');
+    
+    // LOD: 中景省略小裝飾
+    if (zoom < 0.8) return;
+    
     // 小草裝飾（約 30% 機率）
     if (rand > 0.7) {
       this.renderGrassBlades(screenX, screenY, tileX, tileY);
@@ -251,14 +296,6 @@ export class TileRenderer extends BaseRenderer {
     // 野花裝飾（約 8% 機率）
     if (rand2 > 0.92) {
       this.renderFlower(screenX, screenY, tileX, tileY);
-    }
-    
-    // 道路邊界過渡（泥土色 dithering）
-    this.renderEdgeDithering(screenX, screenY, tileX, tileY, 0, 1, '#6b5a45');
-    
-    // 河岸處理：先畫土色沖刷地，再過渡
-    if (this.isNearTerrain(tileX, tileY, 9)) {
-      this.renderRiverbank(screenX, screenY, tileX, tileY);
     }
   }
   
@@ -358,9 +395,12 @@ export class TileRenderer extends BaseRenderer {
   }
   
   /**
-   * 渲染道路邊緣裝飾（碎石、小草）
+   * 渲染道路邊緣裝飾（碎石、小草）- LOD: 近景才渲染
    */
   renderRoadEdgeDecor(screenX, screenY, tileX, tileY) {
+    const zoom = this.camera.zoom || 1;
+    if (zoom < 0.8) return; // LOD: 中遠景跳過
+    
     const size = this.tileSize;
     const neighbors = this.getNeighborTerrains(tileX, tileY);
     const rand = this.seededRandom(tileX, tileY, 80);
@@ -498,15 +538,19 @@ export class TileRenderer extends BaseRenderer {
   }
   
   /**
-   * 渲染河流（南北向，帶流動動畫）
+   * 渲染河流（南北向，帶流動動畫，含 LOD）
    */
   renderRiver(screenX, screenY, tileX, tileY) {
     const size = this.tileSize;
     const rand = this.seededRandom(tileX, tileY);
+    const zoom = this.camera.zoom || 1;
     
     // 水面基底
     this.ctx.fillStyle = this.colors.water;
     this.ctx.fillRect(screenX, screenY, size, size);
+    
+    // LOD: 遠景只渲染基底色
+    if (zoom < 0.5) return;
     
     // 流動偏移（往南流動）
     const flowOffset = Math.floor(this.riverTime + tileY * 0.5) % size;
