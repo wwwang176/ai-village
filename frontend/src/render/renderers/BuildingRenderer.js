@@ -157,7 +157,10 @@ export class BuildingRenderer extends BaseRenderer {
     for (let row = 0; row < wallHeight; row += 8) {
       const offset = (row / 8) % 2 === 0 ? 0 : ts / 2;
       for (let i = offset; i < width; i += ts) {
-        this.ctx.fillRect(screenX + i, wallTop + row + 7, ts - 2, 1);
+        const lineWidth = Math.min(ts - 2, width - i);
+        if (lineWidth > 0) {
+          this.ctx.fillRect(screenX + i, wallTop + row + 7, lineWidth, 1);
+        }
       }
     }
     
@@ -174,9 +177,6 @@ export class BuildingRenderer extends BaseRenderer {
     
     // 恢復透明度
     this.ctx.globalAlpha = 1.0;
-    
-    // 渲染內部外圈矮牆（舊方法，矮牆現在由 Y-sort 處理）
-    // this.renderInteriorLowWalls(building);
   }
   
   /**
@@ -223,7 +223,10 @@ export class BuildingRenderer extends BaseRenderer {
     for (let row = 0; row < wallHeight; row += 8) {
       const offset = (row / 8) % 2 === 0 ? 0 : ts / 2;
       for (let i = offset; i < width; i += ts) {
-        this.ctx.fillRect(screenX + i, wallTop + row + 7, ts - 2, 1);
+        const lineWidth = Math.min(ts - 2, width - i);
+        if (lineWidth > 0) {
+          this.ctx.fillRect(screenX + i, wallTop + row + 7, lineWidth, 1);
+        }
       }
     }
     
@@ -300,10 +303,10 @@ export class BuildingRenderer extends BaseRenderer {
     this.ctx.fillStyle = wallColor;
     this.ctx.fillRect(blockScreenX, blockScreenY, ts, ts);
     
-    // 頂部邊框
+    // 頂部邊框（畫在矩形內部）
     this.ctx.strokeStyle = wallColorDark;
     this.ctx.lineWidth = 1;
-    this.ctx.strokeRect(blockScreenX, blockScreenY, ts, ts);
+    this.ctx.strokeRect(blockScreenX + 0.5, blockScreenY + 0.5, ts - 1, ts - 1);
     
     // 南面牆壁（最南排 或 北端第一排）
     if (isSouthRow || isNorthRow) {
@@ -322,86 +325,6 @@ export class BuildingRenderer extends BaseRenderer {
     
     // 恢復透明度
     this.ctx.globalAlpha = 1.0;
-  }
-  
-  /**
-   * 渲染建築內部外圈矮牆（建築物透明時顯示）
-   */
-  renderInteriorLowWalls(building) {
-    const { x: screenX, y: screenY } = this.toScreen(building.x, building.y);
-    const ts = this.tileSize;
-    const lowWallHeight = 6; // 矮牆高度
-    const colors = this.colors[building.type] || this.colors.house;
-    const wallColor = colors.wallDark || '#6b5b4b';
-    const wallColorDark = '#4b3b2b';
-    
-    // 建築物南端位置（矮牆下緣要對齊這裡）
-    const buildingSouthY = screenY + building.height * ts;
-    
-    // 門的位置（建築物南邊中央）
-    const doorX = building.x + Math.floor(building.width / 2);
-    const doorY = building.y + building.height - 1;
-    
-    // 遍歷建築物邊緣 1 格範圍
-    for (let y = building.y; y < building.y + building.height; y++) {
-      for (let x = building.x; x < building.x + building.width; x++) {
-        // 判斷是否在邊緣 1 格範圍內
-        const isEdge = (
-          x === building.x || 
-          x === building.x + building.width - 1 ||
-          y === building.y || 
-          y === building.y + building.height - 1
-        );
-        
-        if (!isEdge) continue;
-        
-        // 跳過門口位置
-        if (x === doorX && y === doorY) continue;
-        
-        // 計算螢幕座標
-        const blockScreenX = screenX + (x - building.x) * ts;
-        const blockScreenY = screenY + (y - building.y) * ts;
-        
-        // 判斷是否是北端第一排
-        const isNorthRow = (y === building.y);
-        
-        // 渲染矮牆方塊
-        this.renderLowWallBlock(blockScreenX, blockScreenY, ts, lowWallHeight, wallColor, wallColorDark, buildingSouthY, isNorthRow);
-      }
-    }
-  }
-  
-  /**
-   * 渲染單一矮牆方塊（2.5D 風格）
-   */
-  renderLowWallBlock(x, y, size, wallHeight, color, colorDark, buildingSouthY, isNorthRow) {
-    // 頂部（正方形）
-    this.ctx.fillStyle = color;
-    this.ctx.fillRect(x, y, size, size);
-    
-    // 頂部邊框
-    this.ctx.strokeStyle = colorDark;
-    this.ctx.lineWidth = 1;
-    this.ctx.strokeRect(x, y, size, size);
-    
-    // 判斷是否需要渲染南面牆壁
-    const blockBottomY = y + size;
-    const isOnSouthEdge = (blockBottomY >= buildingSouthY - size);
-    
-    // 南面牆壁（最南排 或 北端第一排）
-    if (isOnSouthEdge || isNorthRow) {
-      const wallTop = y + size;
-      this.ctx.fillStyle = color;
-      this.ctx.fillRect(x, wallTop, size, wallHeight);
-      
-      // 南面牆壁陰影
-      this.ctx.fillStyle = colorDark;
-      this.ctx.fillRect(x, wallTop + wallHeight - 2, size, 2);
-      
-      // 南面牆壁左右邊線
-      this.ctx.fillRect(x, wallTop, 1, wallHeight);
-      this.ctx.fillRect(x + size - 1, wallTop, 1, wallHeight);
-    }
   }
   
   /**
@@ -484,7 +407,10 @@ export class BuildingRenderer extends BaseRenderer {
     for (let row = 0; row < wallHeight; row += 8) {
       const offset = (row / 8) % 2 === 0 ? 0 : ts / 2;
       for (let i = offset; i < width; i += ts) {
-        this.ctx.fillRect(screenX + i, wallTop + row + 7, ts - 2, 1);
+        const lineWidth = Math.min(ts - 2, width - i);
+        if (lineWidth > 0) {
+          this.ctx.fillRect(screenX + i, wallTop + row + 7, lineWidth, 1);
+        }
       }
     }
     

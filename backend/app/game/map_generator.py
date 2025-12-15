@@ -306,6 +306,24 @@ def _add_roads(terrain: List[List[int]], collision: List[List[int]], buildings: 
         for x in right_main_x:
             _set_road(terrain, x, y, width, height)
     
+    # 建築物周圍一圈設定為道路（排除開放空間）
+    for b in buildings:
+        if b["type"] in OPEN_BUILDINGS:
+            continue  # 開放空間不需要周圍道路
+        bx, by, bw, bh = b["x"], b["y"], b["width"], b["height"]
+        # 上邊（北）
+        for x in range(bx - 1, bx + bw + 1):
+            _set_road(terrain, x, by - 1, width, height)
+        # 下邊（南）
+        for x in range(bx - 1, bx + bw + 1):
+            _set_road(terrain, x, by + bh, width, height)
+        # 左邊（西）
+        for y in range(by - 1, by + bh + 1):
+            _set_road(terrain, bx - 1, y, width, height)
+        # 右邊（東）
+        for y in range(by - 1, by + bh + 1):
+            _set_road(terrain, bx + bw, y, width, height)
+    
     # 每個建築門口用最短路徑連到主幹道
     for b in buildings:
         door_x = b.get("doorX", b["x"] + b["width"] // 2)

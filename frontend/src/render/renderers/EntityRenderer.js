@@ -99,14 +99,14 @@ export class EntityRenderer extends BaseRenderer {
     // 頭部主體
     this.ctx.fillStyle = skinColor;
     this.ctx.beginPath();
-    this.ctx.arc(cx, screenY + 3, 4, 0, Math.PI * 2);
+    this.ctx.arc(cx - 0.5, screenY + 3, 4, 0, Math.PI * 2);
     this.ctx.fill();
     
     // 頭部右側陰影
     this.ctx.fillStyle = skinDark;
     this.ctx.beginPath();
-    this.ctx.arc(cx + 1, screenY + 3, 4, -0.3, 1.2);
-    this.ctx.lineTo(cx + 1, screenY + 3);
+    this.ctx.arc(cx + 0.5, screenY + 3, 4, -0.3, 1.2);
+    this.ctx.lineTo(cx + 0.5, screenY + 3);
     this.ctx.fill();
     
     // === 頭髮 ===
@@ -114,23 +114,23 @@ export class EntityRenderer extends BaseRenderer {
       // 男性：短髮
       this.ctx.fillStyle = hairColor;
       this.ctx.beginPath();
-      this.ctx.arc(cx, screenY + 2, 4, Math.PI, 0);
+      this.ctx.arc(cx - 0.5, screenY + 2, 4, Math.PI, 0);
       this.ctx.fill();
       // 頭髮陰影
       this.ctx.fillStyle = hairDark;
-      this.ctx.fillRect(cx + 1, screenY - 1, 3, 2);
+      this.ctx.fillRect(cx, screenY - 1, 3, 2);
     } else {
       // 女性：長髮
       this.ctx.fillStyle = hairColor;
       this.ctx.beginPath();
-      this.ctx.arc(cx, screenY + 2, 4, Math.PI, 0);
+      this.ctx.arc(cx - 0.5, screenY + 2, 4, Math.PI, 0);
       this.ctx.fill();
       // 側邊長髮
       this.ctx.fillRect(cx - 5, screenY + 1, 2, 6);
       this.ctx.fillRect(cx + 3, screenY + 1, 2, 6);
       // 頭髮陰影
       this.ctx.fillStyle = hairDark;
-      this.ctx.fillRect(cx + 2, screenY - 1, 2, 2);
+      this.ctx.fillRect(cx + 1, screenY - 1, 2, 2);
     }
     
     // === 眼睛 ===

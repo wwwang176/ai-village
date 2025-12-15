@@ -555,22 +555,6 @@ export class TileRenderer extends BaseRenderer {
     // 流動偏移（往南流動）
     const flowOffset = Math.floor(this.riverTime + tileY * 0.5) % size;
     
-    // // 水波紋理（深色，南北向垂直線條，帶流動）
-    // this.ctx.fillStyle = this.colors.water_dark;
-    // const baseOffset = Math.floor(rand * 4);
-    // for (let i = baseOffset; i < size; i += 5) {
-    //   const y1 = (flowOffset) % size;
-    //   const lineHeight = Math.floor(size * 0.6);
-    //   // 繪製流動線條
-    //   if (y1 + lineHeight <= size) {
-    //     this.ctx.fillRect(screenX + i, screenY + y1, 1, lineHeight);
-    //   } else {
-    //     // 分段繪製（循環）
-    //     this.ctx.fillRect(screenX + i, screenY + y1, 1, size - y1);
-    //     this.ctx.fillRect(screenX + i, screenY, 1, lineHeight - (size - y1));
-    //   }
-    // }
-    
     // 流動高光點
     this.ctx.fillStyle = this.colors.water_light;
     const sparkleOffset = Math.floor(this.riverTime * 1.5 + rand * 10) % size;
