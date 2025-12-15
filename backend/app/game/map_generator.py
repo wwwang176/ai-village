@@ -103,6 +103,18 @@ def generate_map(seed: int, width: int = 96, height: int = 96) -> dict:
     # 物件
     objects = []
     
+    # 生成樹木
+    trees = _generate_trees(terrain, collision, buildings, width, height)
+    
+    # 生成草叢
+    bushes = _generate_bushes(terrain, collision, buildings, trees, width, height)
+    
+    # 生成稻米（農田）
+    crops = _generate_crops(terrain, buildings, trees, bushes, width, height)
+    
+    # 生成礦石（礦場）
+    ores = _generate_ores(terrain, collision, buildings, width, height)
+    
     return {
         "width": width,
         "height": height,
@@ -110,7 +122,11 @@ def generate_map(seed: int, width: int = 96, height: int = 96) -> dict:
         "terrain": terrain,
         "collision": collision,
         "buildings": buildings,
-        "objects": objects
+        "objects": objects,
+        "trees": trees,
+        "bushes": bushes,
+        "crops": crops,
+        "ores": ores
     }
 
 
@@ -357,3 +373,310 @@ def _set_road(terrain: List[List[int]], x: int, y: int, width: int, height: int)
         # 只有草地(0)才變成道路(1)，不覆蓋其他地形
         if terrain[y][x] == 0:
             terrain[y][x] = 1
+
+
+def _generate_trees(
+    terrain: List[List[int]], 
+    collision: List[List[int]], 
+    buildings: List[dict],
+    width: int, height: int,
+    tree_count: int = 80
+) -> List[dict]:
+    """生成隨機樹木"""
+    trees = []
+    tree_types = ["oak", "pine"]
+    tree_sizes = ["small", "medium", "large"]
+    
+    # 找出伐木場區域
+    lumber_camps = [b for b in buildings if b["type"] == "lumber_camp"]
+    
+    # 建立禁止區域（建築物周圍 2 格、道路、河流）
+    forbidden = [[False] * width for _ in range(height)]
+    
+    for y in range(height):
+        for x in range(width):
+            # 非草地和非伐木場區域禁止
+            if terrain[y][x] != 0 and terrain[y][x] != TERRAIN_TYPES["lumber_camp"]:
+                forbidden[y][x] = True
+    
+    # 建築物周圍 2 格禁止（伐木場除外）
+    for b in buildings:
+        if b["type"] == "lumber_camp":
+            continue
+        bx, by, bw, bh = b["x"], b["y"], b["width"], b["height"]
+        for dy in range(-2, bh + 2):
+            for dx in range(-2, bw + 2):
+                nx, ny = bx + dx, by + dy
+                if 0 <= nx < width and 0 <= ny < height:
+                    forbidden[ny][nx] = True
+    
+    # 地圖邊緣 3 格禁止
+    for y in range(height):
+        for x in range(width):
+            if x < 3 or x >= width - 3 or y < 3 or y >= height - 3:
+                forbidden[y][x] = True
+    
+    # 先在伐木場內隨機生成樹木
+    for camp in lumber_camps:
+        cx, cy, cw, ch = camp["x"], camp["y"], camp["width"], camp["height"]
+        # 伐木場內隨機放置樹木（約 40% 密度）
+        camp_tree_count = int((cw - 2) * (ch - 2) * 0.4)
+        camp_attempts = 0
+        camp_trees_placed = 0
+        while camp_trees_placed < camp_tree_count and camp_attempts < camp_tree_count * 10:
+            camp_attempts += 1
+            tx = cx + random.randint(1, cw - 2)
+            ty = cy + random.randint(1, ch - 2)
+            if forbidden[ty][tx]:
+                continue
+            # 檢查周圍是否有其他樹木（至少間隔 1 格）
+            too_close = False
+            for tree in trees:
+                if abs(tree["x"] - tx) <= 1 and abs(tree["y"] - ty) <= 1:
+                    too_close = True
+                    break
+            if too_close:
+                continue
+            tree_type = random.choice(tree_types)
+            tree_size = random.choice(["medium", "large"])
+            trees.append({
+                "id": f"tree_{len(trees)}",
+                "x": tx,
+                "y": ty,
+                "type": tree_type,
+                "size": tree_size
+            })
+            collision[ty][tx] = 1
+            forbidden[ty][tx] = True
+            camp_trees_placed += 1
+    
+    # 隨機生成其他樹木
+    attempts = 0
+    max_attempts = tree_count * 20
+    
+    while len(trees) < tree_count and attempts < max_attempts:
+        attempts += 1
+        x = random.randint(0, width - 1)
+        y = random.randint(0, height - 1)
+        
+        if forbidden[y][x]:
+            continue
+        
+        # 檢查周圍是否有其他樹木（至少間隔 2 格）
+        too_close = False
+        for tree in trees:
+            if abs(tree["x"] - x) < 2 and abs(tree["y"] - y) < 2:
+                too_close = True
+                break
+        
+        if too_close:
+            continue
+        
+        tree_type = random.choice(tree_types)
+        tree_size = random.choice(tree_sizes)
+        
+        trees.append({
+            "id": f"tree_{len(trees)}",
+            "x": x,
+            "y": y,
+            "type": tree_type,
+            "size": tree_size
+        })
+        
+        # 標記樹木位置為碰撞區域（村民不可穿越）
+        collision[y][x] = 1
+        # 標記為禁止（避免重疊）
+        forbidden[y][x] = True
+    
+    print(f"🌲 生成 {len(trees)} 棵樹木")
+    return trees
+
+
+def _generate_bushes(
+    terrain: List[List[int]], 
+    collision: List[List[int]], 
+    buildings: List[dict],
+    trees: List[dict],
+    width: int, height: int,
+    bush_count: int = 120
+) -> List[dict]:
+    """生成隨機草叢"""
+    bushes = []
+    bush_sizes = ["small", "medium", "large"]
+    
+    # 找出牧場區域
+    pastures = [b for b in buildings if b["type"] == "pasture"]
+    
+    # 建立禁止區域
+    forbidden = [[False] * width for _ in range(height)]
+    
+    for y in range(height):
+        for x in range(width):
+            # 非草地和非牧場區域禁止
+            if terrain[y][x] != 0 and terrain[y][x] != TERRAIN_TYPES["pasture"]:
+                forbidden[y][x] = True
+    
+    # 建築物周圍 1 格禁止（牧場除外）
+    for b in buildings:
+        if b["type"] == "pasture":
+            continue
+        bx, by, bw, bh = b["x"], b["y"], b["width"], b["height"]
+        for dy in range(-1, bh + 1):
+            for dx in range(-1, bw + 1):
+                nx, ny = bx + dx, by + dy
+                if 0 <= nx < width and 0 <= ny < height:
+                    forbidden[ny][nx] = True
+    
+    # 樹木位置禁止
+    for tree in trees:
+        forbidden[tree["y"]][tree["x"]] = True
+    
+    # 地圖邊緣 2 格禁止
+    for y in range(height):
+        for x in range(width):
+            if x < 2 or x >= width - 2 or y < 2 or y >= height - 2:
+                forbidden[y][x] = True
+    
+    # 先在牧場內隨機生成草叢
+    for pasture in pastures:
+        px, py, pw, ph = pasture["x"], pasture["y"], pasture["width"], pasture["height"]
+        # 牧場內隨機放置草叢（約 35% 密度）
+        pasture_bush_count = int((pw - 2) * (ph - 2) * 0.35)
+        pasture_attempts = 0
+        pasture_bushes_placed = 0
+        while pasture_bushes_placed < pasture_bush_count and pasture_attempts < pasture_bush_count * 10:
+            pasture_attempts += 1
+            bx = px + random.randint(1, pw - 2)
+            by = py + random.randint(1, ph - 2)
+            if 0 <= bx < width and 0 <= by < height and not forbidden[by][bx]:
+                bush_size = random.choice(bush_sizes)
+                bushes.append({
+                    "id": f"bush_{len(bushes)}",
+                    "x": bx,
+                    "y": by,
+                    "size": bush_size
+                })
+                forbidden[by][bx] = True
+                pasture_bushes_placed += 1
+    
+    # 隨機生成其他草叢
+    attempts = 0
+    max_attempts = bush_count * 15
+    
+    while len(bushes) < bush_count and attempts < max_attempts:
+        attempts += 1
+        x = random.randint(0, width - 1)
+        y = random.randint(0, height - 1)
+        
+        if forbidden[y][x]:
+            continue
+        
+        bush_size = random.choice(bush_sizes)
+        
+        bushes.append({
+            "id": f"bush_{len(bushes)}",
+            "x": x,
+            "y": y,
+            "size": bush_size
+        })
+        
+        # 標記草叢位置為禁止（避免重疊）
+        forbidden[y][x] = True
+    
+    print(f"🌿 生成 {len(bushes)} 個草叢")
+    return bushes
+
+
+def _generate_crops(
+    terrain: List[List[int]], 
+    buildings: List[dict],
+    trees: List[dict],
+    bushes: List[dict],
+    width: int, height: int
+) -> List[dict]:
+    """生成稻米（農田內）"""
+    crops = []
+    crop_sizes = ["small", "medium", "large"]
+    
+    # 找出農田區域
+    farms = [b for b in buildings if b["type"] == "farm"]
+    
+    # 建立禁止區域
+    forbidden = [[False] * width for _ in range(height)]
+    
+    # 樹木位置禁止
+    for tree in trees:
+        forbidden[tree["y"]][tree["x"]] = True
+    
+    # 草叢位置禁止
+    for bush in bushes:
+        forbidden[bush["y"]][bush["x"]] = True
+    
+    # 在農田內生成稻米（密集）
+    for farm in farms:
+        fx, fy, fw, fh = farm["x"], farm["y"], farm["width"], farm["height"]
+        # 農田內部每隔 2 格放一叢稻米
+        for dy in range(1, fh - 1, 2):
+            for dx in range(1, fw - 1, 2):
+                cx, cy = fx + dx, fy + dy
+                if 0 <= cx < width and 0 <= cy < height and not forbidden[cy][cx]:
+                    crop_size = random.choice(crop_sizes)
+                    crops.append({
+                        "id": f"crop_{len(crops)}",
+                        "x": cx,
+                        "y": cy,
+                        "size": crop_size
+                    })
+                    forbidden[cy][cx] = True
+    
+    print(f"🌾 生成 {len(crops)} 叢稻米")
+    return crops
+
+
+def _generate_ores(
+    terrain: List[List[int]], 
+    collision: List[List[int]],
+    buildings: List[dict],
+    width: int, height: int
+) -> List[dict]:
+    """生成礦石（礦場內）"""
+    ores = []
+    ore_types = ["iron", "copper", "gold"]
+    ore_sizes = ["small", "medium", "large"]
+    
+    # 找出礦場區域
+    mines = [b for b in buildings if b["type"] == "mine"]
+    
+    # 建立已放置礦石的位置
+    placed = set()
+    
+    # 在礦場內隨機生成礦石
+    for mine in mines:
+        mx, my, mw, mh = mine["x"], mine["y"], mine["width"], mine["height"]
+        # 礦場內隨機放置礦石（約 30% 密度）
+        mine_ore_count = int((mw - 2) * (mh - 2) * 0.3)
+        mine_attempts = 0
+        mine_ores_placed = 0
+        while mine_ores_placed < mine_ore_count and mine_attempts < mine_ore_count * 10:
+            mine_attempts += 1
+            ox = mx + random.randint(1, mw - 2)
+            oy = my + random.randint(1, mh - 2)
+            if (ox, oy) in placed:
+                continue
+            if 0 <= ox < width and 0 <= oy < height:
+                ore_type = random.choice(ore_types)
+                ore_size = random.choice(ore_sizes)
+                ores.append({
+                    "id": f"ore_{len(ores)}",
+                    "x": ox,
+                    "y": oy,
+                    "type": ore_type,
+                    "size": ore_size
+                })
+                # 標記為碰撞區域（村民不可穿越）
+                collision[oy][ox] = 1
+                placed.add((ox, oy))
+                mine_ores_placed += 1
+    
+    print(f"🪨 生成 {len(ores)} 塊礦石")
+    return ores

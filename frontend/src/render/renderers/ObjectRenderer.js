@@ -19,6 +19,15 @@ export class ObjectRenderer extends BaseRenderer {
       leafHighlight: '#66bb6a', // 高光
     };
     
+    // 草叢顏色（更深色調）
+    this.bushColors = {
+      darkest: '#1a472a',
+      dark: '#1b5e20',
+      mid: '#2e7d32',
+      light: '#388e3c',
+      highlight: '#43a047',
+    };
+    
     // 物品圖示對應表
     this.itemIcons = {
       'hoe': '⛏️', 'pickaxe': '⛏️', 'axe': '🪓', 'shears': '✂️',
@@ -136,30 +145,164 @@ export class ObjectRenderer extends BaseRenderer {
   }
   
   /**
-   * 渲染樹 - 像素風格多層次
+   * 渲染樹 - 像素風格多層次（含 LOD）
    */
   renderTree(screenX, screenY, size, obj = null) {
-    // 使用物件座標作為隨機種子，確保同一棵樹外觀一致
-    const seed = obj ? (obj.x * 100 + obj.y) : 0;
-    const variant = seed % 3; // 3 種樹木變體
+    // 樹幹置中於格子中央
+    const trunkCenterX = screenX + size / 2;
+    const trunkBottomY = screenY + size / 2;  // 格子中央
     
-    // 陰影
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    // 尺寸縮放
+    const sizeScale = obj?.size === 'small' ? 0.8 : obj?.size === 'large' ? 1.2 : 1.0;
+    const zoom = this.camera.zoom || 1;
+    
+    // LOD: 遠景只渲染簡化版
+    if (zoom <= 0.5) {
+      // 極遠：只畫一個綠色方塊
+      this.ctx.fillStyle = '#2e7d32';
+      this.ctx.fillRect(trunkCenterX - 6 * sizeScale, trunkBottomY - 20 * sizeScale, 12 * sizeScale, 16 * sizeScale);
+      return;
+    }
+    
+    // 陰影（在格子中央）
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
     this.ctx.beginPath();
-    this.ctx.ellipse(screenX + size / 2, screenY + size - 2, size * 0.4, size * 0.15, 0, 0, Math.PI * 2);
+    this.ctx.ellipse(trunkCenterX, trunkBottomY, size * 0.5, size * 0.2, 0, 0, Math.PI * 2);
     this.ctx.fill();
     
-    switch (variant) {
-      case 0:
-        this.renderOakTree(screenX, screenY, size);
-        break;
-      case 1:
-        this.renderPineTree(screenX, screenY, size);
-        break;
-      case 2:
-        this.renderBushyTree(screenX, screenY, size);
-        break;
+    // LOD: 中遠景簡化渲染
+    if (zoom <= 0.75) {
+      this.renderTreeSimple(trunkCenterX, trunkBottomY, sizeScale, obj?.type || 'oak');
+      return;
     }
+    
+    // 近景：完整渲染
+    const treeType = obj?.type || 'oak';
+    if (treeType === 'pine') {
+      this.renderPineTreeLarge(trunkCenterX, trunkBottomY, size, sizeScale);
+    } else {
+      this.renderOakTreeLarge(trunkCenterX, trunkBottomY, size, sizeScale);
+    }
+  }
+  
+  /**
+   * 簡化版樹木渲染（LOD 中遠景用）
+   */
+  renderTreeSimple(cx, bottomY, scale, type) {
+    const trunkWidth = 4 * scale;
+    const trunkHeight = 16 * scale;
+    
+    // 簡化樹幹
+    this.ctx.fillStyle = this.treeColors.trunk;
+    this.ctx.fillRect(cx - trunkWidth / 2, bottomY - trunkHeight, trunkWidth, trunkHeight);
+    
+    // 簡化樹冠
+    if (type === 'pine') {
+      // 松樹：三角形
+      this.ctx.fillStyle = this.treeColors.leaf1;
+      this.ctx.fillRect(cx - 10 * scale, bottomY - trunkHeight - 20 * scale, 20 * scale, 24 * scale);
+      this.ctx.fillStyle = this.treeColors.leaf3;
+      this.ctx.fillRect(cx - 6 * scale, bottomY - trunkHeight - 32 * scale, 12 * scale, 14 * scale);
+    } else {
+      // 橡樹：圓形
+      this.ctx.fillStyle = this.treeColors.leaf1;
+      this.ctx.fillRect(cx - 14 * scale, bottomY - trunkHeight - 18 * scale, 28 * scale, 22 * scale);
+      this.ctx.fillStyle = this.treeColors.leaf3;
+      this.ctx.fillRect(cx - 10 * scale, bottomY - trunkHeight - 24 * scale, 20 * scale, 10 * scale);
+    }
+  }
+  
+  /**
+   * 大型橡樹 - 樹幹置中，樹冠寬廣
+   */
+  renderOakTreeLarge(cx, bottomY, tileSize, scale = 1.0) {
+    const trunkWidth = 6 * scale;
+    const trunkHeight = 28 * scale;
+    const crownWidth = 36 * scale;
+    const crownHeight = 32 * scale;
+    
+    // 樹幹（從底部往上）
+    this.ctx.fillStyle = this.treeColors.trunk;
+    this.ctx.fillRect(cx - trunkWidth / 2, bottomY - trunkHeight, trunkWidth, trunkHeight);
+    
+    // 樹幹紋理
+    this.ctx.fillStyle = this.treeColors.trunkDark;
+    this.ctx.fillRect(cx - 1, bottomY - trunkHeight + 4, 2, trunkHeight - 8);
+    this.ctx.fillStyle = this.treeColors.trunkLight;
+    this.ctx.fillRect(cx + 1, bottomY - trunkHeight + 6, 1, trunkHeight - 12);
+    
+    // 樹冠基準點（樹幹頂部）
+    const crownBaseY = bottomY - trunkHeight;
+    
+    // 樹冠 - 多層次大面積
+    // 底層（最深，最寬）
+    this.ctx.fillStyle = this.treeColors.leaf4;
+    this.ctx.fillRect(cx - crownWidth * 0.45, crownBaseY - crownHeight * 0.3, crownWidth * 0.9, crownHeight * 0.35);
+    
+    // 中下層
+    this.ctx.fillStyle = this.treeColors.leaf1;
+    this.ctx.fillRect(cx - crownWidth * 0.5, crownBaseY - crownHeight * 0.6, crownWidth, crownHeight * 0.4);
+    
+    // 中層
+    this.ctx.fillStyle = this.treeColors.leaf2;
+    this.ctx.fillRect(cx - crownWidth * 0.4, crownBaseY - crownHeight * 0.8, crownWidth * 0.8, crownHeight * 0.35);
+    
+    // 上層
+    this.ctx.fillStyle = this.treeColors.leaf3;
+    this.ctx.fillRect(cx - crownWidth * 0.3, crownBaseY - crownHeight * 0.95, crownWidth * 0.6, crownHeight * 0.25);
+    
+    // 頂部
+    this.ctx.fillRect(cx - crownWidth * 0.15, crownBaseY - crownHeight, crownWidth * 0.3, crownHeight * 0.15);
+    
+    // 高光點
+    this.ctx.fillStyle = this.treeColors.leafHighlight;
+    this.ctx.fillRect(cx - crownWidth * 0.3, crownBaseY - crownHeight * 0.7, 3, 3);
+    this.ctx.fillRect(cx + crownWidth * 0.15, crownBaseY - crownHeight * 0.5, 2, 2);
+    this.ctx.fillRect(cx - crownWidth * 0.1, crownBaseY - crownHeight * 0.85, 2, 2);
+  }
+  
+  /**
+   * 大型松樹 - 樹幹置中，三角形樹冠
+   */
+  renderPineTreeLarge(cx, bottomY, tileSize, scale = 1.0) {
+    const trunkWidth = 5 * scale;
+    const trunkHeight = 20 * scale;
+    const crownWidth = 28 * scale;
+    const crownHeight = 40 * scale;
+    
+    // 樹幹
+    this.ctx.fillStyle = this.treeColors.trunk;
+    this.ctx.fillRect(cx - trunkWidth / 2, bottomY - trunkHeight, trunkWidth, trunkHeight);
+    this.ctx.fillStyle = this.treeColors.trunkDark;
+    this.ctx.fillRect(cx, bottomY - trunkHeight + 3, 1, trunkHeight - 6);
+    
+    // 樹冠基準點
+    const crownBaseY = bottomY - trunkHeight;
+    
+    // 三層三角形樹冠
+    // 底層（最寬）
+    this.ctx.fillStyle = this.treeColors.leaf4;
+    this.ctx.fillRect(cx - crownWidth * 0.5, crownBaseY - crownHeight * 0.25, crownWidth, crownHeight * 0.28);
+    this.ctx.fillRect(cx - crownWidth * 0.4, crownBaseY - crownHeight * 0.18, crownWidth * 0.8, crownHeight * 0.2);
+    
+    // 中層
+    this.ctx.fillStyle = this.treeColors.leaf1;
+    this.ctx.fillRect(cx - crownWidth * 0.4, crownBaseY - crownHeight * 0.5, crownWidth * 0.8, crownHeight * 0.28);
+    this.ctx.fillRect(cx - crownWidth * 0.3, crownBaseY - crownHeight * 0.42, crownWidth * 0.6, crownHeight * 0.2);
+    
+    // 上層
+    this.ctx.fillStyle = this.treeColors.leaf2;
+    this.ctx.fillRect(cx - crownWidth * 0.3, crownBaseY - crownHeight * 0.75, crownWidth * 0.6, crownHeight * 0.28);
+    this.ctx.fillRect(cx - crownWidth * 0.2, crownBaseY - crownHeight * 0.67, crownWidth * 0.4, crownHeight * 0.2);
+    
+    // 頂部
+    this.ctx.fillStyle = this.treeColors.leaf3;
+    this.ctx.fillRect(cx - crownWidth * 0.15, crownBaseY - crownHeight * 0.92, crownWidth * 0.3, crownHeight * 0.2);
+    this.ctx.fillRect(cx - crownWidth * 0.08, crownBaseY - crownHeight, crownWidth * 0.16, crownHeight * 0.12);
+    
+    // 高光
+    this.ctx.fillStyle = this.treeColors.leafHighlight;
+    this.ctx.fillRect(cx - crownWidth * 0.15, crownBaseY - crownHeight * 0.6, 2, 2);
   }
   
   /**
@@ -506,5 +649,400 @@ export class ObjectRenderer extends BaseRenderer {
     this.ctx.lineWidth = 2;
     this.ctx.strokeText(label, screenX + size / 2, screenY + size + 0);
     this.ctx.fillText(label, screenX + size / 2, screenY + size + 0);
+  }
+  
+  /**
+   * 渲染草叢後景（在實體後面）- 弧形彎曲草葉
+   */
+  renderBushBack(screenX, screenY, size, obj = null) {
+    const cx = screenX + size / 2;
+    const cy = screenY + size / 2;
+    const zoom = this.camera.zoom || 1;
+    const sizeScale = obj?.size === 'small' ? 0.7 : obj?.size === 'large' ? 1.2 : 1.0;
+    
+    // LOD: 極遠景不渲染後景
+    if (zoom <= 0.5) return;
+    
+    const baseY = cy;
+    
+    // LOD: 中遠景簡化
+    if (zoom <= 0.75) {
+      this.ctx.strokeStyle = this.bushColors.dark;
+      this.ctx.lineWidth = 1;
+      this.ctx.beginPath();
+      this.ctx.moveTo(cx - 3, baseY);
+      this.ctx.quadraticCurveTo(cx - 5, baseY - 6, cx - 6, baseY - 10);
+      this.ctx.stroke();
+      this.ctx.beginPath();
+      this.ctx.moveTo(cx + 3, baseY);
+      this.ctx.quadraticCurveTo(cx + 5, baseY - 6, cx + 6, baseY - 10);
+      this.ctx.stroke();
+      return;
+    }
+    
+    // 後排草 - 弧形彎曲草葉（高低落差加大）
+    this.ctx.lineWidth = 1.5;
+    
+    // 左側草葉（向左彎曲，較短）
+    this.ctx.strokeStyle = this.bushColors.darkest;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx - 4 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx - 6 * sizeScale, baseY - 2 * sizeScale, cx - 7 * sizeScale, baseY - 4 * sizeScale);
+    this.ctx.stroke();
+    
+    this.ctx.strokeStyle = this.bushColors.dark;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx - 2 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx - 4 * sizeScale, baseY - 4 * sizeScale, cx - 5 * sizeScale, baseY - 8 * sizeScale);
+    this.ctx.stroke();
+    
+    // 中間草葉（較直，最高）
+    this.ctx.strokeStyle = this.bushColors.mid;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx, baseY);
+    this.ctx.quadraticCurveTo(cx - 1 * sizeScale, baseY - 5 * sizeScale, cx - 1 * sizeScale, baseY - 10 * sizeScale);
+    this.ctx.stroke();
+    
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx + 1 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx + 2 * sizeScale, baseY - 4 * sizeScale, cx + 2 * sizeScale, baseY - 8 * sizeScale);
+    this.ctx.stroke();
+    
+    // 右側草葉（向右彎曲，較短）
+    this.ctx.strokeStyle = this.bushColors.dark;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx + 3 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx + 5 * sizeScale, baseY - 3 * sizeScale, cx + 6 * sizeScale, baseY - 7 * sizeScale);
+    this.ctx.stroke();
+    
+    this.ctx.strokeStyle = this.bushColors.darkest;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx + 5 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx + 7 * sizeScale, baseY - 2 * sizeScale, cx + 8 * sizeScale, baseY - 4 * sizeScale);
+    this.ctx.stroke();
+  }
+  
+  /**
+   * 渲染草叢前景（在實體前面）- 弧形彎曲草葉
+   */
+  renderBushFront(screenX, screenY, size, obj = null) {
+    const cx = screenX + size / 2;
+    const cy = screenY + size / 2;
+    const zoom = this.camera.zoom || 1;
+    const sizeScale = obj?.size === 'small' ? 0.7 : obj?.size === 'large' ? 1.2 : 1.0;
+    
+    const baseY = cy + size / 2;  // 格子底部
+    
+    // LOD: 極遠景簡化
+    if (zoom <= 0.5) {
+      this.ctx.strokeStyle = this.bushColors.mid;
+      this.ctx.lineWidth = 1;
+      this.ctx.beginPath();
+      this.ctx.moveTo(cx, baseY);
+      this.ctx.lineTo(cx - 1, baseY - 6);
+      this.ctx.stroke();
+      return;
+    }
+    
+    // LOD: 中遠景簡化
+    if (zoom <= 0.75) {
+      this.ctx.strokeStyle = this.bushColors.mid;
+      this.ctx.lineWidth = 1;
+      this.ctx.beginPath();
+      this.ctx.moveTo(cx - 2, baseY);
+      this.ctx.quadraticCurveTo(cx - 4, baseY - 6, cx - 5, baseY - 12);
+      this.ctx.stroke();
+      this.ctx.beginPath();
+      this.ctx.moveTo(cx + 2, baseY);
+      this.ctx.quadraticCurveTo(cx + 4, baseY - 6, cx + 5, baseY - 12);
+      this.ctx.stroke();
+      return;
+    }
+    
+    // 前排草 - 弧形彎曲草葉（高低落差加大）
+    this.ctx.lineWidth = 1.5;
+    
+    // 左側草葉（向左彎曲，較短）
+    this.ctx.strokeStyle = this.bushColors.dark;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx - 5 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx - 7 * sizeScale, baseY - 2 * sizeScale, cx - 8 * sizeScale, baseY - 5 * sizeScale);
+    this.ctx.stroke();
+    
+    this.ctx.strokeStyle = this.bushColors.mid;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx - 3 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx - 5 * sizeScale, baseY - 5 * sizeScale, cx - 6 * sizeScale, baseY - 10 * sizeScale);
+    this.ctx.stroke();
+    
+    // 中間草葉（較直，最高）
+    this.ctx.strokeStyle = this.bushColors.light;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx - 1 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx - 1 * sizeScale, baseY - 6 * sizeScale, cx - 2 * sizeScale, baseY - 12 * sizeScale);
+    this.ctx.stroke();
+    
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx + 1 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx + 1 * sizeScale, baseY - 5 * sizeScale, cx + 2 * sizeScale, baseY - 10 * sizeScale);
+    this.ctx.stroke();
+    
+    // 右側草葉（向右彎曲，較短）
+    this.ctx.strokeStyle = this.bushColors.mid;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx + 3 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx + 5 * sizeScale, baseY - 4 * sizeScale, cx + 6 * sizeScale, baseY - 9 * sizeScale);
+    this.ctx.stroke();
+    
+    this.ctx.strokeStyle = this.bushColors.dark;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx + 5 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx + 7 * sizeScale, baseY - 2 * sizeScale, cx + 8 * sizeScale, baseY - 5 * sizeScale);
+    this.ctx.stroke();
+    
+  }
+  
+  /**
+   * 渲染稻米後景（黃色草）
+   */
+  renderCropBack(screenX, screenY, size, obj = null) {
+    const cx = screenX + size / 2;
+    const cy = screenY + size / 2;
+    const zoom = this.camera.zoom || 1;
+    const sizeScale = obj?.size === 'small' ? 0.7 : obj?.size === 'large' ? 1.2 : 1.0;
+    
+    // LOD: 極遠景不渲染後景
+    if (zoom <= 0.5) return;
+    
+    const baseY = cy;
+    
+    // 稻米顏色（黃色系）
+    const cropColors = {
+      darkest: '#8B7355',  // 深褐黃
+      dark: '#B8860B',     // 暗金色
+      mid: '#DAA520',      // 金黃色
+      light: '#F0C040',    // 淺金色
+    };
+    
+    // LOD: 中遠景簡化
+    if (zoom <= 0.75) {
+      this.ctx.strokeStyle = cropColors.dark;
+      this.ctx.lineWidth = 1;
+      this.ctx.beginPath();
+      this.ctx.moveTo(cx - 3, baseY);
+      this.ctx.quadraticCurveTo(cx - 5, baseY - 6, cx - 6, baseY - 10);
+      this.ctx.stroke();
+      this.ctx.beginPath();
+      this.ctx.moveTo(cx + 3, baseY);
+      this.ctx.quadraticCurveTo(cx + 5, baseY - 6, cx + 6, baseY - 10);
+      this.ctx.stroke();
+      return;
+    }
+    
+    // 後排稻米 - 弧形彎曲
+    this.ctx.lineWidth = 1.5;
+    
+    // 左側
+    this.ctx.strokeStyle = cropColors.darkest;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx - 4 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx - 6 * sizeScale, baseY - 2 * sizeScale, cx - 7 * sizeScale, baseY - 4 * sizeScale);
+    this.ctx.stroke();
+    
+    this.ctx.strokeStyle = cropColors.dark;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx - 2 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx - 4 * sizeScale, baseY - 4 * sizeScale, cx - 5 * sizeScale, baseY - 8 * sizeScale);
+    this.ctx.stroke();
+    
+    // 中間（最高）
+    this.ctx.strokeStyle = cropColors.mid;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx, baseY);
+    this.ctx.quadraticCurveTo(cx - 1 * sizeScale, baseY - 5 * sizeScale, cx - 1 * sizeScale, baseY - 10 * sizeScale);
+    this.ctx.stroke();
+    
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx + 1 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx + 2 * sizeScale, baseY - 4 * sizeScale, cx + 2 * sizeScale, baseY - 8 * sizeScale);
+    this.ctx.stroke();
+    
+    // 右側
+    this.ctx.strokeStyle = cropColors.dark;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx + 3 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx + 5 * sizeScale, baseY - 3 * sizeScale, cx + 6 * sizeScale, baseY - 7 * sizeScale);
+    this.ctx.stroke();
+    
+    this.ctx.strokeStyle = cropColors.darkest;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx + 5 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx + 7 * sizeScale, baseY - 2 * sizeScale, cx + 8 * sizeScale, baseY - 4 * sizeScale);
+    this.ctx.stroke();
+  }
+  
+  /**
+   * 渲染稻米前景（黃色草）
+   */
+  renderCropFront(screenX, screenY, size, obj = null) {
+    const cx = screenX + size / 2;
+    const cy = screenY + size / 2;
+    const zoom = this.camera.zoom || 1;
+    const sizeScale = obj?.size === 'small' ? 0.7 : obj?.size === 'large' ? 1.2 : 1.0;
+    
+    const baseY = cy + size / 2;  // 格子底部
+    
+    // 稻米顏色（黃色系）
+    const cropColors = {
+      darkest: '#8B7355',  // 深褐黃
+      dark: '#B8860B',     // 暗金色
+      mid: '#DAA520',      // 金黃色
+      light: '#F0C040',    // 淺金色
+    };
+    
+    // LOD: 極遠景簡化
+    if (zoom <= 0.5) {
+      this.ctx.strokeStyle = cropColors.mid;
+      this.ctx.lineWidth = 1;
+      this.ctx.beginPath();
+      this.ctx.moveTo(cx, baseY);
+      this.ctx.lineTo(cx - 1, baseY - 6);
+      this.ctx.stroke();
+      return;
+    }
+    
+    // LOD: 中遠景簡化
+    if (zoom <= 0.75) {
+      this.ctx.strokeStyle = cropColors.mid;
+      this.ctx.lineWidth = 1;
+      this.ctx.beginPath();
+      this.ctx.moveTo(cx - 2, baseY);
+      this.ctx.quadraticCurveTo(cx - 4, baseY - 6, cx - 5, baseY - 12);
+      this.ctx.stroke();
+      this.ctx.beginPath();
+      this.ctx.moveTo(cx + 2, baseY);
+      this.ctx.quadraticCurveTo(cx + 4, baseY - 6, cx + 5, baseY - 12);
+      this.ctx.stroke();
+      return;
+    }
+    
+    // 前排稻米 - 弧形彎曲
+    this.ctx.lineWidth = 1.5;
+    
+    // 左側（較短）
+    this.ctx.strokeStyle = cropColors.dark;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx - 5 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx - 7 * sizeScale, baseY - 2 * sizeScale, cx - 8 * sizeScale, baseY - 5 * sizeScale);
+    this.ctx.stroke();
+    
+    this.ctx.strokeStyle = cropColors.mid;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx - 3 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx - 5 * sizeScale, baseY - 5 * sizeScale, cx - 6 * sizeScale, baseY - 10 * sizeScale);
+    this.ctx.stroke();
+    
+    // 中間（最高）
+    this.ctx.strokeStyle = cropColors.light;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx - 1 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx - 1 * sizeScale, baseY - 6 * sizeScale, cx - 2 * sizeScale, baseY - 12 * sizeScale);
+    this.ctx.stroke();
+    
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx + 1 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx + 1 * sizeScale, baseY - 5 * sizeScale, cx + 2 * sizeScale, baseY - 10 * sizeScale);
+    this.ctx.stroke();
+    
+    // 右側（較短）
+    this.ctx.strokeStyle = cropColors.mid;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx + 3 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx + 5 * sizeScale, baseY - 4 * sizeScale, cx + 6 * sizeScale, baseY - 9 * sizeScale);
+    this.ctx.stroke();
+    
+    this.ctx.strokeStyle = cropColors.dark;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx + 5 * sizeScale, baseY);
+    this.ctx.quadraticCurveTo(cx + 7 * sizeScale, baseY - 2 * sizeScale, cx + 8 * sizeScale, baseY - 5 * sizeScale);
+    this.ctx.stroke();
+  }
+  
+  /**
+   * 渲染礦石（占滿整個格子）
+   */
+  renderOre(screenX, screenY, size, obj = null) {
+    const cx = screenX + size / 2;
+    const cy = screenY + size / 2;
+    const zoom = this.camera.zoom || 1;
+    
+    // 根據礦石類型選擇顏色
+    const oreType = obj?.type || 'iron';
+    let baseColor, darkColor, lightColor;
+    
+    switch (oreType) {
+      case 'gold':
+        baseColor = '#DAA520';
+        darkColor = '#B8860B';
+        lightColor = '#FFD700';
+        break;
+      case 'copper':
+        baseColor = '#B87333';
+        darkColor = '#8B4513';
+        lightColor = '#CD853F';
+        break;
+      default: // iron
+        baseColor = '#708090';
+        darkColor = '#4A5568';
+        lightColor = '#A0AEC0';
+    }
+    
+    // LOD: 極遠景簡化
+    if (zoom <= 0.5) {
+      this.ctx.fillStyle = baseColor;
+      this.ctx.fillRect(screenX + 2, screenY + 2, size - 4, size - 4);
+      return;
+    }
+    
+    // 繪製礦石（占滿格子的多邊形岩石）
+    const rockSize = size * 0.45;
+    
+    // 主體岩石
+    this.ctx.fillStyle = baseColor;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx - rockSize, cy);
+    this.ctx.lineTo(cx - rockSize * 0.6, cy - rockSize * 0.9);
+    this.ctx.lineTo(cx + rockSize * 0.4, cy - rockSize * 0.8);
+    this.ctx.lineTo(cx + rockSize, cy - rockSize * 0.2);
+    this.ctx.lineTo(cx + rockSize * 0.9, cy + rockSize * 0.6);
+    this.ctx.lineTo(cx - rockSize * 0.2, cy + rockSize * 0.8);
+    this.ctx.closePath();
+    this.ctx.fill();
+    
+    // 暗面
+    this.ctx.fillStyle = darkColor;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx - rockSize, cy);
+    this.ctx.lineTo(cx - rockSize * 0.2, cy + rockSize * 0.8);
+    this.ctx.lineTo(cx + rockSize * 0.9, cy + rockSize * 0.6);
+    this.ctx.lineTo(cx + rockSize, cy - rockSize * 0.2);
+    this.ctx.lineTo(cx, cy);
+    this.ctx.closePath();
+    this.ctx.fill();
+    
+    // 亮面高光
+    this.ctx.fillStyle = lightColor;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx - rockSize * 0.6, cy - rockSize * 0.9);
+    this.ctx.lineTo(cx + rockSize * 0.4, cy - rockSize * 0.8);
+    this.ctx.lineTo(cx + rockSize * 0.1, cy - rockSize * 0.3);
+    this.ctx.lineTo(cx - rockSize * 0.4, cy - rockSize * 0.5);
+    this.ctx.closePath();
+    this.ctx.fill();
+    
+    // 礦石光點
+    this.ctx.fillStyle = lightColor;
+    this.ctx.fillRect(cx - 3, cy - rockSize * 0.5, 3, 3);
+    this.ctx.fillRect(cx + rockSize * 0.4, cy + rockSize * 0.1, 2, 2);
   }
 }

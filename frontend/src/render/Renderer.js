@@ -169,7 +169,18 @@ export class Renderer {
       });
     }
     
-    // 收集樹木和其他物件
+    // 收集樹木（從 map.trees）
+    if (map.trees) {
+      for (const tree of map.trees) {
+        renderables.push({
+          type: 'tree',
+          sortY: tree.y,
+          data: { ...tree, type: 'tree' }
+        });
+      }
+    }
+    
+    // 收集其他物件中的樹木
     if (map.objects) {
       for (const obj of map.objects) {
         if (obj.type === 'tree') {
@@ -179,6 +190,56 @@ export class Renderer {
             data: obj
           });
         }
+      }
+    }
+    
+    // 收集草叢（前後分層）
+    if (map.bushes) {
+      for (const bush of map.bushes) {
+        // 小草前後靠近一點
+        const backOffset = bush.size === 'small' ? -0.25 : -0.4;
+        const frontOffset = bush.size === 'small' ? 0.35 : 0.5;
+        // 後景（sortY 略小，先渲染）
+        renderables.push({
+          type: 'bush_back',
+          sortY: bush.y + backOffset,
+          data: bush
+        });
+        // 前景（sortY 略大，後渲染）
+        renderables.push({
+          type: 'bush_front',
+          sortY: bush.y + frontOffset,
+          data: bush
+        });
+      }
+    }
+    
+    // 收集稻米（前後分層）
+    if (map.crops) {
+      for (const crop of map.crops) {
+        // 後景
+        renderables.push({
+          type: 'crop_back',
+          sortY: crop.y - 0.4,
+          data: crop
+        });
+        // 前景
+        renderables.push({
+          type: 'crop_front',
+          sortY: crop.y + 0.5,
+          data: crop
+        });
+      }
+    }
+    
+    // 收集礦石
+    if (map.ores) {
+      for (const ore of map.ores) {
+        renderables.push({
+          type: 'ore',
+          sortY: ore.y,
+          data: ore
+        });
       }
     }
     
@@ -228,6 +289,46 @@ export class Renderer {
           break;
         case 'tree':
           this.object.renderSingleObject(item.data);
+          break;
+        case 'bush_back':
+          this.object.renderBushBack(
+            item.data.x * this.tileSize - this.camera.x,
+            item.data.y * this.tileSize - this.camera.y,
+            this.tileSize,
+            item.data
+          );
+          break;
+        case 'bush_front':
+          this.object.renderBushFront(
+            item.data.x * this.tileSize - this.camera.x,
+            item.data.y * this.tileSize - this.camera.y,
+            this.tileSize,
+            item.data
+          );
+          break;
+        case 'crop_back':
+          this.object.renderCropBack(
+            item.data.x * this.tileSize - this.camera.x,
+            item.data.y * this.tileSize - this.camera.y,
+            this.tileSize,
+            item.data
+          );
+          break;
+        case 'crop_front':
+          this.object.renderCropFront(
+            item.data.x * this.tileSize - this.camera.x,
+            item.data.y * this.tileSize - this.camera.y,
+            this.tileSize,
+            item.data
+          );
+          break;
+        case 'ore':
+          this.object.renderOre(
+            item.data.x * this.tileSize - this.camera.x,
+            item.data.y * this.tileSize - this.camera.y,
+            this.tileSize,
+            item.data
+          );
           break;
         case 'sheep':
           this.entity.renderSingleSheep(item.data);

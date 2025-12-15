@@ -11,7 +11,11 @@ export class GameMap {
     this.terrain = mapData.terrain;
     this.collision = mapData.collision;
     this.buildings = mapData.buildings;
-    this.objects = mapData.objects;
+    this.objects = mapData.objects || [];
+    this.trees = mapData.trees || [];      // 樹木
+    this.bushes = mapData.bushes || [];    // 草叢
+    this.crops = mapData.crops || [];      // 稻米
+    this.ores = mapData.ores || [];        // 礦石
     this.worldItems = [];  // 地上物品（動態更新）
     this.sheep = [];       // 羊群（動態更新）
     

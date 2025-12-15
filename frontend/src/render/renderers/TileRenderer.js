@@ -138,9 +138,9 @@ export class TileRenderer extends BaseRenderer {
     
     // 河流用大像素塊（效能優化 + 更明顯過渡）
     const isRiver = targetTerrain === 9;
-    const step = isRiver ? 4 : 2;       // 間隔
-    const pixelSize = isRiver ? 2 : 1;  // 像素大小
-    const maxDepth = isRiver ? 6 : 4;   // 最大深度
+    const step = isRiver ? 6 : 6;       // 間隔
+    const pixelSize = isRiver ? 6 : 2;  // 像素大小
+    const maxDepth = isRiver ? 6 : 2;   // 最大深度
     
     this.ctx.fillStyle = targetColor;
     
@@ -255,7 +255,7 @@ export class TileRenderer extends BaseRenderer {
     this.ctx.fillRect(screenX, screenY, size, size);
     
     // LOD: 遠景只渲染基底色
-    if (zoom < 0.5) return;
+    if (zoom <= 0.75) return;
     
     // 添加草地紋理變化（小色塊）
     const rand2 = this.seededRandom(tileX, tileY, 1);
@@ -550,7 +550,7 @@ export class TileRenderer extends BaseRenderer {
     this.ctx.fillRect(screenX, screenY, size, size);
     
     // LOD: 遠景只渲染基底色
-    if (zoom < 0.5) return;
+    if (zoom <= 0.75) return;
     
     // 流動偏移（往南流動）
     const flowOffset = Math.floor(this.riverTime + tileY * 0.5) % size;
