@@ -110,7 +110,7 @@ async def get_history(
     
     # 取得村民列表（用於前端下拉選單）
     villagers = [
-        {"id": v["id"], "name": v["name"]}
+        {"id": v["id"], "name": v["name"], "occupation": v.get("occupation", "")}
         for v in game_state.villagers.values()
     ]
     

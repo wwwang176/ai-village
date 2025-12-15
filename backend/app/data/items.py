@@ -59,7 +59,7 @@ ITEM_TYPES = {
     ),
     "leather": ItemType(
         id="leather", name="皮革", icon="🟤",
-        category="material", stack_max=10, price=8
+        category="material", stack_max=10, price=9
     ),
     
     # ========== 成品（消費品）==========

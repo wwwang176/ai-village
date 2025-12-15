@@ -137,14 +137,14 @@ MERCHANT_BUY_PRICES = {
     "flour": 3,         # 麵粉
     "iron": 8,          # 鐵錠
     "cloth": 7,         # 布料
-    "leather": 10,      # 皮革
+    "leather": 11,      # 皮革
     "hide": 4,          # 獸皮
     "meat_raw": 5,      # 生肉
     "plank": 6,         # 木板
     # L3 成品
     "bread": 4,         # 麵包
     "meat": 6,          # 熟肉
-    "furniture": 34,    # 家具
+    "furniture": 33,    # 家具
     "clothes": 35,      # 衣服
 }
 
