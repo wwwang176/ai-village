@@ -6,32 +6,39 @@ import random
 from typing import List, Dict
 
 
+# 河流設定（地圖右邊 1/3 位置）
+RIVER_X = 64  # 河流中心 X 座標
+RIVER_WIDTH = 4  # 河流寬度
+BRIDGE_Y = 48  # 橋樑 Y 座標（主幹道位置）
+BRIDGE_HEIGHT = 4  # 橋樑高度
+
 # 工作建築定義（職業對應建築）
+# 河流在 x=62~66，建築物需避開
 WORK_BUILDINGS = [
     # === 左上區：食物生產 ===
     {"type": "farm", "name": "農田", "x": 4, "y": 4, "width": 12, "height": 10},
     {"type": "mill", "name": "磨坊", "x": 20, "y": 4, "width": 7, "height": 6},
     {"type": "bakery", "name": "麵包店", "x": 30, "y": 4, "width": 7, "height": 6},
     
-    # === 右上區：礦業 ===
-    {"type": "mine", "name": "礦場", "x": 76, "y": 4, "width": 12, "height": 8},
-    {"type": "blacksmith", "name": "鐵匠舖", "x": 60, "y": 4, "width": 8, "height": 7},
+    # === 河流右側：礦業 ===
+    {"type": "mine", "name": "礦場", "x": 72, "y": 4, "width": 12, "height": 8},
+    {"type": "blacksmith", "name": "鐵匠舖", "x": 72, "y": 16, "width": 8, "height": 7},
     
-    # === 中央區：商業 ===
-    {"type": "market", "name": "市集", "x": 40, "y": 40, "width": 16, "height": 10},
+    # === 中央區：商業（河流左側）===
+    {"type": "market", "name": "市集", "x": 38, "y": 40, "width": 16, "height": 10},
     
     # === 左下區：木材 ===
     {"type": "lumber_camp", "name": "伐木場", "x": 4, "y": 76, "width": 12, "height": 10},
     {"type": "carpentry", "name": "木工坊", "x": 20, "y": 80, "width": 8, "height": 7},
     
-    # === 右下區：畜牧 ===
+    # === 河流右側：畜牧 ===
     {"type": "pasture", "name": "牧場", "x": 72, "y": 72, "width": 16, "height": 12},
-    {"type": "butcher_shop", "name": "肉舖", "x": 56, "y": 80, "width": 8, "height": 7},
+    {"type": "butcher_shop", "name": "肉舖", "x": 72, "y": 60, "width": 8, "height": 7},
     
-    # === 右中區：服飾 ===
-    {"type": "weaver_shop", "name": "織坊", "x": 76, "y": 40, "width": 8, "height": 6},
-    {"type": "tannery", "name": "皮革坊", "x": 76, "y": 50, "width": 8, "height": 6},
-    {"type": "tailor_shop", "name": "裁縫店", "x": 76, "y": 60, "width": 8, "height": 6},
+    # === 河流右側：服飾 ===
+    {"type": "weaver_shop", "name": "織坊", "x": 72, "y": 28, "width": 8, "height": 6},
+    {"type": "tannery", "name": "皮革坊", "x": 82, "y": 28, "width": 8, "height": 6},
+    {"type": "tailor_shop", "name": "裁縫店", "x": 82, "y": 38, "width": 8, "height": 6},
 ]
 
 # 開放式建築（戶外，不需要圍牆）
@@ -45,6 +52,8 @@ TERRAIN_TYPES = {
     "pasture": 7,    # 牧場
     "market": 8,     # 市集廣場
     "default": 3,    # 一般地板
+    "river": 9,      # 河流
+    "bridge": 10,    # 橋樑
 }
 
 
@@ -85,8 +94,11 @@ def generate_map(seed: int, width: int = 96, height: int = 96) -> dict:
         buildings, width, height
     )
     
+    # 添加河流和橋樑
+    _add_river(terrain, collision, width, height)
+    
     # 添加道路（連接所有建築）
-    _add_roads(terrain, buildings, width, height)
+    _add_roads(terrain, collision, buildings, width, height)
     
     # 物件
     objects = []
@@ -111,8 +123,18 @@ def _generate_random_houses(
 ) -> List[dict]:
     """生成隨機散落的民宅"""
     
+    # 河流區域（需要避開）
+    river_start = RIVER_X - RIVER_WIDTH // 2 - margin
+    river_end = RIVER_X + RIVER_WIDTH // 2 + margin
+    
     # 建立已佔用區域
     occupied = [[False] * width for _ in range(height)]
+    
+    # 標記河流區域為已佔用
+    for y in range(height):
+        for x in range(river_start, river_end + 1):
+            if 0 <= x < width:
+                occupied[y][x] = True
     
     for b in existing_buildings:
         for dy in range(-margin, b["height"] + margin):
@@ -206,22 +228,70 @@ def _generate_terrain_and_collision(
     return terrain, collision
 
 
-def _add_roads(terrain: List[List[int]], buildings: List[dict], width: int, height: int):
+def _add_river(terrain: List[List[int]], collision: List[List[int]], width: int, height: int):
+    """添加彎曲河流和橋樑"""
+    
+    bridge_start = BRIDGE_Y - BRIDGE_HEIGHT // 2
+    bridge_end = BRIDGE_Y + BRIDGE_HEIGHT // 2
+    
+    # 河流從地圖上方流向下方，有蜿蜒效果
+    river_x = RIVER_X  # 河流起始 X 位置
+    river_positions = []  # 記錄每個 Y 座標的河流 X 位置
+    
+    for y in range(height):
+        # 蜿蜒效果：每隔 8 格隨機左右偏移
+        if y % 8 == 0 and y > 0:
+            direction = 1 if random.random() > 0.5 else -1
+            river_x += direction * 2
+            # 確保河流不會太靠近邊緣或中心
+            river_x = max(width * 0.55, min(width * 0.85, river_x))
+        
+        river_positions.append(int(river_x))
+        
+        # 繪製河流寬度
+        for dx in range(RIVER_WIDTH):
+            x = int(river_x) + dx
+            if 0 <= x < width:
+                # 檢查是否是橋樑區域
+                if bridge_start <= y < bridge_end:
+                    terrain[y][x] = TERRAIN_TYPES["bridge"]
+                    collision[y][x] = 0  # 橋樑可通行
+                else:
+                    terrain[y][x] = TERRAIN_TYPES["river"]
+                    collision[y][x] = 1  # 河流不可通行
+    
+    print(f"🌊 彎曲河流生成完成 (起始 x={RIVER_X}, 寬度={RIVER_WIDTH}, 橋樑 y={bridge_start}~{bridge_end})")
+
+
+def _add_roads(terrain: List[List[int]], collision: List[List[int]], buildings: List[dict], width: int, height: int):
     """添加道路：中央主幹道 + 建築連接最近支線"""
     
     center_x = width // 2
     center_y = height // 2
     
-    # 主幹道位置（十字）
-    main_roads_x = [center_x, center_x + 1]  # 垂直主幹道
-    main_roads_y = [center_y, center_y + 1]  # 水平主幹道
+    # 河流相關常數
+    river_start = RIVER_X - RIVER_WIDTH // 2
+    river_end = RIVER_X + RIVER_WIDTH // 2
+    bridge_y = BRIDGE_Y  # 橋樑 Y 座標（水平主幹道經過這裡）
     
-    # 畫主幹道
+    # 主幹道位置（十字）- 水平主幹道改為經過橋樑
+    main_roads_x = [center_x, center_x + 1]  # 垂直主幹道（河流左側）
+    main_roads_y = [bridge_y, bridge_y + 1]  # 水平主幹道（經過橋樑）
+    
+    # 畫主幹道（水平方向穿越整個地圖，包括橋樑）
     for x in range(4, width - 4):
         for y in main_roads_y:
             _set_road(terrain, x, y, width, height)
+    
+    # 畫垂直主幹道（河流左側）
     for y in range(4, height - 4):
         for x in main_roads_x:
+            _set_road(terrain, x, y, width, height)
+    
+    # 河流右側也需要一條垂直主幹道
+    right_main_x = [RIVER_X + RIVER_WIDTH // 2 + 8, RIVER_X + RIVER_WIDTH // 2 + 9]
+    for y in range(4, height - 4):
+        for x in right_main_x:
             _set_road(terrain, x, y, width, height)
     
     # 每個建築門口用最短路徑連到主幹道
@@ -229,18 +299,24 @@ def _add_roads(terrain: List[List[int]], buildings: List[dict], width: int, heig
         door_x = b.get("doorX", b["x"] + b["width"] // 2)
         door_y = b.get("doorY", b["y"] + b["height"] - 1) + 1
         
+        # 判斷建築在河流哪一側
+        is_right_side = door_x > river_end
+        
+        # 選擇對應的垂直主幹道
+        target_main_x = right_main_x[0] if is_right_side else center_x
+        
         # 判斷連接水平還是垂直主幹道（選最近的）
-        dist_to_h = abs(door_y - center_y)  # 到水平主幹道的距離
-        dist_to_v = abs(door_x - center_x)  # 到垂直主幹道的距離
+        dist_to_h = abs(door_y - bridge_y)  # 到水平主幹道的距離
+        dist_to_v = abs(door_x - target_main_x)  # 到垂直主幹道的距離
         
         if dist_to_h <= dist_to_v:
             # 垂直連接到水平主幹道
-            y_start, y_end = (door_y, center_y) if door_y < center_y else (center_y + 1, door_y)
+            y_start, y_end = (door_y, bridge_y) if door_y < bridge_y else (bridge_y + 1, door_y)
             for y in range(y_start, y_end + 1):
                 _set_road(terrain, door_x, y, width, height)
         else:
             # 水平連接到垂直主幹道
-            x_start, x_end = (door_x, center_x) if door_x < center_x else (center_x + 1, door_x)
+            x_start, x_end = (door_x, target_main_x) if door_x < target_main_x else (target_main_x + 1, door_x)
             for x in range(x_start, x_end + 1):
                 _set_road(terrain, x, door_y, width, height)
 

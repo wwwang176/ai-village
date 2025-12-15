@@ -7,6 +7,9 @@ export class TileRenderer extends BaseRenderer {
   constructor(ctx, camera, tileSize) {
     super(ctx, camera, tileSize);
     
+    // 河流動畫時間
+    this.riverTime = 0;
+    
     // 草地顏色變體（多層次）
     this.grassColors = [
       '#4a7c34', // 基礎綠
@@ -108,7 +111,10 @@ export class TileRenderer extends BaseRenderer {
       case 8: // 市集廣場
         this.renderPlaza(screenX, screenY, tileX, tileY);
         break;
-      case 9: // 橋
+      case 9: // 河流
+        this.renderRiver(screenX, screenY, tileX, tileY);
+        break;
+      case 10: // 橋樑
         this.renderBridge(screenX, screenY, tileX, tileY);
         break;
       default:
@@ -352,6 +358,58 @@ export class TileRenderer extends BaseRenderer {
     this.ctx.fillStyle = '#7f7265';
     this.ctx.fillRect(screenX, screenY + size - 1, size, 1);
     this.ctx.fillRect(screenX + size - 1, screenY, 1, size);
+  }
+  
+  /**
+   * 更新河流動畫時間
+   */
+  updateRiverAnimation(deltaTime) {
+    this.riverTime += deltaTime * 8; // deltaTime 是秒，增大倍率讓流動更明顯
+  }
+  
+  /**
+   * 渲染河流（南北向，帶流動動畫）
+   */
+  renderRiver(screenX, screenY, tileX, tileY) {
+    const size = this.tileSize;
+    const rand = this.seededRandom(tileX, tileY);
+    
+    // 水面基底
+    this.ctx.fillStyle = this.colors.water;
+    this.ctx.fillRect(screenX, screenY, size, size);
+    
+    // 流動偏移（往南流動）
+    const flowOffset = Math.floor(this.riverTime + tileY * 0.5) % size;
+    
+    // // 水波紋理（深色，南北向垂直線條，帶流動）
+    // this.ctx.fillStyle = this.colors.water_dark;
+    // const baseOffset = Math.floor(rand * 4);
+    // for (let i = baseOffset; i < size; i += 5) {
+    //   const y1 = (flowOffset) % size;
+    //   const lineHeight = Math.floor(size * 0.6);
+    //   // 繪製流動線條
+    //   if (y1 + lineHeight <= size) {
+    //     this.ctx.fillRect(screenX + i, screenY + y1, 1, lineHeight);
+    //   } else {
+    //     // 分段繪製（循環）
+    //     this.ctx.fillRect(screenX + i, screenY + y1, 1, size - y1);
+    //     this.ctx.fillRect(screenX + i, screenY, 1, lineHeight - (size - y1));
+    //   }
+    // }
+    
+    // 流動高光點
+    this.ctx.fillStyle = this.colors.water_light;
+    const sparkleOffset = Math.floor(this.riverTime * 1.5 + rand * 10) % size;
+    const sx = Math.floor(rand * (size - 2));
+    this.ctx.fillRect(screenX + sx, screenY + sparkleOffset, 2, 2);
+    
+    // 額外的流動光點
+    if (rand > 0.5) {
+      this.ctx.fillStyle = '#7ec8e3';
+      const sparkle2 = Math.floor(this.riverTime * 2 + rand * 20) % size;
+      const sx2 = Math.floor(this.seededRandom(tileX, tileY, 1) * (size - 1));
+      this.ctx.fillRect(screenX + sx2, screenY + sparkle2, 1, 1);
+    }
   }
   
   /**
