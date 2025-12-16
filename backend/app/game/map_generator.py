@@ -650,9 +650,6 @@ def _generate_ores(
     # 找出礦場區域
     mines = [b for b in buildings if b["type"] == "mine"]
     
-    # 建立已放置礦石的位置
-    placed = set()
-    
     # 在礦場內隨機生成礦石
     for mine in mines:
         mx, my, mw, mh = mine["x"], mine["y"], mine["width"], mine["height"]
@@ -662,11 +659,17 @@ def _generate_ores(
         mine_ores_placed = 0
         while mine_ores_placed < mine_ore_count and mine_attempts < mine_ore_count * 10:
             mine_attempts += 1
-            ox = mx + random.randint(1, mw - 2)
-            oy = my + random.randint(1, mh - 2)
-            if (ox, oy) in placed:
-                continue
+            ox = mx + random.randint(0, mw - 1)
+            oy = my + random.randint(0, mh - 1)
             if 0 <= ox < width and 0 <= oy < height:
+                # 檢查周圍是否有其他礦石（至少間隔 1 格）
+                too_close = False
+                for ore in ores:
+                    if abs(ore["x"] - ox) <= 1 and abs(ore["y"] - oy) <= 1:
+                        too_close = True
+                        break
+                if too_close:
+                    continue
                 ore_type = random.choice(ore_types)
                 ore_size = random.choice(ore_sizes)
                 ores.append({
@@ -678,7 +681,6 @@ def _generate_ores(
                 })
                 # 標記為碰撞區域（村民不可穿越）
                 collision[oy][ox] = 1
-                placed.add((ox, oy))
                 mine_ores_placed += 1
     
     print(f"🪨 生成 {len(ores)} 塊礦石")

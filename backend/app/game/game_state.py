@@ -679,14 +679,13 @@ class GameState:
         
         pending = []
         for v in self.villagers.values():
+            # 排除正在對話或等待社交的村民
+            if v.get("state") in ("talking", "waiting_social"):
+                continue
+            
             # 沒有任務且閒置超過 3 秒
             if not v.get("task_queue") and current_time - v["last_decision_time"] > 3:
                 pending.append(v)
-            # 調試：檢查蘇菲為什麼沒被選中
-            elif v["name"] == "蘇菲":
-                tasks = [t.get("type") for t in v.get("task_queue", [])]
-                idle_time = current_time - v["last_decision_time"]
-                logger.info(f"🔍 蘇菲狀態: 任務={tasks}, 閒置={idle_time:.1f}秒, 狀態={v.get('state')}")
         
         return pending
     
