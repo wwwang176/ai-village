@@ -35,7 +35,8 @@ export class ObjectRenderer extends BaseRenderer {
       'grain': '🌾', 'livestock': '🐄', 'ore': '🪨', 'wood': '🪵',
       'wool': '🧶', 'hide': '☁️', 'flour': '🌫️', 'meat_raw': '🥩',
       'iron': '🔩', 'plank': '📏', 'cloth': '🧵', 'leather': '🟤',
-      'bread': '🍞', 'meat': '🍖', 'clothes': '👕', 'furniture': '🪑'
+      'bread': '🍞', 'meat': '🍖', 'clothes': '👕', 'furniture': '🪑',
+      'beer': '🍺'
     };
     
     // 物品名稱對應表
@@ -45,7 +46,8 @@ export class ObjectRenderer extends BaseRenderer {
       'grain': '穀物', 'livestock': '牲畜', 'ore': '礦石', 'wood': '木材',
       'wool': '羊毛', 'hide': '獸皮', 'flour': '麵粉', 'meat_raw': '生肉',
       'iron': '鐵錠', 'plank': '木板', 'cloth': '布料', 'leather': '皮革',
-      'bread': '麵包', 'meat': '熟肉', 'clothes': '衣服', 'furniture': '傢俱'
+      'bread': '麵包', 'meat': '熟肉', 'clothes': '衣服', 'furniture': '傢俱',
+      'beer': '啤酒'
     };
   }
   

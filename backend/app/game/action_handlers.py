@@ -121,6 +121,21 @@ class GoMarketActionHandler(ActionHandler):
         return tasks
 
 
+class GoBarActionHandler(ActionHandler):
+    """去酒吧行為（買啤酒喝）"""
+    
+    def create_tasks(self, villager: dict, ctx: ActionContext) -> List[dict]:
+        tasks = []
+        target = ctx.resolve_target(villager, "go_bar")
+        if ctx.need_move(villager, target):
+            tasks.append(Task(type="move", target=target).to_dict())
+        # 嘗試買啤酒（如果酒保在場且有啤酒）
+        tasks.append(Task(type="buy_beer", duration=2).to_dict())
+        # 在酒吧等待社交
+        tasks.append(Task(type="wait", duration=6).to_dict())
+        return tasks
+
+
 class WanderActionHandler(ActionHandler):
     """閒逛行為"""
     
@@ -602,7 +617,7 @@ class SellGoodsActionHandler(ActionHandler):
             if ctx.need_move(villager, item_pos):
                 tasks.append(Task(type="move", target=item_pos).to_dict())
             
-            tasks.append(Task(type="pickup", world_item_id=ground_item["id"], duration=1).to_dict())
+            tasks.append(Task(type="pickup", item_id=ground_item["id"], duration=1).to_dict())
             logger.info(f"💰 {villager['name']} 先去撿地上的 {best_item_id}")
         
         # 記錄交易資訊
@@ -647,6 +662,7 @@ ACTION_HANDLERS: Dict[str, ActionHandler] = {
     "rest": RestActionHandler(),
     "go_home": RestActionHandler(),
     "go_market": GoMarketActionHandler(),
+    "go_bar": GoBarActionHandler(),
     "socialize": SocializeActionHandler(),
     "go_work": GoWorkActionHandler(),
     "buy_food": BuyFoodActionHandler(),

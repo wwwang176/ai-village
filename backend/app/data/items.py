@@ -79,6 +79,10 @@ ITEM_TYPES = {
         id="furniture", name="家具", icon="🪑",
         category="goods", stack_max=3, price=20
     ),
+    "beer": ItemType(
+        id="beer", name="啤酒", icon="🍺",
+        category="drink", stack_max=10, price=2, hunger_restore=2
+    ),
     
     # ========== 工具 ==========
     "hoe": ItemType(

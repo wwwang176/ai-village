@@ -39,6 +39,9 @@ WORK_BUILDINGS = [
     {"type": "weaver_shop", "name": "織坊", "x": 72, "y": 28, "width": 8, "height": 6},
     {"type": "tannery", "name": "皮革坊", "x": 82, "y": 28, "width": 8, "height": 6},
     {"type": "tailor_shop", "name": "裁縫店", "x": 82, "y": 38, "width": 8, "height": 6},
+    
+    # === 社交區域 ===
+    {"type": "tavern", "name": "酒吧", "x": 56, "y": 52, "width": 7, "height": 6},
 ]
 
 # 開放式建築（戶外，不需要圍牆）
@@ -85,7 +88,7 @@ def generate_map(seed: int, width: int = 96, height: int = 96) -> dict:
     # 生成隨機散落的民宅
     houses = _generate_random_houses(
         buildings, width, height, 
-        house_count=13, house_w=6, house_h=5, margin=3
+        house_count=14, house_w=6, house_h=5, margin=3
     )
     buildings.extend(houses)
     

@@ -221,6 +221,7 @@ class VillagerAI:
         can_buy_food = self._can_buy_food(villager, game_state)
         occupation = villager.get("occupation", "")
         food_chain_jobs = ["farmer", "miller", "baker"]
+        money = villager.get("money", 0)
         
         # 1. 賣東西（有貨才顯示）
         if sell_action:
@@ -249,6 +250,9 @@ class VillagerAI:
         
         # 5. 社交/閒逛
         action_list.append("- go_market：去市集 → 恢復社交滿足度（無法恢復飽足度與體力）")
+        if money >= 200:
+            action_list.append("- go_bar：去酒吧 → 恢復社交滿足度（無法恢復飽足度與體力）")
+        
         action_list.append("- wander：閒逛 → 無特定目的（不恢復任何狀態）")
         
         return "\n".join(action_list)
