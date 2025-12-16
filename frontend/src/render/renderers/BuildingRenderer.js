@@ -169,10 +169,13 @@ export class BuildingRenderer extends BaseRenderer {
     this.ctx.fillRect(screenX, wallBottom - 2, width, 2);
     
     // 窗戶（北邊內部牆面）
-    if (building.width >= 4) {
+    if (building.width >= 5) {
       const windowY = wallTop + 4;
       this.renderWindow(screenX + ts, windowY);
       this.renderWindow(screenX + width - ts * 2, windowY);
+    } else if (building.width >= 4) {
+      const windowY = wallTop + 4;
+      this.renderWindow(screenX + ts, windowY);
     }
     
     // 恢復透明度
@@ -235,10 +238,13 @@ export class BuildingRenderer extends BaseRenderer {
     this.ctx.fillRect(screenX, wallBottom - 2, width, 2);
     
     // 窗戶
-    if (building.width >= 4) {
+    if (building.width >= 5) {
       const windowY = wallTop + 4;
       this.renderWindow(screenX + ts, windowY);
       this.renderWindow(screenX + width - ts * 2, windowY);
+    } else if (building.width >= 4) {
+      const windowY = wallTop + 4;
+      this.renderWindow(screenX + ts, windowY);
     }
   }
   
@@ -418,17 +424,27 @@ export class BuildingRenderer extends BaseRenderer {
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
     this.ctx.fillRect(screenX, wallBottom - 3, width, 3);
     
-    // 門（正面牆壁中央）
+    // 門和窗戶
     const doorWidth = ts;
     const doorHeight = wallHeight - 4;
-    const doorX = screenX + Math.floor(width / 2) - doorWidth / 2;
-    this.renderDoor(doorX, wallTop + 2, doorWidth, doorHeight);
     
-    // 窗戶（門兩側）
-    if (building.width >= 4) {
+    if (building.width >= 5) {
+      // 雙窗戶：門在中央，窗戶在兩側
+      const doorX = screenX + Math.floor(width / 2) - doorWidth / 2;
+      this.renderDoor(doorX, wallTop + 2, doorWidth, doorHeight);
       const windowY = wallTop + 4;
       this.renderWindow(screenX + ts, windowY);
       this.renderWindow(screenX + width - ts * 2, windowY);
+    } else if (building.width >= 4) {
+      // 單窗戶：窗戶靠左，門靠右
+      const doorX = screenX + width - ts * 1.5;
+      this.renderDoor(doorX, wallTop + 2, doorWidth, doorHeight);
+      const windowY = wallTop + 4;
+      this.renderWindow(screenX + ts * 0.5, windowY);
+    } else {
+      // 小房子：只有門在中央
+      const doorX = screenX + Math.floor(width / 2) - doorWidth / 2;
+      this.renderDoor(doorX, wallTop + 2, doorWidth, doorHeight);
     }
     
     // === 屋頂（東西向雙坡） ===
@@ -452,7 +468,7 @@ export class BuildingRenderer extends BaseRenderer {
     // 屋頂覆蓋整個建築物地板區域（往北移動一格）
     const ts = this.tileSize;
     const roofTop = screenY - 2 - ts; // 屋頂北側（往北一格）
-    const roofBottom = screenY + height - ts; // 屋頂南側（往北一格）
+    const roofBottom = screenY + height - ts * 1.5; // 屋頂南側（往北縮，避免蓋過正面牆）
     const roofLeft = screenX - roofOverhang;
     const roofRight = screenX + width + roofOverhang;
     const roofCenterX = screenX + width / 2;

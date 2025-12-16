@@ -213,6 +213,7 @@ class VillagerAI:
     
     def _build_action_list(self, villager: dict, game_state) -> str:
         """建構可用行為列表"""
+        import random
         action_list = []
         
         # 檢查條件
@@ -222,6 +223,8 @@ class VillagerAI:
         occupation = villager.get("occupation", "")
         food_chain_jobs = ["farmer", "miller", "baker"]
         money = villager.get("money", 0)
+        hour = game_state.get_time()["hour"]
+        is_night = hour >= 19 or hour < 4
         
         # 1. 賣東西（有貨才顯示）
         if sell_action:
@@ -248,12 +251,19 @@ class VillagerAI:
             else:
                 action_list.append("- go_work：去工作 → 賺錢")
         
-        # 5. 社交/閒逛
-        action_list.append("- go_market：去市集 → 恢復社交滿足度（無法恢復飽足度與體力）")
-        if money >= 200:
+        # 5. 社交（晚上且有錢時只顯示酒吧，否則顯示市集）
+        if is_night and money >= 200:
             action_list.append("- go_bar：去酒吧 → 恢復社交滿足度（無法恢復飽足度與體力）")
+        else:
+            action_list.append("- go_market：去市集 → 恢復社交滿足度（無法恢復飽足度與體力）")
+            if money >= 200:
+                action_list.append("- go_bar：去酒吧 → 恢復社交滿足度（無法恢復飽足度與體力）")
         
+        # 6. 閒逛
         action_list.append("- wander：閒逛 → 無特定目的（不恢復任何狀態）")
+        
+        # 隨機排序選項
+        random.shuffle(action_list)
         
         return "\n".join(action_list)
     

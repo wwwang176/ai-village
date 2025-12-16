@@ -88,7 +88,7 @@ def generate_map(seed: int, width: int = 96, height: int = 96) -> dict:
     # 生成隨機散落的民宅
     houses = _generate_random_houses(
         buildings, width, height, 
-        house_count=14, house_w=6, house_h=5, margin=3
+        house_count=14, house_w=4, house_h=4, margin=2
     )
     buildings.extend(houses)
     
@@ -199,7 +199,7 @@ def _generate_random_houses(
                 "name": f"民宅 {len(houses) + 1}",
                 "x": x, "y": y,
                 "width": house_w, "height": house_h,
-                "doorX": x + 3,
+                "doorX": x + house_w // 2,
                 "doorY": y + house_h - 1,
                 "doorWidth": 2
             })

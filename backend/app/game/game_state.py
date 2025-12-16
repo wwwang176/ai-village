@@ -352,8 +352,8 @@ class GameState:
             self.add_world_item(
                 item_id="bread",
                 quantity=bread_count,
-                x=spawn["doorX"],
-                y=spawn["doorY"] -3,
+                x=spawn["doorX"] -1,
+                y=spawn["doorY"] -2,
                 owner_id=villager["id"]
             )
         
