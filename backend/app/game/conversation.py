@@ -284,7 +284,27 @@ class ConversationSystem:
         my_prefs = villager.get("preferences", {})
         other_prefs = other.get("preferences", {})
         
-        prompt = f"""你是中古世紀村莊的村民「{villager['name']}」，正在和「{other['name']}」聊天。
+        # 根據熟悉度決定知道對方多少資訊
+        other_info_lines = []
+        if familiarity >= 1:
+            other_info_lines.append(f"- 名字：{other['name']}")
+        else:
+            other_info_lines.append("- 名字：（不認識的人）")
+        if familiarity >= 10:
+            other_info_lines.append(f"- 職業：{other.get('occupation', '村民')}")
+        if familiarity >= 20:
+            other_info_lines.append(f"- 興趣：{', '.join(other_prefs.get('hobbies', ['不知道']))}")
+        if familiarity >= 30:
+            other_info_lines.append(f"- 喜歡的食物：{', '.join(other_prefs.get('favorite_foods', ['不知道']))}")
+        if familiarity >= 40:
+            other_info_lines.append(f"- 性格：{', '.join(other.get('personality', ['普通']))}")
+            other_info_lines.append(f"- 討厭的事：{', '.join(other_prefs.get('dislikes', ['不知道']))}")
+        other_info_text = "\n".join(other_info_lines)
+        
+        # 對方名稱（陌生人用「這個人」）
+        other_name = other['name'] if familiarity >= 1 else "這個人"
+        
+        prompt = f"""你是中古世紀村莊的村民「{villager['name']}」，正在和「{other_name}」聊天。
 
 【你的資訊】
 - 年齡：{villager.get('age', 25)} 歲
@@ -294,15 +314,13 @@ class ConversationSystem:
 - 目前心情：{my_mood}
 
 【對方資訊】
-- 名字：{other['name']}
-- 職業：{other.get('occupation', '村民')}
-- 性格：{', '.join(other.get('personality', ['普通']))}
+{other_info_text}
 
 【你們的關係】
 - 熟悉度：{familiarity_text}
 - 好感度：{affection_text}
 
-【你對 {other['name']} 的記憶】
+【你對 {other_name} 的記憶】
 {memories_text}
 
 【現在時間】第 {game_time['day']} 天 {game_time['hour']:02d}:{game_time['minute']:02d}
@@ -425,7 +443,7 @@ class ConversationSystem:
 {history_text}
 
 請判斷：
-1. 用一句話總結對話內容、雙方情緒
+1. 用一句話總結對話內容、雙方情緒、獲得的資訊
 2. 這次對話讓雙方好感度如何變化？（-3到+3之間的整數）
    - +3: 非常愉快、深入交流
    - +1~+2: 普通友好對話
@@ -440,7 +458,7 @@ class ConversationSystem:
                 response = await self.villager_ai.client.chat.completions.create(
                     model=os.getenv("OPENAI_MODEL", "gpt-4.1-nano"),
                     messages=[{"role": "user", "content": prompt}],
-                    max_tokens=500,
+                    max_tokens=600,
                     temperature=0.5
                 )
             
