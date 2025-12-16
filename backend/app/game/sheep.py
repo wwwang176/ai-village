@@ -21,6 +21,12 @@ class SheepSystem:
     def update(self, delta_time: float, current_time: float):
         """更新所有羊的狀態"""
         for sheep in list(self.game_state.sheep.values()):
+            # 0. 如果羊正在被牽著，跟隨村民移動
+            following_id = sheep.get("following")
+            if following_id:
+                self.follow_villager(sheep, following_id)
+                continue  # 被牽著的羊不做其他行為
+            
             # 1. 羊在牧場內隨機移動（每 5 秒移動一次）
             if current_time - sheep.get("last_move_time", 0) > 5:
                 sheep["last_move_time"] = current_time
@@ -69,6 +75,25 @@ class SheepSystem:
         
         sheep["x"] = max(min_x, min(max_x, new_x))
         sheep["y"] = max(min_y, min(max_y, new_y))
+    
+    def follow_villager(self, sheep: dict, villager_id: str):
+        """讓羊跟隨村民移動"""
+        villager = self.game_state.villagers.get(villager_id)
+        if not villager:
+            # 村民不存在，解除跟隨
+            sheep["following"] = None
+            return
+        
+        dx = villager["x"] - sheep["x"]
+        dy = villager["y"] - sheep["y"]
+        dist = (dx**2 + dy**2) ** 0.5
+        
+        # 如果距離 > 1.5，往村民方向移動 1 格
+        if dist > 1.5:
+            step_x = 1 if dx > 0 else (-1 if dx < 0 else 0)
+            step_y = 1 if dy > 0 else (-1 if dy < 0 else 0)
+            sheep["x"] += step_x
+            sheep["y"] += step_y
     
     def check_breeding(self, sheep: dict):
         """檢查羊是否可以繁殖"""

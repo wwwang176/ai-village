@@ -441,9 +441,10 @@ class GameLoop:
         return self.process_move_task(villager, task, delta_time)
     
     def process_slaughter_sheep_task(self, villager: dict, task: dict, delta_time: float) -> bool:
-        """處理宰殺羊任務（整合移動+宰殺）"""
+        """處理宰殺羊任務（追羊→抓羊→帶回肉舖→殺）"""
         sheep_id = task.get("sheep_id")
         duration = task.get("duration", 6)
+        phase = task.get("phase", "chase")  # chase → bring → slaughter
         
         # 取得目標羊
         sheep = self.game_state.sheep.get(sheep_id)
@@ -451,24 +452,60 @@ class GameLoop:
             logger.warning(f"⚠️ {villager['name']}: 找不到羊 {sheep_id}")
             return True
         
-        # 計算距離
-        dx = sheep["x"] - villager["x"]
-        dy = sheep["y"] - villager["y"]
-        dist = (dx**2 + dy**2) ** 0.5
-        
-        # 太遠 → 移動靠近（動態追蹤）
-        if dist > 1.5:
-            villager["state"] = "walking"
-            task["target"] = (sheep["x"], sheep["y"])
-            self.process_move_task(villager, task, delta_time)
+        # 階段 1: 追羊
+        if phase == "chase":
+            dx = sheep["x"] - villager["x"]
+            dy = sheep["y"] - villager["y"]
+            dist = (dx**2 + dy**2) ** 0.5
+            
+            if dist > 1.5:
+                villager["state"] = "walking"
+                task["target"] = (sheep["x"], sheep["y"])
+                self.process_move_task(villager, task, delta_time)
+                return False
+            
+            # 抓住羊，進入下一階段
+            sheep["following"] = villager["id"]
+            task["phase"] = "bring"
+            logger.info(f"🐑 {villager['name']} 抓住了羊 {sheep_id}，準備帶回肉舖")
             return False
         
-        # 夠近了 → 執行宰殺
+        # 階段 2: 帶羊回肉舖
+        if phase == "bring":
+            # 取得肉舖位置
+            butcher_shop = self.game_state.get_workplace(villager)
+            if not butcher_shop:
+                logger.warning(f"⚠️ {villager['name']}: 找不到肉舖")
+                sheep["following"] = None
+                return True
+            
+            # 目標為建築物內部
+            shop_x = butcher_shop["x"] + butcher_shop["width"] // 2
+            shop_y = butcher_shop["y"] + butcher_shop["height"] // 2
+            
+            dx = shop_x - villager["x"]
+            dy = shop_y - villager["y"]
+            dist = (dx**2 + dy**2) ** 0.5
+            
+            if dist > 1.5:
+                villager["state"] = "walking"
+                task["target"] = (shop_x, shop_y)
+                self.process_move_task(villager, task, delta_time)
+                return False
+            
+            # 到達肉舖，進入宰殺階段
+            task["phase"] = "slaughter"
+            logger.info(f"🔪 {villager['name']} 帶羊 {sheep_id} 到達肉舖，開始宰殺")
+            return False
+        
+        # 階段 3: 宰殺
         villager["state"] = "slaughter_sheep"
         elapsed = task.get("elapsed", 0) + delta_time
         task["elapsed"] = elapsed
         
         if elapsed >= duration:
+            # 解除跟隨
+            sheep["following"] = None
             # 執行效果
             success = self.apply_task_effect(villager, task)
             if not success:

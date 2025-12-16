@@ -896,6 +896,13 @@ class GameState:
                 return building
         return None
     
+    def get_workplace(self, villager: dict) -> Optional[dict]:
+        """取得村民的工作地點建築物"""
+        workplace_id = villager.get("workplace")
+        if not workplace_id:
+            return None
+        return self.get_building_by_id(workplace_id)
+    
     def get_building_by_type(self, building_type: str) -> Optional[dict]:
         """根據類型取得建築物（返回第一個符合的）"""
         for building in self.map_data.get("buildings", []):
