@@ -108,17 +108,7 @@ class SheepSystem:
             (s["x"] - villager["x"])**2 + (s["y"] - villager["y"])**2
         )
         
-        # 移動到羊的位置
-        sheep_pos = (sheep["x"], sheep["y"])
-        current = (villager["x"], villager["y"])
-        dx = sheep_pos[0] - current[0]
-        dy = sheep_pos[1] - current[1]
-        dist = (dx**2 + dy**2) ** 0.5
-        
-        if dist > 1.5:
-            tasks.append({"type": "move", "target": sheep_pos})
-        
-        # 剪毛任務
+        # 剪毛任務（會自動追蹤羊的位置）
         tasks.append({
             "type": "shear_sheep",
             "sheep_id": sheep["id"],
