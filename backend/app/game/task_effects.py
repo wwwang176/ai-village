@@ -123,6 +123,25 @@ class WorkEffect(TaskEffect):
             quantity = production_result["quantity"]
             location = production_result["location"]
             
+            # 觸發生產動畫（物品從自己飛到自己）
+            from ..data.items import ITEM_TYPES
+            item_type = ITEM_TYPES.get(product)
+            icon = item_type.icon if item_type else "📦"
+            
+            villager_x = villager.get("x", 0)
+            villager_y = villager.get("y", 0)
+            
+            ctx.queue_broadcast({
+                "type": "trade_animation",
+                "data": {
+                    "from_pos": {"x": villager_x, "y": villager_y - 1},  # 從頭頂飛出
+                    "to_pos": {"x": villager_x, "y": villager_y},
+                    "item_id": product,
+                    "icon": icon,
+                    "quantity": quantity
+                }
+            })
+            
             if tool_result == "broken":
                 logger.info(f"⚒️ {villager['name']} 生產了 {product} x{quantity}（{location}），工具損壞！")
             else:
@@ -235,6 +254,127 @@ class BuyFoodEffect(TaskEffect):
             return False
 
 
+class BuyBeerEffect(TaskEffect):
+    """在酒吧買啤酒效果（直接消耗，不經過背包）"""
+    
+    def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
+        from ..game.production import FOOD_INFO
+        beer_info = FOOD_INFO.get("beer", {"price": 2, "hunger_restore": 2})
+        beer_price = beer_info["price"]
+        beer_qty = 1  # 一次買 1 杯
+        hunger_per_beer = beer_info["hunger_restore"]
+        
+        # 找酒保
+        bartender = None
+        for v in ctx.production.game_state.villagers.values():
+            if v.get("occupation") == "bartender":
+                bartender = v
+                break
+        
+        if not bartender:
+            logger.info(f"🍺 {villager['name']} 找不到酒保")
+            return True  # 不算失敗，繼續社交
+        
+        # 檢查酒保是否在酒吧內
+        bartender_workplace = bartender.get("workplace")
+        tavern = ctx.production.game_state.get_building_by_id(bartender_workplace)
+        if not tavern:
+            logger.info(f"🍺 {villager['name']} 酒保不在酒吧")
+            return True
+        
+        # 檢查酒保距離酒吧門口是否夠近（8格內）
+        bx, by = bartender.get("x", 0), bartender.get("y", 0)
+        door_x, door_y = tavern.get("doorX", 0), tavern.get("doorY", 0)
+        dist = ((bx - door_x) ** 2 + (by - door_y) ** 2) ** 0.5
+        if dist > 8:
+            logger.info(f"🍺 {villager['name']} 酒保不在酒吧附近")
+            return True
+        
+        # 檢查酒保有沒有啤酒（背包 + 地上）
+        bartender_inventory = bartender.get("inventory", [None] * 5)
+        beer_in_bag = 0
+        for slot in bartender_inventory:
+            if slot and slot.get("item_id") == "beer":
+                beer_in_bag += slot.get("quantity", 0)
+        
+        ground_beer = 0
+        for item in ctx.production.game_state.get_items_by_owner(bartender["id"]):
+            if item.get("item_id") == "beer":
+                ground_beer += item.get("quantity", 0)
+        
+        total_beer = beer_in_bag + ground_beer
+        if total_beer < 1:
+            logger.info(f"🍺 {villager['name']} 酒保沒有啤酒可賣")
+            return True
+        
+        # 決定實際購買數量
+        actual_qty = min(beer_qty, total_beer)
+        total_price = beer_price * actual_qty
+        
+        # 檢查村民有沒有錢
+        buyer_money = villager.get("money", 0)
+        if buyer_money < beer_price:
+            logger.info(f"🍺 {villager['name']} 沒錢買啤酒（需要 ${beer_price}，擁有 ${buyer_money}）")
+            return True
+        
+        # 錢不夠買想要的量，看能買多少
+        if buyer_money < total_price:
+            actual_qty = buyer_money // beer_price
+            total_price = beer_price * actual_qty
+        
+        # 從酒保扣除啤酒（優先從背包扣）
+        remaining = actual_qty
+        for i, slot in enumerate(bartender_inventory):
+            if remaining <= 0:
+                break
+            if slot and slot.get("item_id") == "beer":
+                slot_qty = slot.get("quantity", 0)
+                deduct = min(slot_qty, remaining)
+                if slot_qty <= deduct:
+                    bartender["inventory"][i] = None
+                else:
+                    slot["quantity"] = slot_qty - deduct
+                remaining -= deduct
+        
+        # 背包不夠再從地上扣
+        if remaining > 0:
+            for item in ctx.production.game_state.get_items_by_owner(bartender["id"]):
+                if remaining <= 0:
+                    break
+                if item.get("item_id") == "beer":
+                    item_qty = item.get("quantity", 0)
+                    deduct = min(item_qty, remaining)
+                    if item_qty <= deduct:
+                        ctx.production.game_state.remove_world_item(item["id"])
+                    else:
+                        item["quantity"] = item_qty - deduct
+                    remaining -= deduct
+        
+        # 金錢轉移
+        villager["money"] = buyer_money - total_price
+        bartender["money"] = bartender.get("money", 0) + total_price
+        
+        # 直接喝掉（恢復飽足度，啤酒不進背包）
+        stats = villager.get("stats", {})
+        hunger_restore = actual_qty * hunger_per_beer
+        stats["hunger"] = max(0, stats.get("hunger", 0) - hunger_restore)
+        
+        # 廣播交易動畫
+        ctx.queue_broadcast({
+            "type": "trade_animation",
+            "data": {
+                "from_pos": {"x": bx, "y": by},
+                "to_pos": {"x": villager.get("x", 0), "y": villager.get("y", 0)},
+                "item_id": "beer",
+                "icon": "🍺",
+                "quantity": actual_qty
+            }
+        })
+        
+        logger.info(f"🍺 {villager['name']} 向 {bartender['name']} 買了 {actual_qty} 杯啤酒並喝掉（花費 ${total_price}，飽足度 +{hunger_restore}）")
+        return True  # 不管成功失敗都繼續社交
+
+
 # ==================== 物品相關效果 ====================
 
 class DropItemEffect(TaskEffect):
@@ -303,6 +443,35 @@ class SlaughterSheepEffect(TaskEffect):
         if result["success"]:
             loc1 = ctx.inventory.add_item(villager, "meat_raw", result["meat_qty"])
             loc2 = ctx.inventory.add_item(villager, "hide", result["hide_qty"])
+            
+            # 觸發動畫（生肉和羊皮從羊的位置飛到屠夫）
+            villager_x = villager.get("x", 0)
+            villager_y = villager.get("y", 0)
+            
+            # 生肉動畫
+            ctx.queue_broadcast({
+                "type": "trade_animation",
+                "data": {
+                    "from_pos": {"x": villager_x, "y": villager_y - 1},
+                    "to_pos": {"x": villager_x, "y": villager_y},
+                    "item_id": "meat_raw",
+                    "icon": "🥩",
+                    "quantity": result["meat_qty"]
+                }
+            })
+            
+            # 羊皮動畫（稍微延遲顯示）
+            ctx.queue_broadcast({
+                "type": "trade_animation",
+                "data": {
+                    "from_pos": {"x": villager_x + 0.5, "y": villager_y - 1},
+                    "to_pos": {"x": villager_x, "y": villager_y},
+                    "item_id": "hide",
+                    "icon": "☁️",
+                    "quantity": result["hide_qty"]
+                }
+            })
+            
             logger.info(f"🔪 {villager['name']} 宰殺了羊 {sheep_id}，獲得生肉 x{result['meat_qty']}、羊皮 x{result['hide_qty']}（肉:{loc1}, 皮:{loc2}）")
             return True
         else:
@@ -583,6 +752,7 @@ TASK_EFFECTS: Dict[str, TaskEffect] = {
     "buy_tool": BuyToolEffect(),
     "buy_material": BuyMaterialEffect(),
     "buy_food": BuyFoodEffect(),
+    "buy_beer": BuyBeerEffect(),
     "drop_one_item": DropItemEffect(),
     "drop_item": DropForFoodEffect(),
     "shear_sheep": ShearSheepEffect(),

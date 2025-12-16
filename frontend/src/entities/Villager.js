@@ -64,6 +64,7 @@ export const ITEM_ICONS = {
   meat: '🍖',
   clothes: '👕',
   furniture: '🪑',
+  beer: '🍺',
 };
 
 // 狀態中文翻譯
@@ -117,6 +118,7 @@ export const OCCUPATION_NAMES = {
   tailor: '裁縫',
   // 特殊
   merchant: '商人',
+  bartender: '酒保',
   // 其他
   house: '無業',
 };

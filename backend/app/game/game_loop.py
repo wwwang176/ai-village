@@ -241,7 +241,14 @@ class GameLoop:
         """處理村民的任務隊列"""
         # 如果正在對話，不處理任務
         if villager.get("state") == "talking":
-            return
+            # 安全機制：如果 talking 超過 60 秒，強制重置
+            last_chat = villager.get("last_chat_time", 0)
+            if time.time() - last_chat > 60:
+                logger.warning(f"⚠️ {villager['name']} 卡在 talking 狀態超過 60 秒，強制重置")
+                villager["state"] = "idle"
+                villager["task_queue"] = []
+            else:
+                return
         
         # 如果正在等待社交，檢查是否超時（10秒）
         if villager.get("state") == "waiting_social":

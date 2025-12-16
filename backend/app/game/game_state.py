@@ -115,8 +115,8 @@ class GameState:
             "relationships": {}
         }
         
-        # 生成村民（13種職業各1人）
-        self._generate_villagers(13)
+        # 生成村民（14種職業各1人）
+        self._generate_villagers(14)
         
         # 生成羊群（牧場初始 4 隻羊）
         self._generate_sheep()
@@ -172,7 +172,7 @@ class GameState:
             "下雨天", "早起", "吵雜", "蟲子", "寒冷", "炎熱", "說謊的人", "懶惰的人"
         ]
         
-        # 13種職業（對應工作建築）- 使用新的職業 ID
+        # 14種職業（對應工作建築）- 使用新的職業 ID
         occupations = [
             # 食物鏈
             "farmer",       # 農田 - 農夫
@@ -191,6 +191,7 @@ class GameState:
             "tailor",       # 裁縫店 - 裁縫
             # 特殊
             "merchant",     # 市集 - 商人
+            "bartender",    # 酒吧 - 酒保
         ]
         
         # 打亂名字順序，確保不重複
@@ -245,6 +246,7 @@ class GameState:
                 "tanner": "tannery",
                 "tailor": "tailor_shop",
                 "merchant": "market",
+                "bartender": "tavern",
             }
             
             # 根據職業找對應的建築物作為工作地點
@@ -677,14 +679,13 @@ class GameState:
         
         pending = []
         for v in self.villagers.values():
+            # 排除正在對話或等待社交的村民
+            if v.get("state") in ("talking", "waiting_social"):
+                continue
+            
             # 沒有任務且閒置超過 3 秒
             if not v.get("task_queue") and current_time - v["last_decision_time"] > 3:
                 pending.append(v)
-            # 調試：檢查蘇菲為什麼沒被選中
-            elif v["name"] == "蘇菲":
-                tasks = [t.get("type") for t in v.get("task_queue", [])]
-                idle_time = current_time - v["last_decision_time"]
-                logger.info(f"🔍 蘇菲狀態: 任務={tasks}, 閒置={idle_time:.1f}秒, 狀態={v.get('state')}")
         
         return pending
     

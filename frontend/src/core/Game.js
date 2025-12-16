@@ -624,6 +624,9 @@ export class Game {
     
     // 更新羊的位置插值
     this.updateSheepAnimation(deltaTime);
+    
+    // 更新河流動畫
+    this.renderer.tile.updateRiverAnimation(deltaTime);
   }
   
   /**

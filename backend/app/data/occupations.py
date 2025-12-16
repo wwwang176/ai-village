@@ -118,6 +118,13 @@ OCCUPATIONS = {
         input_materials=[],
         output_product="", output_quantity=0, work_time=0,
     ),
+    "bartender": OccupationType(
+        id="bartender", name="酒保", tier=2, chain="food",
+        building="tavern",
+        required_tool=None,
+        input_materials=[("grain", 1)],
+        output_product="beer", output_quantity=2, work_time=2,
+    ),
 }
 
 

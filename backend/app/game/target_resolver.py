@@ -34,6 +34,7 @@ class TargetResolver:
             "go_work": lambda v: self._get_work_target(v),
             "go_home": lambda v: self._get_bed_target(v),
             "go_market": lambda v: self._get_building_target("market"),
+            "go_bar": lambda v: self._get_building_target("tavern"),
             "go_blacksmith": lambda v: self._get_villager_by_occupation("blacksmith"),
             "eat": lambda v: self._get_eat_target(v),
             "rest": lambda v: self._get_home_target(v),

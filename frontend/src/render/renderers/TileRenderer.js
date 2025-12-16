@@ -7,6 +7,9 @@ export class TileRenderer extends BaseRenderer {
   constructor(ctx, camera, tileSize) {
     super(ctx, camera, tileSize);
     
+    // 河流動畫時間
+    this.riverTime = 0;
+    
     // 草地顏色變體（多層次）
     this.grassColors = [
       '#4a7c34', // 基礎綠
@@ -61,13 +64,131 @@ export class TileRenderer extends BaseRenderer {
   }
   
   /**
-   * 渲染所有地形
+   * 渲染所有地形（視窗裁剪優化）
    */
   render(map) {
-    for (let y = 0; y < map.height; y++) {
-      for (let x = 0; x < map.width; x++) {
+    this.currentMap = map; // 保存地圖引用，供邊界檢測使用
+    
+    // 視窗裁剪：只渲染可見範圍（考慮縮放，縮放中心是螢幕中心）
+    const camX = this.camera.x;
+    const camY = this.camera.y;
+    const zoom = this.camera.zoom || 1;
+    const vpW = this.camera.viewportWidth;
+    const vpH = this.camera.viewportHeight;
+    const ts = this.tileSize;
+    
+    // 縮放以螢幕中心為中心，計算實際可見的世界範圍
+    const centerX = vpW / 2;
+    const centerY = vpH / 2;
+    
+    // 螢幕左上角對應的世界座標
+    const worldLeftTop = {
+      x: camX + centerX * (1 - 1/zoom),
+      y: camY + centerY * (1 - 1/zoom)
+    };
+    
+    // 可見範圍大小
+    const viewW = vpW / zoom;
+    const viewH = vpH / zoom;
+    
+    // 計算可見格子範圍（加 2 格緩衝避免邊緣閃爍）
+    const startX = Math.max(0, Math.floor(worldLeftTop.x / ts) - 2);
+    const startY = Math.max(0, Math.floor(worldLeftTop.y / ts) - 2);
+    const endX = Math.min(map.width, Math.ceil((worldLeftTop.x + viewW) / ts) + 2);
+    const endY = Math.min(map.height, Math.ceil((worldLeftTop.y + viewH) / ts) + 2);
+    
+    // 只渲染可見範圍
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
         const terrain = map.getTerrain(x, y);
         this.renderTile(x, y, terrain);
+      }
+    }
+  }
+  
+  /**
+   * 取得鄰居地形
+   */
+  getNeighborTerrains(tileX, tileY) {
+    if (!this.currentMap) return { n: -1, s: -1, e: -1, w: -1 };
+    return {
+      n: this.currentMap.getTerrain(tileX, tileY - 1),
+      s: this.currentMap.getTerrain(tileX, tileY + 1),
+      e: this.currentMap.getTerrain(tileX + 1, tileY),
+      w: this.currentMap.getTerrain(tileX - 1, tileY),
+    };
+  }
+  
+  /**
+   * 檢查是否靠近特定地形
+   */
+  isNearTerrain(tileX, tileY, terrainType) {
+    const neighbors = this.getNeighborTerrains(tileX, tileY);
+    return neighbors.n === terrainType || neighbors.s === terrainType ||
+           neighbors.e === terrainType || neighbors.w === terrainType;
+  }
+  
+  /**
+   * 渲染邊界 dithering 過渡效果
+   * 河流邊界用大像素塊減少渲染次數
+   */
+  renderEdgeDithering(screenX, screenY, tileX, tileY, currentTerrain, targetTerrain, targetColor) {
+    const neighbors = this.getNeighborTerrains(tileX, tileY);
+    const size = this.tileSize;
+    
+    // 河流用大像素塊（效能優化 + 更明顯過渡）
+    const isRiver = targetTerrain === 9;
+    const step = isRiver ? 6 : 6;       // 間隔
+    const pixelSize = isRiver ? 6 : 2;  // 像素大小
+    const maxDepth = isRiver ? 6 : 2;   // 最大深度
+    
+    this.ctx.fillStyle = targetColor;
+    
+    // 北邊有目標地形
+    if (neighbors.n === targetTerrain) {
+      for (let i = 0; i < size; i += step) {
+        const depth = Math.floor(this.seededRandom(tileX * 100 + i, tileY, 1) * maxDepth) + 1;
+        for (let d = 0; d < depth; d += pixelSize) {
+          if (this.seededRandom(tileX + i, tileY + d, 2) > 0.4) {
+            this.ctx.fillRect(screenX + i, screenY + d, pixelSize, pixelSize);
+          }
+        }
+      }
+    }
+    
+    // 南邊有目標地形
+    if (neighbors.s === targetTerrain) {
+      for (let i = 0; i < size; i += step) {
+        const depth = Math.floor(this.seededRandom(tileX * 100 + i, tileY, 3) * maxDepth) + 1;
+        for (let d = 0; d < depth; d += pixelSize) {
+          if (this.seededRandom(tileX + i, tileY - d, 4) > 0.4) {
+            this.ctx.fillRect(screenX + i, screenY + size - pixelSize - d, pixelSize, pixelSize);
+          }
+        }
+      }
+    }
+    
+    // 東邊有目標地形
+    if (neighbors.e === targetTerrain) {
+      for (let i = 0; i < size; i += step) {
+        const depth = Math.floor(this.seededRandom(tileX, tileY * 100 + i, 5) * maxDepth) + 1;
+        for (let d = 0; d < depth; d += pixelSize) {
+          if (this.seededRandom(tileX + d, tileY + i, 6) > 0.4) {
+            this.ctx.fillRect(screenX + size - pixelSize - d, screenY + i, pixelSize, pixelSize);
+          }
+        }
+      }
+    }
+    
+    // 西邊有目標地形
+    if (neighbors.w === targetTerrain) {
+      for (let i = 0; i < size; i += step) {
+        const depth = Math.floor(this.seededRandom(tileX, tileY * 100 + i, 7) * maxDepth) + 1;
+        for (let d = 0; d < depth; d += pixelSize) {
+          if (this.seededRandom(tileX - d, tileY + i, 8) > 0.4) {
+            this.ctx.fillRect(screenX + d, screenY + i, pixelSize, pixelSize);
+          }
+        }
       }
     }
   }
@@ -108,7 +229,10 @@ export class TileRenderer extends BaseRenderer {
       case 8: // 市集廣場
         this.renderPlaza(screenX, screenY, tileX, tileY);
         break;
-      case 9: // 橋
+      case 9: // 河流
+        this.renderRiver(screenX, screenY, tileX, tileY);
+        break;
+      case 10: // 橋樑
         this.renderBridge(screenX, screenY, tileX, tileY);
         break;
       default:
@@ -118,16 +242,20 @@ export class TileRenderer extends BaseRenderer {
   }
   
   /**
-   * 渲染草地 - 多層次像素風格
+   * 渲染草地 - 多層次像素風格（含 LOD）
    */
   renderGrass(screenX, screenY, tileX, tileY) {
     const size = this.tileSize;
     const rand = this.seededRandom(tileX, tileY);
+    const zoom = this.camera.zoom || 1;
     
     // 基底顏色（從多種綠色中選擇）
     const colorIndex = Math.floor(rand * this.grassColors.length);
     this.ctx.fillStyle = this.grassColors[colorIndex];
     this.ctx.fillRect(screenX, screenY, size, size);
+    
+    // LOD: 遠景只渲染基底色
+    if (zoom <= 0.75) return;
     
     // 添加草地紋理變化（小色塊）
     const rand2 = this.seededRandom(tileX, tileY, 1);
@@ -148,6 +276,17 @@ export class TileRenderer extends BaseRenderer {
       const spotY = Math.floor(rand2 * (size - 3));
       this.ctx.fillRect(screenX + spotX, screenY + spotY, 2, 2);
     }
+    
+    // 河岸處理（中景以上）
+    if (this.isNearTerrain(tileX, tileY, 9)) {
+      this.renderRiverbank(screenX, screenY, tileX, tileY);
+    }
+    
+    // 道路邊界過渡（中景以上）
+    this.renderEdgeDithering(screenX, screenY, tileX, tileY, 0, 1, '#6b5a45');
+    
+    // LOD: 中景省略小裝飾
+    if (zoom < 0.8) return;
     
     // 小草裝飾（約 30% 機率）
     if (rand > 0.7) {
@@ -244,6 +383,43 @@ export class TileRenderer extends BaseRenderer {
       const lx = Math.floor(this.seededRandom(tileX, tileY, 40) * (size - 3));
       const ly = Math.floor(this.seededRandom(tileX, tileY, 41) * (size - 3));
       this.ctx.fillRect(screenX + lx, screenY + ly, 2, 2);
+    }
+    
+    // 草地邊界過渡（綠色 dithering）
+    this.renderEdgeDithering(screenX, screenY, tileX, tileY, 1, 0, this.colors.grass_dark);
+    
+    // 道路邊緣碎石裝飾
+    if (this.isNearTerrain(tileX, tileY, 0)) {
+      this.renderRoadEdgeDecor(screenX, screenY, tileX, tileY);
+    }
+  }
+  
+  /**
+   * 渲染道路邊緣裝飾（碎石、小草）- LOD: 近景才渲染
+   */
+  renderRoadEdgeDecor(screenX, screenY, tileX, tileY) {
+    const zoom = this.camera.zoom || 1;
+    if (zoom < 0.8) return; // LOD: 中遠景跳過
+    
+    const size = this.tileSize;
+    const neighbors = this.getNeighborTerrains(tileX, tileY);
+    const rand = this.seededRandom(tileX, tileY, 80);
+    
+    // 路邊小草叢
+    if (rand > 0.5) {
+      this.ctx.fillStyle = '#4a7c34';
+      const grassCount = Math.floor(rand * 2) + 1;
+      for (let i = 0; i < grassCount; i++) {
+        const gx = Math.floor(this.seededRandom(tileX, tileY, 81 + i) * (size - 2));
+        const gy = Math.floor(this.seededRandom(tileX, tileY, 91 + i) * (size - 3));
+        // 草叢靠近草地邊
+        if ((neighbors.e === 0 && gx > size * 0.7) ||
+            (neighbors.w === 0 && gx < size * 0.3) ||
+            (neighbors.n === 0 && gy < size * 0.3) ||
+            (neighbors.s === 0 && gy > size * 0.7)) {
+          this.ctx.fillRect(screenX + gx, screenY + gy, 1, 2);
+        }
+      }
     }
   }
   
@@ -355,6 +531,46 @@ export class TileRenderer extends BaseRenderer {
   }
   
   /**
+   * 更新河流動畫時間
+   */
+  updateRiverAnimation(deltaTime) {
+    this.riverTime += deltaTime * 8; // deltaTime 是秒，增大倍率讓流動更明顯
+  }
+  
+  /**
+   * 渲染河流（南北向，帶流動動畫，含 LOD）
+   */
+  renderRiver(screenX, screenY, tileX, tileY) {
+    const size = this.tileSize;
+    const rand = this.seededRandom(tileX, tileY);
+    const zoom = this.camera.zoom || 1;
+    
+    // 水面基底
+    this.ctx.fillStyle = this.colors.water;
+    this.ctx.fillRect(screenX, screenY, size, size);
+    
+    // LOD: 遠景只渲染基底色
+    if (zoom <= 0.75) return;
+    
+    // 流動偏移（往南流動）
+    const flowOffset = Math.floor(this.riverTime + tileY * 0.5) % size;
+    
+    // 流動高光點
+    this.ctx.fillStyle = this.colors.water_light;
+    const sparkleOffset = Math.floor(this.riverTime * 1.5 + rand * 10) % size;
+    const sx = Math.floor(rand * (size - 2));
+    this.ctx.fillRect(screenX + sx, screenY + sparkleOffset, 2, 2);
+    
+    // 額外的流動光點
+    if (rand > 0.5) {
+      this.ctx.fillStyle = '#7ec8e3';
+      const sparkle2 = Math.floor(this.riverTime * 2 + rand * 20) % size;
+      const sx2 = Math.floor(this.seededRandom(tileX, tileY, 1) * (size - 1));
+      this.ctx.fillRect(screenX + sx2, screenY + sparkle2, 1, 1);
+    }
+  }
+  
+  /**
    * 渲染橋樑
    */
   renderBridge(screenX, screenY, tileX, tileY) {
@@ -382,5 +598,100 @@ export class TileRenderer extends BaseRenderer {
     this.ctx.fillStyle = '#5d4037';
     this.ctx.fillRect(screenX, screenY + 1, size, 2);
     this.ctx.fillRect(screenX, screenY + size - 3, size, 2);
+  }
+  
+  /**
+   * 渲染河岸（土色沖刷地 + 過渡到草地）
+   */
+  renderRiverbank(screenX, screenY, tileX, tileY) {
+    const size = this.tileSize;
+    const neighbors = this.getNeighborTerrains(tileX, tileY);
+    const rand = this.seededRandom(tileX, tileY, 50);
+    
+    // 河岸土色（沙土色）
+    const bankColor = '#a08060';
+    const bankColorDark = '#8a7050';
+    
+    // 根據河流方向繪製土色沖刷地帶
+    // 東邊是河流
+    if (neighbors.e === 9) {
+      // 靠河邊畫一片土色（寬度 4-6 像素）
+      const bankWidth = 4 + Math.floor(rand * 3);
+      this.ctx.fillStyle = bankColor;
+      this.ctx.fillRect(screenX + size - bankWidth, screenY, bankWidth, size);
+      // 土色與草地的過渡（dithering）
+      this.ctx.fillStyle = bankColorDark;
+      for (let y = 0; y < size; y += 2) {
+        const depth = Math.floor(this.seededRandom(tileX, tileY * 100 + y, 90) * 3) + 1;
+        for (let d = 0; d < depth; d++) {
+          if (this.seededRandom(tileX + d, tileY + y, 91) > 0.5) {
+            this.ctx.fillRect(screenX + size - bankWidth - d - 1, screenY + y, 1, 1);
+          }
+        }
+      }
+    }
+    
+    // 西邊是河流
+    if (neighbors.w === 9) {
+      const bankWidth = 4 + Math.floor(rand * 3);
+      this.ctx.fillStyle = bankColor;
+      this.ctx.fillRect(screenX, screenY, bankWidth, size);
+      this.ctx.fillStyle = bankColorDark;
+      for (let y = 0; y < size; y += 2) {
+        const depth = Math.floor(this.seededRandom(tileX, tileY * 100 + y, 92) * 3) + 1;
+        for (let d = 0; d < depth; d++) {
+          if (this.seededRandom(tileX - d, tileY + y, 93) > 0.5) {
+            this.ctx.fillRect(screenX + bankWidth + d, screenY + y, 1, 1);
+          }
+        }
+      }
+    }
+    
+    // 北邊是河流
+    if (neighbors.n === 9) {
+      const bankWidth = 4 + Math.floor(rand * 3);
+      this.ctx.fillStyle = bankColor;
+      this.ctx.fillRect(screenX, screenY, size, bankWidth);
+      this.ctx.fillStyle = bankColorDark;
+      for (let x = 0; x < size; x += 2) {
+        const depth = Math.floor(this.seededRandom(tileX * 100 + x, tileY, 94) * 3) + 1;
+        for (let d = 0; d < depth; d++) {
+          if (this.seededRandom(tileX + x, tileY + d, 95) > 0.5) {
+            this.ctx.fillRect(screenX + x, screenY + bankWidth + d, 1, 1);
+          }
+        }
+      }
+    }
+    
+    // 南邊是河流
+    if (neighbors.s === 9) {
+      const bankWidth = 4 + Math.floor(rand * 3);
+      this.ctx.fillStyle = bankColor;
+      this.ctx.fillRect(screenX, screenY + size - bankWidth, size, bankWidth);
+      this.ctx.fillStyle = bankColorDark;
+      for (let x = 0; x < size; x += 2) {
+        const depth = Math.floor(this.seededRandom(tileX * 100 + x, tileY, 96) * 3) + 1;
+        for (let d = 0; d < depth; d++) {
+          if (this.seededRandom(tileX + x, tileY - d, 97) > 0.5) {
+            this.ctx.fillRect(screenX + x, screenY + size - bankWidth - d - 1, 1, 1);
+          }
+        }
+      }
+    }
+    
+    // 小石頭裝飾
+    if (rand > 0.4) {
+      this.ctx.fillStyle = '#7a7a7a';
+      const sx = Math.floor(this.seededRandom(tileX, tileY, 51) * (size - 3));
+      const sy = Math.floor(this.seededRandom(tileX, tileY, 61) * (size - 3));
+      if ((neighbors.e === 9 && sx > size * 0.6) ||
+          (neighbors.w === 9 && sx < size * 0.4) ||
+          (neighbors.n === 9 && sy < size * 0.4) ||
+          (neighbors.s === 9 && sy > size * 0.6)) {
+        this.ctx.fillRect(screenX + sx, screenY + sy, 2, 2);
+        this.ctx.fillStyle = '#8a8a8a';
+        this.ctx.fillRect(screenX + sx, screenY + sy, 1, 1);
+      }
+    }
   }
 }

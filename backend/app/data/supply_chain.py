@@ -15,6 +15,7 @@ SUPPLY_CHAIN = {
     "miller": ["farmer"],               # 磨坊主 ← 農夫（穀物）
     # butcher 透過羊系統購羊，不需要供應商
     "baker": ["miller"],                # 麵包師 ← 磨坊主（麵粉）
+    "bartender": ["farmer"],            # 酒保 ← 農夫（穀物）
     
     # 器具鏈
     "blacksmith": ["miner"],            # 鐵匠 ← 礦工（鐵礦）
@@ -32,6 +33,7 @@ REQUIRED_MATERIALS = {
     "miller": ["grain"],                # 磨坊主需要穀物
     # butcher 透過羊系統購買和宰殺羊，不需要原料
     "baker": ["flour"],                 # 麵包師需要麵粉
+    "bartender": ["grain"],             # 酒保需要穀物
     "blacksmith": ["ore"],              # 鐵匠需要鐵礦
     "carpenter": ["wood", "iron"],      # 木匠需要木材+鐵錠
     "weaver": ["wool"],                 # 織工需要羊毛
@@ -60,6 +62,7 @@ MATERIAL_PRODUCERS = {
     "meat": "butcher",          # 熟肉 ← 屠夫
     "furniture": "carpenter",   # 家具 ← 木匠
     "clothes": "tailor",        # 衣服 ← 裁縫
+    "beer": "bartender",        # 啤酒 ← 酒保
 }
 
 
@@ -144,6 +147,7 @@ MERCHANT_BUY_PRICES = {
     # L3 成品
     "bread": 4,         # 麵包
     "meat": 6,          # 熟肉
+    "beer": 2,          # 啤酒
     "furniture": 33,    # 家具
     "clothes": 35,      # 衣服
 }
@@ -151,13 +155,14 @@ MERCHANT_BUY_PRICES = {
 # 過剩門檻（分層設計）- 達到門檻時會賣給商人
 EXCESS_THRESHOLDS = {
     # L1 原料：容易大量生產
-    "grain": 20, "ore": 20, "wood": 20, "wool": 20,
+    "grain": 40, "ore": 20, "wood": 20, "wool": 20,
     # L2 半成品：受供應鏈限制
     "flour": 20, "iron": 10, "cloth": 10, "leather": 10,
     "hide": 10, "meat_raw": 10, "plank": 10,
     # L3 成品：生產慢，應積極賣出
     "bread": 50,      # 基本需求，保留較多
     "meat": 10,       # 食物
+    "beer": 20,       # 啤酒
     "furniture": 1,   # 高價值，立即賣
     "clothes": 1,     # 高價值，立即賣
 }
