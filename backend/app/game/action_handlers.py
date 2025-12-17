@@ -122,15 +122,16 @@ class GoMarketActionHandler(ActionHandler):
 
 
 class GoBarActionHandler(ActionHandler):
-    """去酒吧行為（買啤酒喝）"""
+    """去酒吧行為（買啤酒喝，酒保除外）"""
     
     def create_tasks(self, villager: dict, ctx: ActionContext) -> List[dict]:
         tasks = []
         target = ctx.resolve_target(villager, "go_bar")
         if ctx.need_move(villager, target):
             tasks.append(Task(type="move", target=target).to_dict())
-        # 嘗試買啤酒（如果酒保在場且有啤酒）
-        tasks.append(Task(type="buy_beer", duration=2).to_dict())
+        # 酒保不買啤酒，只在酒吧社交
+        if villager.get("occupation") != "bartender":
+            tasks.append(Task(type="buy_beer", duration=2).to_dict())
         # 在酒吧等待社交
         tasks.append(Task(type="wait", duration=6).to_dict())
         return tasks

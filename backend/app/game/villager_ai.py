@@ -236,8 +236,10 @@ class VillagerAI:
             else:
                 action_list.append("- go_work：去工作 → 賺錢")
         
-        # 5. 社交（晚上且有錢時只顯示酒吧，否則顯示市集）
-        if is_night and money >= 200:
+        # 5. 社交（酒保晚上只能去酒吧，其他人晚上且有錢時只顯示酒吧，否則顯示市集）
+        if occupation == "bartender" and is_night:
+            action_list.append("- go_bar：去酒吧 → 恢復社交滿足度（無法恢復飽足度與體力）")
+        elif is_night and money >= 200:
             action_list.append("- go_bar：去酒吧 → 恢復社交滿足度（無法恢復飽足度與體力）")
         else:
             action_list.append("- go_market：去市集 → 恢復社交滿足度（無法恢復飽足度與體力）")
