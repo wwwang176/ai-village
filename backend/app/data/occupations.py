@@ -123,7 +123,7 @@ OCCUPATIONS = {
         building="tavern",
         required_tool=None,
         input_materials=[("grain", 1)],
-        output_product="beer", output_quantity=2, work_time=2,
+        output_product="beer", output_quantity=3, work_time=2,
     ),
 }
 

@@ -35,7 +35,7 @@ MATERIAL_PRICES = {
     # L3 產出（麵包師 $80/分，因為食物是生存必需）
     "bread": 4,
     # 飲料
-    "beer": 2,
+    "beer": 3,
 }
 
 # 食物資訊
@@ -43,7 +43,7 @@ FOOD_INFO = {
     "bread": {"name": "麵包", "price": 4, "hunger_restore": 35},
     "meat_raw": {"name": "生肉", "price": 5, "hunger_restore": 40},
     "meat": {"name": "肉品", "price": 6, "hunger_restore": 55},
-    "beer": {"name": "啤酒", "price": 2, "hunger_restore": 2},
+    "beer": {"name": "啤酒", "price": 3, "hunger_restore": 2},
 }
 
 
