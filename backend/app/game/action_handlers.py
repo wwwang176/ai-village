@@ -553,8 +553,8 @@ class SellGoodsActionHandler(ActionHandler):
         
         money = villager.get("money", 0)
         stats = villager.get("stats", {})
-        hunger = 100 - stats.get("hunger", 0)
-        is_broke_and_hungry = money < 12 and hunger < 50
+        satiety = stats.get("satiety", 100)
+        is_broke_and_hungry = money < 12 and satiety < 50
         
         # 統計所有物品（背包 + 地上）
         item_counts = {}  # {item_id: {"bag": qty, "ground": [(item, qty), ...]}}

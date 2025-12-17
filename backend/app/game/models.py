@@ -12,7 +12,7 @@ from typing import Optional, List, Dict, Tuple
 class VillagerStats:
     """村民狀態"""
     energy: int = 100      # 體力 (0-100)
-    hunger: int = 0        # 飢餓 (0-100, 越高越餓)
+    satiety: int = 100     # 飽足度 (0-100, 越高越飽)
     social: int = 50       # 社交 (0-100)
     happiness: int = 70    # 幸福度 (0-100)
     health: int = 100      # 健康 (0-100)
@@ -20,7 +20,7 @@ class VillagerStats:
     def to_dict(self) -> dict:
         return {
             "energy": self.energy,
-            "hunger": self.hunger,
+            "satiety": self.satiety,
             "social": self.social,
             "happiness": self.happiness,
             "health": self.health
@@ -30,7 +30,7 @@ class VillagerStats:
     def from_dict(cls, data: dict) -> "VillagerStats":
         return cls(
             energy=data.get("energy", 100),
-            hunger=data.get("hunger", 0),
+            satiety=data.get("satiety", 100),
             social=data.get("social", 50),
             happiness=data.get("happiness", 70),
             health=data.get("health", 100)

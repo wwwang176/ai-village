@@ -184,8 +184,8 @@ class GameLoop:
         hour = game_time.get("hour", 12)
         is_daytime = 6 <= hour < 18
         
-        # 飢餓緩慢增加（0.2/秒)
-        stats["hunger"] = min(100, stats.get("hunger", 0) + delta_time * 0.2)
+        # 飽足度緩慢下降（0.2/秒)
+        stats["satiety"] = max(0, stats.get("satiety", 100) - delta_time * 0.2)
         
         # 體力緩慢下降（非睡眠時）
         if villager.get("state") != "sleeping":
@@ -215,7 +215,7 @@ class GameLoop:
         # 心情變化（根據其他狀態值）
         happiness = stats.get("happiness", 70)
         energy = stats.get("energy", 100)
-        hunger = stats.get("hunger", 0)
+        satiety = stats.get("satiety", 100)
         social = stats.get("social", 50)
         
         happiness_rate = 0.0
@@ -226,12 +226,12 @@ class GameLoop:
         elif energy < 30:
             happiness_rate += (energy - 30) / 30 * 0.5  # 0→-0.5, 30→0
 
-        # 飽足度影響（hunger 越高越餓，所以反過來）
-        # hunger < 30 (飽足度 > 70%): 0~+0.5, hunger > 70 (飽足度 < 30%): -0.5~0
-        if hunger < 30:
-            happiness_rate += (30 - hunger) / 30 * 0.5  # 0→0.5, 30→0
-        elif hunger > 70:
-            happiness_rate += (70 - hunger) / 30 * 0.5  # 70→0, 100→-0.5
+        # 飽足度影響（與 energy 相同邏輯，越高越好）
+        # 70~100: 0~+0.5, 30~70: 0, 0~30: -0.5~0
+        if satiety > 70:
+            happiness_rate += (satiety - 70) / 30 * 0.5  # 70→0, 100→0.5
+        elif satiety < 30:
+            happiness_rate += (satiety - 30) / 30 * 0.5  # 0→-0.5, 30→0
             
         # 社交影響（線性過渡）
         # 70~100: 0~+0.5, 30~70: 0, 0~30: -0.5~0

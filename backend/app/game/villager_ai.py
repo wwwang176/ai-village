@@ -218,15 +218,15 @@ class VillagerAI:
         # 2. 吃飯（能吃才顯示，食物鏈職業要很餓才買）
         if can_buy_food:
             if occupation in food_chain_jobs:
-                hunger = villager.get("stats", {}).get("hunger", 0)
-                if hunger >= 60:  # 食物鏈職業：飢餓度 >= 60% 才買食物
+                satiety = villager.get("stats", {}).get("satiety", 100)
+                if satiety <= 40:  # 食物鏈職業：飽足度 <= 40% 才買食物
                     action_list.append("- buy_food：買食物吃 → 恢復飽足度（無法恢復體力與社交滿足度）")
             else:
                 action_list.append("- buy_food：買食物吃 → 恢復飽足度（無法恢復體力與社交滿足度）")
         
         # 3. 休息（很餓時不顯示，強迫先吃飯）
-        hunger = villager.get("stats", {}).get("hunger", 0)
-        if hunger < 90:  # 飢餓度 < 90% 才能回家睡覺
+        satiety = villager.get("stats", {}).get("satiety", 100)
+        if satiety > 10:  # 飽足度 > 10% 才能回家睡覺
             action_list.append("- go_home：回家睡覺 → 恢復體力（無法恢復飽足度與社交滿足度）")
         
         # 4. 工作（能工作才顯示，食物鏈職業加註）
@@ -259,17 +259,17 @@ class VillagerAI:
         
         過剩條件：
         1. 同類物品（背包+地上）>= 該物品的過剩門檻
-        2. 或 現金 < 12 且肚子餓（hunger < 50）
+        2. 或 現金 < 12 且肚子餓（satiety < 50）
         """
         from ..data.item_categories import TOOLS
         from ..data.supply_chain import EXCESS_THRESHOLDS, MERCHANT_BUY_PRICES
         
         money = villager.get("money", 0)
         stats = villager.get("stats", {})
-        hunger = 100 - stats.get("hunger", 0)  # hunger 是飢餓度，轉換成飽足度
+        satiety = stats.get("satiety", 100)
         
         # 檢查是否缺錢且餓
-        is_broke_and_hungry = money < 12 and hunger < 50
+        is_broke_and_hungry = money < 12 and satiety < 50
         
         # 統計所有物品（背包 + 地上）
         item_counts = {}  # {item_id: total_qty}
@@ -532,7 +532,7 @@ class VillagerAI:
         stats = villager["stats"]
         
         # 計算狀態值
-        satiety = 100 - stats.get('hunger', 0)
+        satiety = stats.get('satiety', 100)
         energy = stats.get('energy', 100)
         social = stats.get('social', 100)
         money = villager.get('money', 0)

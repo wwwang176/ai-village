@@ -155,7 +155,7 @@ export class Dashboard {
         </div>
         <div class="detail-row">
           <span class="label">飽足</span>
-          <span class="value">${Math.floor(100 - (stats.hunger || 0))}%</span>
+          <span class="value">${Math.floor(stats.satiety || 0)}%</span>
         </div>
         <div class="detail-row">
           <span class="label">社交</span>

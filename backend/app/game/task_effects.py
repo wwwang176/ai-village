@@ -58,7 +58,7 @@ class EatEffect(TaskEffect):
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
         inventory = villager.get("inventory", [None] * 5)
         stats = villager.get("stats", {})
-        old_hunger = stats.get("hunger", 0)
+        old_satiety = stats.get("satiety", 100)
         
         # 尋找背包裡的麵包
         for i, slot in enumerate(inventory):
@@ -71,9 +71,9 @@ class EatEffect(TaskEffect):
                 
                 # 恢復飽足度
                 from .production import FOOD_INFO
-                bread_restore = FOOD_INFO.get("bread", {}).get("hunger_restore", 35)
-                stats["hunger"] = max(0, old_hunger - bread_restore)
-                logger.info(f"🍞 {villager['name']} 吃了麵包 (飢餓: {old_hunger:.0f} → {stats['hunger']:.0f})")
+                bread_restore = FOOD_INFO.get("bread", {}).get("satiety_restore", 35)
+                stats["satiety"] = min(100, old_satiety + bread_restore)
+                logger.info(f"🍞 {villager['name']} 吃了麵包 (飽足: {old_satiety:.0f} → {stats['satiety']:.0f})")
                 return True
         
         # 沒有食物可吃
@@ -235,7 +235,7 @@ class BuyFoodEffect(TaskEffect):
                 logger.info(f"🥩 {villager['name']} 向 {food_result['seller_name']} 購買了 {food_result['food_name']}（花費 ${food_result['price']}，放入{food_result['location']}）")
             else:
                 # 其他食物直接吃
-                logger.info(f"🍽️ {villager['name']} 向 {food_result['seller_name']} 購買並吃了 {food_result['food_name']}（花費 ${food_result['price']}，飽足度 +{food_result['hunger_restore']}）")
+                logger.info(f"🍽️ {villager['name']} 向 {food_result['seller_name']} 購買並吃了 {food_result['food_name']}（花費 ${food_result['price']}，飽足度 +{food_result['satiety_restore']}）")
             # 廣播交易動畫事件
             from ..data.items import ITEM_TYPES
             item_type = ITEM_TYPES.get(food_result.get('food_item', 'bread'))
@@ -261,10 +261,10 @@ class BuyBeerEffect(TaskEffect):
     
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
         from ..game.production import FOOD_INFO
-        beer_info = FOOD_INFO.get("beer", {"price": 2, "hunger_restore": 2})
+        beer_info = FOOD_INFO.get("beer", {"price": 2, "satiety_restore": 2})
         beer_price = beer_info["price"]
         beer_qty = 1  # 一次買 1 杯
-        hunger_per_beer = beer_info["hunger_restore"]
+        satiety_per_beer = beer_info["satiety_restore"]
         
         # 找酒保
         bartender = None
@@ -358,8 +358,8 @@ class BuyBeerEffect(TaskEffect):
         
         # 直接喝掉（恢復飽足度，啤酒不進背包）
         stats = villager.get("stats", {})
-        hunger_restore = actual_qty * hunger_per_beer
-        stats["hunger"] = max(0, stats.get("hunger", 0) - hunger_restore)
+        satiety_restore = actual_qty * satiety_per_beer
+        stats["satiety"] = min(100, stats.get("satiety", 100) + satiety_restore)
         
         # 廣播交易動畫
         ctx.queue_broadcast({
@@ -373,7 +373,7 @@ class BuyBeerEffect(TaskEffect):
             }
         })
         
-        logger.info(f"🍺 {villager['name']} 向 {bartender['name']} 買了 {actual_qty} 杯啤酒並喝掉（花費 ${total_price}，飽足度 +{hunger_restore}）")
+        logger.info(f"🍺 {villager['name']} 向 {bartender['name']} 買了 {actual_qty} 杯啤酒並喝掉（花費 ${total_price}，飽足度 +{satiety_restore}）")
         return True  # 不管成功失敗都繼續社交
 
 
@@ -511,11 +511,11 @@ class CookEffect(TaskEffect):
         # 煮熟並吃掉，恢復飽足度
         from .production import FOOD_INFO
         stats = villager.get("stats", {})
-        old_hunger = stats.get("hunger", 0)
-        meat_restore = FOOD_INFO.get("meat", {}).get("hunger_restore", 50)
-        stats["hunger"] = max(0, old_hunger - meat_restore)
+        old_satiety = stats.get("satiety", 100)
+        meat_restore = FOOD_INFO.get("meat", {}).get("satiety_restore", 50)
+        stats["satiety"] = min(100, old_satiety + meat_restore)
         
-        logger.info(f"🍳 {villager['name']} 用灶台煮了生肉吃 (飢餓: {old_hunger:.0f} → {stats['hunger']:.0f})")
+        logger.info(f"🍳 {villager['name']} 用灶台煮了生肉吃 (飽足: {old_satiety:.0f} → {stats['satiety']:.0f})")
         return True
 
 

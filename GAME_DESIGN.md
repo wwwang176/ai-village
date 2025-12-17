@@ -64,7 +64,7 @@ Villager = {
   // 狀態數值 (0-100)
   stats: {
     energy: 80,      // 體力
-    hunger: 30,      // 飢餓度
+    satiety: 70,     // 飽足度
     social: 50,      // 社交需求
     happiness: 65,   // 心情度
     health: 90       // 健康
@@ -237,7 +237,7 @@ MapObject = {
     "personality": ["friendly", "hardworking"],
     "currentStats": {
       "energy": 60,
-      "hunger": 40,
+      "satiety": 60,
       "social": 30
     },
     "recentMemories": [

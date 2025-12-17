@@ -40,10 +40,10 @@ MATERIAL_PRICES = {
 
 # 食物資訊
 FOOD_INFO = {
-    "bread": {"name": "麵包", "price": 4, "hunger_restore": 35},
-    "meat_raw": {"name": "生肉", "price": 5, "hunger_restore": 40},
-    "meat": {"name": "肉品", "price": 6, "hunger_restore": 55},
-    "beer": {"name": "啤酒", "price": 3, "hunger_restore": 2},
+    "bread": {"name": "麵包", "price": 4, "satiety_restore": 35},
+    "meat_raw": {"name": "生肉", "price": 5, "satiety_restore": 40},
+    "meat": {"name": "肉品", "price": 6, "satiety_restore": 55},
+    "beer": {"name": "啤酒", "price": 3, "satiety_restore": 2},
 }
 
 
@@ -296,7 +296,7 @@ class ProductionSystem:
         """執行食物購買"""
         seller_id = task.get("seller_id")
         food_item = task.get("food_item")
-        food_info = FOOD_INFO.get(food_item, {"name": food_item, "price": 4, "hunger_restore": 30})
+        food_info = FOOD_INFO.get(food_item, {"name": food_item, "price": 4, "satiety_restore": 30})
         
         result = self.execute_trade(
             buyer=buyer,
@@ -312,7 +312,7 @@ class ProductionSystem:
                 del buyer["pending_food_trade"]
             result["food_name"] = food_info["name"]
             result["food_item"] = food_item
-            result["hunger_restore"] = 0
+            result["satiety_restore"] = 0
             result["need_cook"] = food_item == "meat_raw"
         
         return result

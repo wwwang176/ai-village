@@ -202,7 +202,7 @@ export class Villager extends Entity {
     // 狀態數值
     this.stats = {
       energy: 80 + Math.random() * 20,
-      hunger: Math.random() * 30,
+      satiety: 70 + Math.random() * 30,
       social: 40 + Math.random() * 20,
       happiness: 50 + Math.random() * 30,
       health: 80 + Math.random() * 20
@@ -341,11 +341,11 @@ export class Villager extends Entity {
    * 更新狀態數值
    */
   updateStats(deltaTime) {
-    // 飢餓緩慢增加
-    this.stats.hunger = Math.min(100, this.stats.hunger + deltaTime * 0.5);
+    // 飽足度緩慢下降
+    this.stats.satiety = Math.max(0, this.stats.satiety - deltaTime * 0.5);
     
     // 如果很餓，心情度下降
-    if (this.stats.hunger > 70) {
+    if (this.stats.satiety < 30) {
       this.stats.happiness = Math.max(0, this.stats.happiness - deltaTime * 0.3);
     }
     
@@ -389,7 +389,7 @@ export class Villager extends Entity {
     }
     
     // 非常餓
-    if (this.stats.hunger > 80) {
+    if (this.stats.satiety < 20) {
       this.showBubble('肚子好餓', 'thought', 3000);
       this.goEat(map);
       return;

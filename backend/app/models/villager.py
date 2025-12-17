@@ -21,7 +21,7 @@ class Villager:
     
     # 數值
     money: int = 50
-    hunger: int = 0
+    satiety: int = 100
     energy: int = 100
     social: int = 50
     happiness: int = 70
@@ -154,7 +154,7 @@ class Villager:
             "money": self.money,
             "stats": {
                 "energy": self.energy,
-                "hunger": self.hunger,
+                "satiety": self.satiety,
                 "social": self.social,
                 "happiness": self.happiness,
                 "health": self.health,

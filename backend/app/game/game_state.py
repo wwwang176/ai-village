@@ -106,7 +106,7 @@ class GameState:
             "y": spawn["y"],
             "stats": {
                 "energy": 100,
-                "hunger": 0,
+                "satiety": 100,
                 "social": 50,
                 "happiness": 70,
                 "health": 100,
@@ -326,7 +326,7 @@ class GameState:
                 "y": spawn["doorY"] + 1,
                 "stats": VillagerStats(
                     energy=random.randint(30, 100),
-                    hunger=random.randint(0, 60),
+                    satiety=random.randint(40, 100),
                     social=random.randint(20, 80),
                     happiness=random.randint(40, 90),
                     health=random.randint(70, 100)
@@ -985,7 +985,7 @@ class GameState:
             return
         
         # 計算平均值
-        total_satiety = 0  # 飽足度 = 100 - hunger
+        total_satiety = 0
         total_energy = 0
         total_social = 0
         total_money = 0
@@ -995,7 +995,7 @@ class GameState:
         
         for v in villager_list:
             stats = v.get("stats", {})
-            satiety = 100 - stats.get("hunger", 0)  # 飽足度 = 100 - 飢餓度
+            satiety = stats.get("satiety", 100)
             energy = stats.get("energy", 100)
             social = stats.get("social", 50)
             money = v.get("money", 0)

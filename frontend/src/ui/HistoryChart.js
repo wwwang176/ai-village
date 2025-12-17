@@ -113,7 +113,7 @@ export class HistoryChart {
     const moneyKey = isIndividual ? 'money' : 'total_money';
     
     const energyData = data.map(d => d[energyKey]);
-    const hungerData = data.map(d => 100 - d[satietyKey]);  // 飢餓 = 100 - 飽足度
+    const satietyData = data.map(d => d[satietyKey]);
     const socialData = data.map(d => d[socialKey]);
     const moneyData = data.map(d => d[moneyKey]);
     
@@ -135,8 +135,8 @@ export class HistoryChart {
           borderWidth: 2
         },
         {
-          label: '飢餓',
-          data: hungerData,
+          label: '飽足',
+          data: satietyData,
           borderColor: '#FF9800',
           backgroundColor: 'rgba(255, 152, 0, 0.1)',
           tension: 0.3,

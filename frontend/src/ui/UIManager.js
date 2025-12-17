@@ -35,7 +35,7 @@ export class UIManager {
       // 沒有選中村民
       if (nameEl) nameEl.textContent = '點擊村民觀察';
       this.updateStatBar('energy', 0);
-      this.updateStatBar('hunger', 0);
+      this.updateStatBar('satiety', 0);
       this.updateStatBar('social', 0);
       this.updateStatBar('happiness', 0);
       return;
@@ -50,7 +50,7 @@ export class UIManager {
     
     // 更新各狀態條
     this.updateStatBar('energy', stats.energy || 0);
-    this.updateStatBar('hunger', 100 - (stats.hunger || 0)); // 反轉顯示（飽足度）
+    this.updateStatBar('satiety', stats.satiety || 0);
     this.updateStatBar('social', stats.social || 0);
     this.updateStatBar('happiness', stats.happiness || 0);
   }

@@ -16,7 +16,7 @@ class ItemType:
     stack_max: int = 10        # 最大堆疊數
     durability_max: Optional[int] = None  # 工具才有
     price: int = 0             # 價格
-    hunger_restore: int = 0    # 食物恢復飢餓值
+    satiety_restore: int = 0   # 食物恢復飽足度
     
     def is_tool(self) -> bool:
         return self.category == "tool"

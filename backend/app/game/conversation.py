@@ -267,7 +267,7 @@ class ConversationSystem:
         def get_mood(stats):
             if stats.get("energy", 100) < 30:
                 return "很累"
-            if stats.get("hunger", 0) > 70:
+            if stats.get("satiety", 100) < 30:
                 return "很餓"
             if stats.get("social", 50) < 20:
                 return "寂寞"

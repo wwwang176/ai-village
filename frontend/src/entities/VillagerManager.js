@@ -248,14 +248,14 @@ export class VillagerManager {
           
           // 檢查數值變化
           const energyDiff = (newStats.energy || 0) - (oldStats.energy || 0);
-          const hungerDiff = (newStats.hunger || 0) - (oldStats.hunger || 0);
+          const satietyDiff = (newStats.satiety || 0) - (oldStats.satiety || 0);
           const socialDiff = (newStats.social || 0) - (oldStats.social || 0);
           
           if (Math.abs(energyDiff) > 1) {
             console.log(`👁️ [${villager.name}] 體力: ${oldStats.energy?.toFixed(0)} → ${newStats.energy?.toFixed(0)} (${energyDiff > 0 ? '+' : ''}${energyDiff.toFixed(0)})`);
           }
-          if (Math.abs(hungerDiff) > 1) {
-            console.log(`👁️ [${villager.name}] 飢餓: ${oldStats.hunger?.toFixed(0)} → ${newStats.hunger?.toFixed(0)} (${hungerDiff > 0 ? '+' : ''}${hungerDiff.toFixed(0)})`);
+          if (Math.abs(satietyDiff) > 1) {
+            console.log(`👁️ [${villager.name}] 飽足: ${oldStats.satiety?.toFixed(0)} → ${newStats.satiety?.toFixed(0)} (${satietyDiff > 0 ? '+' : ''}${satietyDiff.toFixed(0)})`);
           }
           if (Math.abs(socialDiff) > 1) {
             console.log(`👁️ [${villager.name}] 社交: ${oldStats.social?.toFixed(0)} → ${newStats.social?.toFixed(0)} (${socialDiff > 0 ? '+' : ''}${socialDiff.toFixed(0)})`);
