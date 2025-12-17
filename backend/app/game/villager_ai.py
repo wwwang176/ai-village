@@ -54,7 +54,7 @@ class VillagerAI:
         try:
             # 建構提示詞
             prompt = self._build_decision_prompt(villager, game_state)
-            system_prompt = self._get_system_prompt(villager, game_state)
+            system_prompt = self._build_system_prompt(villager)
             
             messages = [
                 {"role": "system", "content": system_prompt},
@@ -65,14 +65,14 @@ class VillagerAI:
             if DEBUG_OPENAI:
                 logger.info(f"\n{'='*50}")
                 logger.info(f"🤖 [決策請求] 村民: {villager.get('name', villager.get('id'))}")
-                logger.info(f"📤 System Prompt:\n{system_prompt[:500]}...")
+                logger.info(f"📤 System Prompt:\n{system_prompt}...")
                 logger.info(f"📤 User Prompt:\n{prompt}")
                 logger.info(f"{'='*50}")
             
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                temperature=0.8,
+                # temperature=0.8,
                 max_tokens=200,
                 response_format={"type": "json_object"}
             )
@@ -117,15 +117,15 @@ class VillagerAI:
             if DEBUG_OPENAI:
                 logger.info(f"\n{'='*50}")
                 logger.info(f"💬 [對話請求] 村民: {villager.get('name')}")
-                logger.info(f"📤 System Prompt:\n{system_prompt[:200]}...")
+                logger.info(f"📤 System Prompt:\n{system_prompt}...")
                 logger.info(f"📤 User Prompt:\n{prompt}")
                 logger.info(f"{'='*50}")
             
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                temperature=0.9,
-                max_tokens=300
+                # temperature=0.9,
+                max_tokens=400
             )
             
             result_text = response.choices[0].message.content
@@ -160,7 +160,7 @@ class VillagerAI:
                     {"role": "system", "content": self._get_encounter_system_prompt()},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.85,
+                # temperature=0.85,
                 max_tokens=400,
                 response_format={"type": "json_object"}
             )
@@ -171,37 +171,22 @@ class VillagerAI:
             logger.error(f"相遇生成錯誤: {e}")
             return None  # 跳過這次相遇
     
-    def _get_system_prompt(self, villager: dict, game_state) -> str:
-        """動態生成系統提示詞（只包含村民擁有的性格）"""
-        from ..data.personalities import get_trait_description
-        
-        # 建構村民性格描述
-        traits = villager.get("personality", [])
-        trait_lines = []
-        for trait in traits:
-            desc = get_trait_description(trait)
-            trait_lines.append(f"- {trait}：{desc}")
-        traits_section = "\n".join(trait_lines) if trait_lines else "- 無特殊性格"
-        
-        return f"""你是中古世紀村莊模擬遊戲的村民 AI。
+    def _build_system_prompt(self, villager: dict) -> str:
+        """生成靜態系統提示詞"""
+        return """你是中古世紀村莊模擬遊戲的村民 AI。
 根據村民的性格和當前狀態，選擇最符合角色個性的行為。
 
 【決策原則】
 1. 🚨 危急（<20%）：必須立即處理，無視性格
 2. ⚠️ 偏低（20-50%）：建議處理，可依性格延後
 3. 正常（>50%）：自由選擇
-
-【此村民的性格】
-{traits_section}
-
-【職業特性】
-- 農夫/磨坊主/麵包師：工作可生產食物鏈物資，餓了也可選擇工作
+4. 同類型選項請隨機選一個，不要總是選同一個
 
 【回應格式】JSON
-{{
+{
   "action": "行為類型（從可用行為中選擇）",
-  "reason": "第一人稱理由（繁體中文，15字內）"
-}}"""
+  "reason": "主觀理由（繁體中文，15字內）
+}"""
     
     def _get_status_tag(self, value: float) -> str:
         """取得狀態標記"""
@@ -572,8 +557,27 @@ class VillagerAI:
         else:
             location_text = "室外"
         
+        # 建構村民性格描述
+        from ..data.personalities import get_trait_description
+        traits = villager.get("personality", [])
+        trait_lines = []
+        for trait in traits:
+            desc = get_trait_description(trait)
+            trait_lines.append(f"- {trait}：{desc}")
+        traits_section = "\n".join(trait_lines) if trait_lines else "- 無特殊性格"
+        
+        # 職業特性
+        food_chain_jobs = ["farmer", "miller", "baker"]
+        occupation = villager.get("occupation", "")
+        occupation_trait = ""
+        if occupation in food_chain_jobs:
+            occupation_trait = "\n\n【職業特性】\n- 農夫/磨坊主/麵包師：工作可生產食物鏈物資，餓了也可選擇工作"
+        
         return f"""【村民】{villager['name']}（{occupation_name}）
-【性格】{', '.join(villager['personality'])}
+
+【此村民的性格】
+{traits_section}
+{occupation_trait}
 
 【狀態】
 - 飽足度：{satiety:.0f}%{self._get_status_tag(satiety)}
