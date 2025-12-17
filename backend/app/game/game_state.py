@@ -337,7 +337,7 @@ class GameState:
                     "dislikes": villager_dislikes       # 討厭的事物
                 },
                 "inventory": inventory,                 # 背包（5格）
-                "money": 500 if occupation == "merchant" else random.randint(30, 80),  # 商人有較多錢
+                "money": 1000 if occupation == "merchant" else random.randint(100, 200),  # 商人有較多錢
                 "state": "idle",
                 "memories": [],
                 "relationships": {},

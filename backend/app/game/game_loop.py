@@ -219,21 +219,26 @@ class GameLoop:
         social = stats.get("social", 50)
         
         happiness_rate = 0.0
-        # 體力影響
-        if energy > 80:
-            happiness_rate += 0.1
-        elif energy < 20:
-            happiness_rate -= 0.1
+        # 體力影響（線性過渡）
+        # 70~100: 0~+0.5, 30~70: 0, 0~30: -0.5~0
+        if energy > 70:
+            happiness_rate += (energy - 70) / 30 * 0.5  # 70→0, 100→0.5
+        elif energy < 30:
+            happiness_rate += (energy - 30) / 30 * 0.5  # 0→-0.5, 30→0
+
         # 飽足度影響（hunger 越高越餓，所以反過來）
-        if hunger < 20:  # 飽足度 > 80%
-            happiness_rate += 0.1
-        elif hunger > 80:  # 飽足度 < 20%
-            happiness_rate -= 0.1
-        # 社交影響
-        if social > 80:
-            happiness_rate += 0.1
-        elif social < 20:
-            happiness_rate -= 0.1
+        # hunger < 30 (飽足度 > 70%): 0~+0.5, hunger > 70 (飽足度 < 30%): -0.5~0
+        if hunger < 30:
+            happiness_rate += (30 - hunger) / 30 * 0.5  # 0→0.5, 30→0
+        elif hunger > 70:
+            happiness_rate += (70 - hunger) / 30 * 0.5  # 70→0, 100→-0.5
+            
+        # 社交影響（線性過渡）
+        # 70~100: 0~+0.5, 30~70: 0, 0~30: -0.5~0
+        if social > 70:
+            happiness_rate += (social - 70) / 30 * 0.5  # 70→0, 100→0.5
+        elif social < 30:
+            happiness_rate += (social - 30) / 30 * 0.5  # 0→-0.5, 30→0
         
         stats["happiness"] = max(0, min(100, happiness + happiness_rate * delta_time))
     
