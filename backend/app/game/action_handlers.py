@@ -639,10 +639,11 @@ class SellGoodsActionHandler(ActionHandler):
         return tasks
     
     def _find_merchant(self, ctx: ActionContext) -> Optional[dict]:
-        """找到商人"""
-        for v in ctx.game_state.villagers.values():
-            if v.get("occupation") == "merchant":
-                return v
+        """找到商人（隨機選擇）"""
+        import random
+        candidates = [v for v in ctx.game_state.villagers.values() if v.get("occupation") == "merchant"]
+        if candidates:
+            return random.choice(candidates)
         return None
 
 

@@ -178,28 +178,26 @@ class SheepSystem:
     
     def create_buy_sheep_task(self, buyer: dict) -> List[dict]:
         """建立購買活羊的任務"""
+        import random
         tasks = []
         
-        # 找牧羊人
-        shepherd = None
+        # 找牧羊人（隨機選擇有羊可賣的）
+        candidates = []
         for v in self.game_state.villagers.values():
             if v.get("occupation") == "shepherd" and v["id"] != buyer["id"]:
-                shepherd = v
-                break
+                # 檢查是否有可賣的成羊（至少留 2 隻用於繁殖）
+                shepherd_sheep = self.game_state.get_sheep_by_owner(v["id"])
+                adult_sheep = [s for s in shepherd_sheep if s["is_adult"]]
+                if len(adult_sheep) > 2:
+                    candidates.append(v)
         
-        if not shepherd:
-            logger.info(f"🐑 {buyer['name']} 找不到牧羊人")
+        if not candidates:
+            logger.info(f"🐑 {buyer['name']} 找不到有羊可賣的牧羊人")
             return tasks
         
-        # 檢查牧羊人是否有可賣的成羊（至少留 2 隻用於繁殖）
-        shepherd_sheep = self.game_state.get_sheep_by_owner(shepherd["id"])
-        adult_sheep = [s for s in shepherd_sheep if s["is_adult"]]
+        shepherd = random.choice(candidates)
         
-        logger.info(f"🐑 牧羊人 {shepherd['name']} 擁有 {len(shepherd_sheep)} 隻羊，{len(adult_sheep)} 隻成羊")
-        
-        if len(adult_sheep) <= 2:
-            logger.info(f"🐑 牧羊人 {shepherd['name']} 羊不夠（需 > 2 隻成羊），無法出售")
-            return tasks
+        logger.info(f"🐑 {buyer['name']} 選擇向 {shepherd['name']} 購買羊")
         
         # 走到牧羊人位置（動態追蹤）
         shepherd_pos = (shepherd["x"], shepherd["y"])
