@@ -10,6 +10,14 @@ export class InputHandler {
     this.keys = {};
     this.mouse = { x: 0, y: 0, clicked: false };
     this.pathFinding = new PathFinding();
+    
+    // 鏡頭移動設定
+    this.cameraSpeed = 300;      // 鏡頭移動速度（像素/秒）
+    
+    // 滑鼠拖曳移動鏡頭
+    this.isDragging = false;
+    this.lastDragPos = { x: 0, y: 0 };
+    this.dragDistance = 0;  // 累計拖曳距離，用於區分點擊和拖曳
   }
   
   /**
@@ -23,6 +31,9 @@ export class InputHandler {
     // 滑鼠事件
     this.game.canvas.addEventListener('click', (e) => this.onClick(e));
     this.game.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
+    this.game.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+    this.game.canvas.addEventListener('mouseup', (e) => this.onMouseUp(e));
+    this.game.canvas.addEventListener('mouseleave', (e) => this.onMouseUp(e));
     this.game.canvas.addEventListener('contextmenu', (e) => this.onRightClick(e));
     
     // 點擊畫面外關閉選單
@@ -36,68 +47,70 @@ export class InputHandler {
   onKeyDown(e) {
     this.keys[e.code] = true;
     
-    // 處理移動
-    const player = this.game.player;
-    const speed = 3; // tiles per second
-    
-    switch (e.code) {
-      case 'KeyW':
-      case 'ArrowUp':
-        player.setVelocity(0, -speed);
-        break;
-      case 'KeyS':
-      case 'ArrowDown':
-        player.setVelocity(0, speed);
-        break;
-      case 'KeyA':
-      case 'ArrowLeft':
-        player.setVelocity(-speed, 0);
-        break;
-      case 'KeyD':
-      case 'ArrowRight':
-        player.setVelocity(speed, 0);
-        break;
-      case 'Escape':
-        this.game.uiManager.hideActionMenu();
-        break;
+    // Escape 關閉選單
+    if (e.code === 'Escape') {
+      this.game.uiManager.hideActionMenu();
     }
   }
   
   onKeyUp(e) {
     this.keys[e.code] = false;
+  }
+  
+  /**
+   * 更新鏡頭移動（由 Game.update 呼叫）
+   */
+  updateCameraMovement(deltaTime) {
+    // 跟隨模式下不允許手動移動
+    if (this.game.isFollowing) return;
     
-    // 停止移動
-    const player = this.game.player;
+    const camera = this.game.camera;
+    let dx = 0;
+    let dy = 0;
     
-    if (['KeyW', 'KeyS', 'ArrowUp', 'ArrowDown'].includes(e.code)) {
-      if (!this.keys['KeyW'] && !this.keys['KeyS'] && 
-          !this.keys['ArrowUp'] && !this.keys['ArrowDown']) {
-        player.velocity.y = 0;
-      }
-    }
+    // 鍵盤方向鍵移動鏡頭
+    if (this.keys['ArrowUp'] || this.keys['KeyW']) dy -= 1;
+    if (this.keys['ArrowDown'] || this.keys['KeyS']) dy += 1;
+    if (this.keys['ArrowLeft'] || this.keys['KeyA']) dx -= 1;
+    if (this.keys['ArrowRight'] || this.keys['KeyD']) dx += 1;
     
-    if (['KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
-      if (!this.keys['KeyA'] && !this.keys['KeyD'] && 
-          !this.keys['ArrowLeft'] && !this.keys['ArrowRight']) {
-        player.velocity.x = 0;
-      }
+    // 應用移動
+    if (dx !== 0 || dy !== 0) {
+      const speed = (dx !== 0 && dy !== 0) 
+        ? this.cameraSpeed * 0.707  // 對角線移動時正規化
+        : this.cameraSpeed;
+      camera.move(dx * speed * deltaTime, dy * speed * deltaTime);
     }
   }
   
   onClick(e) {
+    // 如果是拖曳操作（移動距離 > 5px），不處理點擊
+    if (this.dragDistance > 5) {
+      return;
+    }
+    
     const rect = this.game.canvas.getBoundingClientRect();
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
     
-    // 轉換為世界座標（考慮置中偏移量）
+    // 考慮縮放：先反向縮放螢幕座標
     const camera = this.game.camera;
-    const worldPos = camera.screenToWorld(screenX, screenY);
+    const zoom = camera.zoom;
+    const centerX = this.game.canvas.width / 2;
+    const centerY = this.game.canvas.height / 2;
+    
+    // 反向縮放變換（與渲染時的縮放相反）
+    const zoomedX = (screenX - centerX) / zoom + centerX;
+    const zoomedY = (screenY - centerY) / zoom + centerY;
+    
+    // 轉換為世界座標（考慮置中偏移量）
+    const worldPos = camera.screenToWorld(zoomedX, zoomedY);
     
     // 轉換為格子座標
     const tileX = Math.floor(worldPos.x / this.game.config.tileSize);
     const tileY = Math.floor(worldPos.y / this.game.config.tileSize);
     
-    console.log(`點擊位置: 螢幕(${screenX}, ${screenY}) 世界(${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)}) 格子(${tileX}, ${tileY})`);
+    console.log(`點擊位置: 螢幕(${screenX}, ${screenY}) 縮放後(${zoomedX.toFixed(0)}, ${zoomedY.toFixed(0)}) 格子(${tileX}, ${tileY})`);
     
     // 檢查是否點擊到村民
     const clickedVillager = this.game.villagerManager.getVillagerAt(tileX, tileY);
@@ -116,6 +129,34 @@ export class InputHandler {
     const rect = this.game.canvas.getBoundingClientRect();
     this.mouse.x = e.clientX - rect.left;
     this.mouse.y = e.clientY - rect.top;
+    
+    // 拖曳移動鏡頭（考慮縮放）
+    if (this.isDragging && !this.game.isFollowing) {
+      const dx = this.lastDragPos.x - this.mouse.x;
+      const dy = this.lastDragPos.y - this.mouse.y;
+      this.dragDistance += Math.abs(dx) + Math.abs(dy);
+      // 縮放時調整移動距離：zoom 大時移動慢，zoom 小時移動快
+      const zoom = this.game.camera.zoom;
+      this.game.camera.move(dx / zoom, dy / zoom);
+      this.lastDragPos.x = this.mouse.x;
+      this.lastDragPos.y = this.mouse.y;
+    }
+  }
+  
+  onMouseDown(e) {
+    // 只處理左鍵拖曳
+    if (e.button === 0) {
+      this.isDragging = true;
+      this.dragDistance = 0;  // 重置拖曳距離
+      this.lastDragPos.x = this.mouse.x;
+      this.lastDragPos.y = this.mouse.y;
+      this.game.canvas.style.cursor = 'grabbing';
+    }
+  }
+  
+  onMouseUp(e) {
+    this.isDragging = false;
+    this.game.canvas.style.cursor = 'default';
   }
   
   onRightClick(e) {

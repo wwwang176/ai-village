@@ -344,7 +344,7 @@ export class Villager extends Entity {
     // 飢餓緩慢增加
     this.stats.hunger = Math.min(100, this.stats.hunger + deltaTime * 0.5);
     
-    // 如果很餓，快樂度下降
+    // 如果很餓，心情度下降
     if (this.stats.hunger > 70) {
       this.stats.happiness = Math.max(0, this.stats.happiness - deltaTime * 0.3);
     }

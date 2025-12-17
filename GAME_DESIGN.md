@@ -66,7 +66,7 @@ Villager = {
     energy: 80,      // 體力
     hunger: 30,      // 飢餓度
     social: 50,      // 社交需求
-    happiness: 65,   // 快樂度
+    happiness: 65,   // 心情度
     health: 90       // 健康
   },
   
@@ -122,7 +122,7 @@ Relationship = {
 - `friendly` - 友善：更常主動社交
 - `hardworking` - 勤勞：工作時間更長
 - `generous` - 慷慨：願意幫助他人
-- `optimistic` - 樂觀：快樂度下降較慢
+- `optimistic` - 樂觀：心情度下降較慢
 - `curious` - 好奇：喜歡探索和聊天
 
 #### 負面特質

@@ -54,13 +54,13 @@ export class Player extends Entity {
     // 體力緩慢下降
     this.stats.energy = Math.max(0, this.stats.energy - deltaTime * 0.05);
     
-    // 飢餓影響快樂度和健康
+    // 飢餓影響心情度和健康
     if (this.stats.hunger > 80) {
       this.stats.happiness = Math.max(0, this.stats.happiness - deltaTime * 0.2);
       this.stats.health = Math.max(0, this.stats.health - deltaTime * 0.1);
     }
     
-    // 疲勞影響快樂度
+    // 疲勞影響心情度
     if (this.stats.energy < 20) {
       this.stats.happiness = Math.max(0, this.stats.happiness - deltaTime * 0.1);
     }

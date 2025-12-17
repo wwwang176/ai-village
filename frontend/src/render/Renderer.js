@@ -292,40 +292,40 @@ export class Renderer {
           break;
         case 'bush_back':
           this.object.renderBushBack(
-            item.data.x * this.tileSize - this.camera.x,
-            item.data.y * this.tileSize - this.camera.y,
+            item.data.x * this.tileSize - this.camera.x + this.camera.offsetX,
+            item.data.y * this.tileSize - this.camera.y + this.camera.offsetY,
             this.tileSize,
             item.data
           );
           break;
         case 'bush_front':
           this.object.renderBushFront(
-            item.data.x * this.tileSize - this.camera.x,
-            item.data.y * this.tileSize - this.camera.y,
+            item.data.x * this.tileSize - this.camera.x + this.camera.offsetX,
+            item.data.y * this.tileSize - this.camera.y + this.camera.offsetY,
             this.tileSize,
             item.data
           );
           break;
         case 'crop_back':
           this.object.renderCropBack(
-            item.data.x * this.tileSize - this.camera.x,
-            item.data.y * this.tileSize - this.camera.y,
+            item.data.x * this.tileSize - this.camera.x + this.camera.offsetX,
+            item.data.y * this.tileSize - this.camera.y + this.camera.offsetY,
             this.tileSize,
             item.data
           );
           break;
         case 'crop_front':
           this.object.renderCropFront(
-            item.data.x * this.tileSize - this.camera.x,
-            item.data.y * this.tileSize - this.camera.y,
+            item.data.x * this.tileSize - this.camera.x + this.camera.offsetX,
+            item.data.y * this.tileSize - this.camera.y + this.camera.offsetY,
             this.tileSize,
             item.data
           );
           break;
         case 'ore':
           this.object.renderOre(
-            item.data.x * this.tileSize - this.camera.x,
-            item.data.y * this.tileSize - this.camera.y,
+            item.data.x * this.tileSize - this.camera.x + this.camera.offsetX,
+            item.data.y * this.tileSize - this.camera.y + this.camera.offsetY,
             this.tileSize,
             item.data
           );

@@ -59,6 +59,20 @@ export class Camera {
   }
   
   /**
+   * 手動移動鏡頭
+   * @param {number} dx - X 方向移動量（像素）
+   * @param {number} dy - Y 方向移動量（像素）
+   */
+  move(dx, dy) {
+    // 有跟隨目標時不允許手動移動
+    if (this.target) return;
+    
+    this.x += dx;
+    this.y += dy;
+    this.clamp();
+  }
+  
+  /**
    * 立即定位鏡頭到目標（不使用平滑）
    */
   centerOn(entity) {
@@ -91,14 +105,10 @@ export class Camera {
   }
   
   /**
-   * 限制鏡頭在地圖範圍內，視窗大於地圖時置中
+   * 限制鏡頭：畫面中央不超過地圖邊界
    * 如果有跟隨目標，則不限制範圍（讓村民始終居中）
    */
   clamp() {
-    // 考慮縮放後的有效視窗大小
-    const effectiveWidth = this.viewportWidth / this.zoom;
-    const effectiveHeight = this.viewportHeight / this.zoom;
-    
     // 如果有跟隨目標，不限制鏡頭範圍（讓目標始終居中）
     if (this.target) {
       this.offsetX = 0;
@@ -106,23 +116,24 @@ export class Camera {
       return;
     }
     
-    // 沒有跟隨目標時，限制在地圖範圍內
-    // 計算偏移量（視窗大於地圖時用於置中）
-    if (effectiveWidth > this.mapWidth) {
-      this.offsetX = (effectiveWidth - this.mapWidth) / 2;
-      this.x = 0;
-    } else {
-      this.offsetX = 0;
-      this.x = Math.max(0, Math.min(this.x, this.mapWidth - effectiveWidth));
-    }
+    const halfWidth = this.viewportWidth / 2;
+    const halfHeight = this.viewportHeight / 2;
     
-    if (effectiveHeight > this.mapHeight) {
-      this.offsetY = (effectiveHeight - this.mapHeight) / 2;
-      this.y = 0;
-    } else {
-      this.offsetY = 0;
-      this.y = Math.max(0, Math.min(this.y, this.mapHeight - effectiveHeight));
-    }
+    // 計算當前畫面中央的世界座標
+    let centerX = this.x + halfWidth;
+    let centerY = this.y + halfHeight;
+    
+    // 限制畫面中央在地圖範圍內 [0, mapWidth] x [0, mapHeight]
+    centerX = Math.max(0, Math.min(centerX, this.mapWidth));
+    centerY = Math.max(0, Math.min(centerY, this.mapHeight));
+    
+    // 反算 camera 位置
+    this.x = centerX - halfWidth;
+    this.y = centerY - halfHeight;
+    
+    // 不需要 offset
+    this.offsetX = 0;
+    this.offsetY = 0;
   }
   
   /**

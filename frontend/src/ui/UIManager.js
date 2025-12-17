@@ -37,6 +37,7 @@ export class UIManager {
       this.updateStatBar('energy', 0);
       this.updateStatBar('hunger', 0);
       this.updateStatBar('social', 0);
+      this.updateStatBar('happiness', 0);
       return;
     }
     
@@ -51,6 +52,7 @@ export class UIManager {
     this.updateStatBar('energy', stats.energy || 0);
     this.updateStatBar('hunger', 100 - (stats.hunger || 0)); // 反轉顯示（飽足度）
     this.updateStatBar('social', stats.social || 0);
+    this.updateStatBar('happiness', stats.happiness || 0);
   }
   
   updateStatBar(statName, value) {

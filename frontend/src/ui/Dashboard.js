@@ -154,15 +154,15 @@ export class Dashboard {
           <span class="value">${Math.floor(stats.energy || 0)}%</span>
         </div>
         <div class="detail-row">
-          <span class="label">飢餓</span>
-          <span class="value">${Math.floor(stats.hunger || 0)}%</span>
+          <span class="label">飽足</span>
+          <span class="value">${Math.floor(100 - (stats.hunger || 0))}%</span>
         </div>
         <div class="detail-row">
           <span class="label">社交</span>
           <span class="value">${Math.floor(stats.social || 0)}%</span>
         </div>
         <div class="detail-row">
-          <span class="label">快樂</span>
+          <span class="label">心情</span>
           <span class="value">${Math.floor(stats.happiness || 0)}%</span>
         </div>
       </div>

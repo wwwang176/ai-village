@@ -36,7 +36,8 @@ export class Game {
     this.tickInterval = 1000; // 每秒呼叫後端一次
     
     // 觀察模式
-    this.selectedVillager = null;  // 選中的村民
+    this.selectedVillager = null;  // 選中的村民（關注）
+    this.isFollowing = false;      // 是否跟隨鏡頭
     
     // API 客戶端
     this.api = apiClient;
@@ -92,8 +93,9 @@ export class Game {
     // 初始化渲染器
     this.renderer = new Renderer(this.ctx, this.camera, this.config.tileSize);
     
-    // 鏡頭跟隨玩家
-    this.camera.follow(this.player);
+    // 鏡頭初始定位到地圖中央（不跟隨）
+    this.camera.x = (this.config.mapWidth * this.config.tileSize - this.canvas.width) / 2;
+    this.camera.y = (this.config.mapHeight * this.config.tileSize - this.canvas.height) / 2;
     
     // 初始化輸入處理
     this.inputHandler = new InputHandler(this);
@@ -129,6 +131,45 @@ export class Game {
     
     // 初始化縮放控制
     this.initZoomControls();
+    
+    // 初始化跟隨按鈕
+    this.initFollowButton();
+  }
+  
+  /**
+   * 初始化跟隨按鈕
+   */
+  initFollowButton() {
+    this.followBtn = document.getElementById('follow-btn');
+    if (this.followBtn) {
+      this.followBtn.addEventListener('click', () => {
+        const isFollowing = this.toggleFollow();
+        this.updateFollowButton();
+      });
+    }
+  }
+  
+  /**
+   * 更新跟隨按鈕狀態
+   */
+  updateFollowButton() {
+    if (!this.followBtn) return;
+    
+    if (this.selectedVillager) {
+      this.followBtn.disabled = false;
+      this.followBtn.style.cursor = 'pointer';
+      this.followBtn.style.color = '#fff';
+      this.followBtn.textContent = this.isFollowing ? '📷 跟隨中' : '📷 跟隨';
+      this.followBtn.style.background = this.isFollowing ? '#2a5a2a' : '#444';
+      this.followBtn.style.borderColor = this.isFollowing ? '#4a8a4a' : '#666';
+    } else {
+      this.followBtn.disabled = true;
+      this.followBtn.style.cursor = 'not-allowed';
+      this.followBtn.style.color = '#666';
+      this.followBtn.style.background = '#333';
+      this.followBtn.style.borderColor = '#444';
+      this.followBtn.textContent = '📷 跟隨';
+    }
   }
   
   /**
@@ -315,6 +356,11 @@ export class Game {
     // 使用後端的地圖資料
     this.map = new GameMap(mapData, this.config.tileSize);
     console.log(`✅ 地圖載入完成: ${this.map.buildings.length} 棟建築物`);
+    
+    // 更新 Camera 的地圖尺寸（後端地圖可能與預設不同）
+    this.camera.mapWidth = this.map.width * this.config.tileSize;
+    this.camera.mapHeight = this.map.height * this.config.tileSize;
+    console.log(`📐 地圖尺寸: ${this.map.width}x${this.map.height} 格 (${this.camera.mapWidth}x${this.camera.mapHeight} px)`);
     
     // 時間系統
     this.timeSystem = new TimeSystem();
@@ -600,12 +646,10 @@ export class Game {
       this.timeSystem.update(deltaTime);
     }
     
-    // 鏡頭跟隨選中的村民
-    if (this.selectedVillager) {
-      this.camera.follow(this.selectedVillager);
-    }
+    // 更新鏡頭移動（鍵盤/邊緣捲動）
+    this.inputHandler.updateCameraMovement(deltaTime);
     
-    // 更新鏡頭
+    // 更新鏡頭（僅在跟隨模式下跟隨村民）
     this.camera.update();
     
     // 離線模式：本地更新村民
@@ -655,17 +699,44 @@ export class Game {
   }
   
   /**
-   * 選取村民
+   * 選取村民（關注，但不自動跟隨）
    */
   selectVillager(villager) {
     this.selectedVillager = villager;
     if (villager) {
-      console.log(`👁️ 開始觀察: ${villager.name}`);
-      // 鏡頭跟隨選中的村民
-      this.camera.follow(villager);
-      // 立即定位鏡頭到村民位置
-      this.camera.centerOn(villager);
+      console.log(`👁️ 開始關注: ${villager.name}`);
+      // 如果正在跟隨模式，則跟隨新村民
+      if (this.isFollowing) {
+        this.camera.follow(villager);
+        this.camera.centerOn(villager);
+      }
+    } else {
+      // 取消關注時也取消跟隨
+      this.isFollowing = false;
+      this.camera.follow(null);
     }
+    // 更新跟隨按鈕狀態
+    this.updateFollowButton();
+  }
+  
+  /**
+   * 切換跟隨模式
+   */
+  toggleFollow() {
+    if (!this.selectedVillager) return;
+    
+    this.isFollowing = !this.isFollowing;
+    
+    if (this.isFollowing) {
+      console.log(`📷 開始跟隨: ${this.selectedVillager.name}`);
+      this.camera.follow(this.selectedVillager);
+      this.camera.centerOn(this.selectedVillager);
+    } else {
+      console.log(`📷 停止跟隨`);
+      this.camera.follow(null);
+    }
+    
+    return this.isFollowing;
   }
   
   /**
