@@ -84,10 +84,7 @@ export class UIRenderer extends BaseRenderer {
     } else if (type === 'thought') {
       this.ctx.fillStyle = 'rgba(200, 200, 255, 0.95)';
       this.ctx.beginPath();
-      this.ctx.arc(x, bubbleY + bubbleHeight + 5, 4, 0, Math.PI * 2);
-      this.ctx.fill();
-      this.ctx.beginPath();
-      this.ctx.arc(x - 3, bubbleY + bubbleHeight + 12, 3, 0, Math.PI * 2);
+      this.ctx.arc(x, bubbleY + bubbleHeight + 2, 4, 0, Math.PI * 2);
       this.ctx.fill();
     }
     

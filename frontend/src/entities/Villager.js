@@ -244,6 +244,7 @@ export class Villager extends Entity {
     this.bubble = {
       text: text,
       type: type,
+      createdAt: Date.now(),
       expireTime: Date.now() + duration
     };
   }

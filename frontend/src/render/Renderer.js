@@ -255,17 +255,6 @@ export class Renderer {
       }
     }
     
-    // 收集村民對話框（稍微在村民後面）
-    for (const villager of villagers) {
-      if (villager.bubble) {
-        renderables.push({
-          type: 'bubble',
-          sortY: villager.y + 0.01,
-          data: villager
-        });
-      }
-    }
-    
     // 按 Y 座標排序（Y 小的先畫）
     renderables.sort((a, b) => a.sortY - b.sortY);
     
@@ -333,10 +322,27 @@ export class Renderer {
         case 'sheep':
           this.entity.renderSingleSheep(item.data);
           break;
-        case 'bubble':
-          this.ui.renderSingleBubble(item.data);
-          break;
       }
+    }
+    
+    // === 泡泡對話框獨立層 ===
+    // 泡泡不受 Y-sort 影響，永遠顯示在最上層
+    // 按建立時間排序，新的泡泡覆蓋舊的
+    const bubbles = [];
+    for (const villager of villagers) {
+      if (villager.bubble) {
+        bubbles.push({
+          villager,
+          createdAt: villager.bubble.createdAt || 0
+        });
+      }
+    }
+    
+    // 按時間排序（早的先渲染，晚的後渲染 = 在上面）
+    bubbles.sort((a, b) => a.createdAt - b.createdAt);
+    
+    for (const { villager } of bubbles) {
+      this.ui.renderSingleBubble(villager);
     }
   }
   
