@@ -562,6 +562,16 @@ class VillagerAI:
         if weather_info['stamina_drain'] > 0:
             weather_text += "（室外活動消耗更多體力）"
         
+        # 取得村民所在位置
+        building = game_state.get_building_at_position(int(villager["x"]), int(villager["y"]))
+        if building:
+            if game_state.is_outdoor_building(building["type"]):
+                location_text = f"室外（{building['name']}）"
+            else:
+                location_text = f"{building['name']}內"
+        else:
+            location_text = "室外"
+        
         return f"""【村民】{villager['name']}（{occupation_name}）
 【性格】{', '.join(villager['personality'])}
 
@@ -574,6 +584,7 @@ class VillagerAI:
 【可用行為】
 {action_list}
 
+【位置】{location_text}
 【時間】第 {time_info['day']} 天 {time_info['hour']:02d}:{time_info['minute']:02d}
 【天氣】{weather_text}
 【記憶】{self._format_memories(villager.get('memories', []))}

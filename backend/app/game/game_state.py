@@ -930,6 +930,20 @@ class GameState:
                      if b["type"] == building_type]
         return random.choice(buildings) if buildings else None
     
+    def get_building_at_position(self, x: int, y: int) -> Optional[dict]:
+        """取得指定座標所在的建築物"""
+        for building in self.map_data.get("buildings", []):
+            bx, by = building["x"], building["y"]
+            bw, bh = building["width"], building["height"]
+            if bx <= x < bx + bw and by <= y < by + bh:
+                return building
+        return None
+    
+    def is_outdoor_building(self, building_type: str) -> bool:
+        """判斷建築物是否為開放式（室外）建築"""
+        outdoor_types = {"pasture", "farm", "mine", "lumber_camp", "market"}
+        return building_type in outdoor_types
+    
     # ==================== 目標位置解析 ====================
     
     def resolve_action_target(
