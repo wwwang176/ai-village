@@ -69,8 +69,10 @@ class EatEffect(TaskEffect):
                 else:
                     villager["inventory"][i] = None
                 
-                # 恢復飽足度（麵包恢復 30）
-                stats["hunger"] = max(0, old_hunger - 30)
+                # 恢復飽足度
+                from .production import FOOD_INFO
+                bread_restore = FOOD_INFO.get("bread", {}).get("hunger_restore", 35)
+                stats["hunger"] = max(0, old_hunger - bread_restore)
                 logger.info(f"🍞 {villager['name']} 吃了麵包 (飢餓: {old_hunger:.0f} → {stats['hunger']:.0f})")
                 return True
         
@@ -507,9 +509,11 @@ class CookEffect(TaskEffect):
             villager["inventory"][meat_index] = None
         
         # 煮熟並吃掉，恢復飽足度
+        from .production import FOOD_INFO
         stats = villager.get("stats", {})
         old_hunger = stats.get("hunger", 0)
-        stats["hunger"] = max(0, old_hunger - 50)  # 熟肉比麵包更飽
+        meat_restore = FOOD_INFO.get("meat", {}).get("hunger_restore", 50)
+        stats["hunger"] = max(0, old_hunger - meat_restore)
         
         logger.info(f"🍳 {villager['name']} 用灶台煮了生肉吃 (飢餓: {old_hunger:.0f} → {stats['hunger']:.0f})")
         return True

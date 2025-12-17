@@ -184,8 +184,8 @@ class GameLoop:
         hour = game_time.get("hour", 12)
         is_daytime = 6 <= hour < 18
         
-        # 飢餓緩慢增加（0.25/秒，約 4.7 分鐘從 0 到 70%）
-        stats["hunger"] = min(100, stats.get("hunger", 0) + delta_time * 0.25)
+        # 飢餓緩慢增加（0.2/秒)
+        stats["hunger"] = min(100, stats.get("hunger", 0) + delta_time * 0.2)
         
         # 體力緩慢下降（非睡眠時）
         if villager.get("state") != "sleeping":

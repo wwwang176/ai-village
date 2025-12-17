@@ -40,9 +40,9 @@ MATERIAL_PRICES = {
 
 # 食物資訊
 FOOD_INFO = {
-    "bread": {"name": "麵包", "price": 4, "hunger_restore": 30},
+    "bread": {"name": "麵包", "price": 4, "hunger_restore": 35},
     "meat_raw": {"name": "生肉", "price": 5, "hunger_restore": 40},
-    "meat": {"name": "肉品", "price": 6, "hunger_restore": 50},
+    "meat": {"name": "肉品", "price": 6, "hunger_restore": 55},
     "beer": {"name": "啤酒", "price": 2, "hunger_restore": 2},
 }
 
