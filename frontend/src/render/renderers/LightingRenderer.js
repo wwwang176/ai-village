@@ -15,6 +15,12 @@ export class LightingRenderer extends BaseRenderer {
     this.zoom = 1;
     this.canvasCenterX = 0;
     this.canvasCenterY = 0;
+    
+    // 開放式建築（不渲染光源，村民在內視為室外）
+    this.openBuildings = ['farm', 'mine', 'lumber_camp', 'pasture', 'market'];
+    
+    // 火焰閃爍效果的時間變數
+    this.flickerTime = 0;
   }
   
   /**
@@ -120,6 +126,9 @@ export class LightingRenderer extends BaseRenderer {
    */
   _renderBuildingLights(buildings, villagers) {
     buildings.forEach(building => {
+      // 開放式建築不渲染光源
+      if (this.openBuildings.includes(building.type)) return;
+      
       // 檢查是否有村民在家
       const hasOccupant = this._hasSomeoneHome(building, villagers);
       if (!hasOccupant) return;
@@ -189,10 +198,13 @@ export class LightingRenderer extends BaseRenderer {
   }
   
   /**
-   * 檢查村民是否在室內
+   * 檢查村民是否在室內（開放式建築不算室內）
    */
   _isIndoor(villager, buildings) {
     return buildings.some(b => {
+      // 開放式建築不算室內
+      if (this.openBuildings.includes(b.type)) return false;
+      
       return villager.x >= b.x && 
              villager.x < b.x + b.width &&
              villager.y >= b.y && 
