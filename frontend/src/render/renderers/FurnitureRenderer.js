@@ -78,25 +78,51 @@ export class FurnitureRenderer extends BaseRenderer {
   }
   
   /**
-   * 渲染床
+   * 渲染床（2.5D 效果，整張床高度 1.5 格）
    */
   renderBed(x, y, size) {
-    // 深棕色床架
-    this.ctx.fillStyle = '#654321';
-    this.ctx.fillRect(x, y, size, size);
+    // 床的總高度 = 1.8 格
+    const bedHeight = size * 1.8;
+    // Y 座標向北偏移，讓床從上一格開始
+    const startY = y - size * 0.8;
     
-    // 米白床單
-    this.ctx.fillStyle = '#F5F5DC';
-    this.ctx.fillRect(x + 2, y + 2, size - 4, size * 0.6);
+    // 木色床頭板（約 10%）
+    this.ctx.fillStyle = '#D4A574';
+    this.ctx.fillRect(x, startY, size, bedHeight * 0.1);
     
-    // 白色枕頭
-    this.ctx.fillStyle = '#FFFFFF';
-    this.ctx.fillRect(x + 3, y + 3, size * 0.3, size * 0.25);
+    // 米白色枕頭區域背景（約 20%）
+    this.ctx.fillStyle = '#F5F0E6';
+    this.ctx.fillRect(x, startY + bedHeight * 0.08, size, bedHeight * 0.2);
     
-    // 床架線條
-    this.ctx.strokeStyle = '#4a3520';
+    // 米黃色枕頭
+    this.ctx.fillStyle = '#F5F0DC';
+    this.ctx.fillRect(x + size * 0.12, startY + bedHeight * 0.1, size * 0.76, bedHeight * 0.15);
+    // 枕頭邊框
+    this.ctx.strokeStyle = '#E0D5C0';
     this.ctx.lineWidth = 1;
-    this.ctx.strokeRect(x, y, size, size);
+    this.ctx.strokeRect(x + size * 0.12, startY + bedHeight * 0.1, size * 0.76, bedHeight * 0.15);
+    
+    // 淺藍色被子（約 55%）
+    this.ctx.fillStyle = '#A8D4E6';
+    this.ctx.fillRect(x, startY + bedHeight * 0.26, size, bedHeight * 0.55);
+    
+    // 被子上緣折疊線
+    this.ctx.fillStyle = '#90C4D6';
+    this.ctx.fillRect(x, startY + bedHeight * 0.26, size, bedHeight * 0.05);
+    
+    // 被子邊框
+    this.ctx.strokeStyle = '#80B4C6';
+    this.ctx.lineWidth = 1;
+    this.ctx.strokeRect(x, startY + bedHeight * 0.26, size, bedHeight * 0.55);
+    
+    // 木色床尾板（約 10%）
+    this.ctx.fillStyle = '#D4A574';
+    this.ctx.fillRect(x, startY + bedHeight * 0.81, size, bedHeight * 0.1);
+    
+    // 床腳（左右，約 15%）
+    this.ctx.fillStyle = '#C49A6C';
+    this.ctx.fillRect(x, startY + bedHeight * 0.85, size * 0.1, bedHeight * 0.15);
+    this.ctx.fillRect(x + size * 0.9, startY + bedHeight * 0.85, size * 0.1, bedHeight * 0.15);
   }
   
   /**
