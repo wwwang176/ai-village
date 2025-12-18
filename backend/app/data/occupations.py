@@ -32,7 +32,8 @@ OCCUPATIONS = {
         building="butcher_shop",
         required_tool="cleaver",
         input_materials=[("livestock", 1)],
-        output_product="meat_raw", output_quantity=2, work_time=2,
+        output_product="meat_raw", output_quantity=4, work_time=2,
+        secondary_outputs=[("hide", 2)],
     ),
     
     # ========== 食物鏈 L3 ==========

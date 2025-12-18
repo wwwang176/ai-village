@@ -313,7 +313,7 @@ class GameState:
             bread_slot = 1 if inventory[0] else 0
             inventory[bread_slot] = {
                 "item_id": "bread",
-                "quantity": 10,
+                "quantity": 1,
                 "owner_id": f"villager_{i}"
             }
             

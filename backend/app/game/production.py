@@ -33,14 +33,14 @@ MATERIAL_PRICES = {
     "flour": 3, "iron": 8, "cloth": 7, "leather": 10,
     "hide": 4, "meat_raw": 5,
     # L3 產出（麵包師 $80/分，因為食物是生存必需）
-    "bread": 4,
+    "bread": 3,
     # 飲料
     "beer": 3,
 }
 
 # 食物資訊
 FOOD_INFO = {
-    "bread": {"name": "麵包", "price": 4, "satiety_restore": 35},
+    "bread": {"name": "麵包", "price": 3, "satiety_restore": 35},
     "meat_raw": {"name": "生肉", "price": 5, "satiety_restore": 40},
     "meat": {"name": "肉品", "price": 6, "satiety_restore": 55},
     "beer": {"name": "啤酒", "price": 3, "satiety_restore": 2},
@@ -159,12 +159,28 @@ class ProductionSystem:
         
         location = self.inventory_system.add_item(villager, output_item, output_qty)
         
+        # 處理副產品（例如屠夫的羊皮）
+        secondary_items = []
+        if getattr(occupation, "secondary_outputs", None):
+            for sec_item, sec_qty in occupation.secondary_outputs:
+                # 同樣應用效率加成
+                final_sec_qty = sec_qty
+                if efficiency_bonus > 0 and random.random() < efficiency_bonus:
+                    final_sec_qty += 1
+                elif efficiency_bonus < 0 and random.random() < abs(efficiency_bonus):
+                    final_sec_qty = max(1, final_sec_qty - 1)
+                
+                if final_sec_qty > 0:
+                    sec_loc = self.inventory_system.add_item(villager, sec_item, final_sec_qty)
+                    secondary_items.append(f"{sec_item} x{final_sec_qty}")
+        
         return {
             "success": True,
             "product": output_item,  # 返回物品 ID，用於取得 icon
             "product_name": occupation.name + "產品",  # 顯示名稱
             "quantity": output_qty,
-            "location": location
+            "location": location,
+            "secondary_products": secondary_items
         }
     
     def execute_trade(self, buyer: dict, seller_id: str, item_id: str, 

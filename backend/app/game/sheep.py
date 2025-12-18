@@ -244,8 +244,10 @@ class SheepSystem:
         sheep["wool_ready"] = False
         sheep["wool_grow_time"] = 0
         
-        # 產出羊毛（由外部處理加入背包）
-        wool_qty = 2
+        # 從 occupations.py 讀取牧羊人的產出配置
+        from ..data.occupations import OCCUPATIONS
+        shepherd_config = OCCUPATIONS.get("shepherd")
+        wool_qty = shepherd_config.output_quantity if shepherd_config else 2
         
         # 牧羊人獲得收入
         villager["money"] = villager.get("money", 0) + 3
@@ -313,9 +315,19 @@ class SheepSystem:
         # 移除羊
         self.game_state.remove_sheep(sheep_id)
         
-        # 產出數量（由外部處理加入背包）
-        meat_qty = 3
-        hide_qty = 1
+        # 從 occupations.py 讀取屠夫的產出配置
+        from ..data.occupations import OCCUPATIONS
+        butcher_config = OCCUPATIONS.get("butcher")
+        
+        meat_qty = butcher_config.output_quantity if butcher_config else 3
+        hide_qty = 0
+        if butcher_config and butcher_config.secondary_outputs:
+            for item_id, qty in butcher_config.secondary_outputs:
+                if item_id == "hide":
+                    hide_qty = qty
+                    break
+        if hide_qty == 0:
+            hide_qty = 1  # 預設值
         
         return {
             "success": True,

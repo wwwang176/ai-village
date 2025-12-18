@@ -24,6 +24,8 @@ class OccupationType:
     output_quantity: int = 0
     work_time: int = 2         # 工作所需時間（遊戲時間單位）
     
+    secondary_outputs: List[Tuple[str, int]] = field(default_factory=list)  # [(item_id, quantity), ...]
+    
     def needs_tool(self) -> bool:
         """是否需要工具"""
         return self.required_tool is not None
@@ -44,4 +46,5 @@ class OccupationType:
             "input_materials": self.input_materials,
             "output_product": self.output_product,
             "output_quantity": self.output_quantity,
+            "secondary_outputs": self.secondary_outputs,
         }

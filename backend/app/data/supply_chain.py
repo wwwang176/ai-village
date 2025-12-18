@@ -145,7 +145,7 @@ MERCHANT_BUY_PRICES = {
     "meat_raw": 5,      # 生肉
     "plank": 6,         # 木板
     # L3 成品
-    "bread": 2,         # 麵包
+    "bread": 3,         # 麵包
     "meat": 6,          # 熟肉
     "beer": 2,          # 啤酒
     "furniture": 33,    # 家具
