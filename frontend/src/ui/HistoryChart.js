@@ -148,21 +148,21 @@ export class HistoryChart {
   }
   
   async updateProductChart() {
-    // 如果沒有數據，先載入
-    if (!this.historyData) {
-      await this.loadData();
-    }
+    // 根據產品時間範圍載入數據
+    const range = parseInt(this.productRangeSelect?.value) || 0;
+    const hours = range === 0 ? null : range;
     
-    if (!this.historyData || this.historyData.length === 0) {
+    try {
+      const response = await this.apiClient.getHistory(hours, null);
+      if (!response.success || !response.data || response.data.length === 0) {
+        this.showNoProductData();
+        return;
+      }
+      var data = response.data;
+    } catch (error) {
+      console.error('Failed to load product history:', error);
       this.showNoProductData();
       return;
-    }
-    
-    // 取得時間範圍
-    const range = parseInt(this.productRangeSelect?.value) || 0;
-    let data = this.historyData;
-    if (range > 0 && data.length > range) {
-      data = data.slice(-range);
     }
     
     // 取得選中的產品
