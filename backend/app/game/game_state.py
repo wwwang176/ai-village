@@ -1018,6 +1018,21 @@ class GameState:
             }
         
         count = len(villager_list)
+        
+        # 統計產品數量（背包 + 地上）
+        product_counts = {}
+        for v in villager_list:
+            for slot in v.get("inventory", []):
+                if slot:
+                    item_id = slot.get("item_id")
+                    if item_id:
+                        product_counts[item_id] = product_counts.get(item_id, 0) + slot.get("quantity", 0)
+        
+        for item in self.world_items:
+            item_id = item.get("item_id")
+            if item_id:
+                product_counts[item_id] = product_counts.get(item_id, 0) + item.get("quantity", 0)
+        
         snapshot = {
             "day": current_day,
             "hour": current_hour,
@@ -1026,7 +1041,8 @@ class GameState:
             "avg_energy": round(total_energy / count, 1),
             "avg_social": round(total_social / count, 1),
             "total_money": total_money,
-            "villagers": individual_data
+            "villagers": individual_data,
+            "products": product_counts
         }
         
         self.history.append(snapshot)
@@ -1077,7 +1093,8 @@ class GameState:
                 "avg_satiety": s["avg_satiety"],
                 "avg_energy": s["avg_energy"],
                 "avg_social": s["avg_social"],
-                "total_money": s["total_money"]
+                "total_money": s["total_money"],
+                "products": s.get("products", {})
             }
             for s in data
         ]

@@ -579,6 +579,99 @@
       height: 12px;
       border-radius: 2px;
     }
+    
+    /* 圖表 Tab */
+    #chart-tabs {
+      display: flex;
+      border-bottom: 1px solid #4a4a6a;
+    }
+    
+    .chart-tab {
+      flex: 1;
+      padding: 10px;
+      background: #2a2a4a;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    
+    .chart-tab:hover {
+      background: #3a3a5a;
+      color: #ccc;
+    }
+    
+    .chart-tab.active {
+      background: #3a3a5a;
+      color: #ffd700;
+      border-bottom: 2px solid #ffd700;
+    }
+    
+    .chart-panel {
+      display: none;
+    }
+    
+    .chart-panel.active {
+      display: block;
+    }
+    
+    /* 產品篩選器 */
+    #product-controls {
+      padding: 10px 15px;
+      border-bottom: 1px solid #4a4a6a;
+    }
+    
+    #product-controls select {
+      background: #3a3a5a;
+      border: 1px solid #5a5a7a;
+      border-radius: 4px;
+      color: #fff;
+      padding: 5px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    
+    #product-filter {
+      padding: 10px 15px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      border-bottom: 1px solid #4a4a6a;
+      max-height: 80px;
+      overflow-y: auto;
+    }
+    
+    #product-filter label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: #ccc;
+      cursor: pointer;
+      padding: 3px 6px;
+      background: #2a2a4a;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+    
+    #product-filter label:hover {
+      background: #3a3a5a;
+    }
+    
+    #product-filter input[type="checkbox"] {
+      accent-color: #ffd700;
+    }
+    
+    #product-chart-container {
+      padding: 15px;
+      height: 300px;
+    }
+    
+    #product-chart {
+      width: 100%;
+      height: 100%;
+    }
   </style>
 </head>
 <body>
@@ -617,35 +710,72 @@
           <span>📊 歷史統計</span>
           <button id="chart-close-btn">×</button>
         </div>
-        <div id="chart-controls">
-          <select id="chart-target">
-            <option value="all">全體平均</option>
-          </select>
-          <select id="chart-range">
-            <option value="24">最近 1 天</option>
-            <option value="168">最近 7 天</option>
-            <option value="0">全部</option>
-          </select>
+        <!-- Tab 切換 -->
+        <div id="chart-tabs">
+          <button class="chart-tab active" data-tab="stats">📈 村民狀態</button>
+          <button class="chart-tab" data-tab="products">📦 產品數量</button>
         </div>
-        <div id="chart-container">
-          <canvas id="history-chart"></canvas>
+        <!-- 村民狀態 Tab -->
+        <div id="chart-stats-panel" class="chart-panel active">
+          <div id="chart-controls">
+            <select id="chart-target">
+              <option value="all">全體平均</option>
+            </select>
+            <select id="chart-range">
+              <option value="24">最近 1 天</option>
+              <option value="168">最近 7 天</option>
+              <option value="0">全部</option>
+            </select>
+          </div>
+          <div id="chart-container">
+            <canvas id="history-chart"></canvas>
+          </div>
+          <div class="chart-legend">
+            <div class="legend-item">
+              <div class="legend-color" style="background: #4CAF50;"></div>
+              <span>體力</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #FF9800;"></div>
+              <span>飽足</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #2196F3;"></div>
+              <span>社交</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #ffd700;"></div>
+              <span>總金錢</span>
+            </div>
+          </div>
         </div>
-        <div class="chart-legend">
-          <div class="legend-item">
-            <div class="legend-color" style="background: #4CAF50;"></div>
-            <span>體力</span>
+        <!-- 產品數量 Tab -->
+        <div id="chart-products-panel" class="chart-panel">
+          <div id="product-controls">
+            <select id="product-chart-range">
+              <option value="24">最近 1 天</option>
+              <option value="168">最近 7 天</option>
+              <option value="0">全部</option>
+            </select>
           </div>
-          <div class="legend-item">
-            <div class="legend-color" style="background: #FF9800;"></div>
-            <span>飽足</span>
+          <div id="product-filter">
+            <label><input type="checkbox" value="bread" checked> 🍞 麵包</label>
+            <label><input type="checkbox" value="meat_raw" checked> 🥩 生肉</label>
+            <label><input type="checkbox" value="meat"> 🍖 熟肉</label>
+            <label><input type="checkbox" value="flour"> 🌫️ 麵粉</label>
+            <label><input type="checkbox" value="grain"> 🌾 穀物</label>
+            <label><input type="checkbox" value="wood"> 🪵 木材</label>
+            <label><input type="checkbox" value="ore"> 🪨 礦石</label>
+            <label><input type="checkbox" value="iron"> 🔩 鐵錠</label>
+            <label><input type="checkbox" value="wool"> 🧶 羊毛</label>
+            <label><input type="checkbox" value="cloth"> 🧵 布料</label>
+            <label><input type="checkbox" value="hide"> ☁️ 獸皮</label>
+            <label><input type="checkbox" value="leather"> 🟤 皮革</label>
+            <label><input type="checkbox" value="furniture"> 🪑 家具</label>
+            <label><input type="checkbox" value="clothes"> 👕 衣服</label>
           </div>
-          <div class="legend-item">
-            <div class="legend-color" style="background: #2196F3;"></div>
-            <span>社交</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-color" style="background: #ffd700;"></div>
-            <span>總金錢</span>
+          <div id="product-chart-container">
+            <canvas id="product-chart"></canvas>
           </div>
         </div>
       </div>
