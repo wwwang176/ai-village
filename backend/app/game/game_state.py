@@ -351,15 +351,15 @@ class GameState:
             
             self.villagers[villager["id"]] = villager
             
-            # 在村民家裡地上放置麵包（1~10個，分流購買時間）
-            bread_count = random.randint(1, 10)
-            self.add_world_item(
-                item_id="bread",
-                quantity=bread_count,
-                x=spawn["doorX"] -1,
-                y=spawn["doorY"] -2,
-                owner_id=villager["id"]
-            )
+            # # 在村民家裡地上放置麵包（1~10個，分流購買時間）
+            # bread_count = random.randint(1, 10)
+            # self.add_world_item(
+            #     item_id="bread",
+            #     quantity=bread_count,
+            #     x=spawn["doorX"] -1,
+            #     y=spawn["doorY"] -2,
+            #     owner_id=villager["id"]
+            # )
         
         # 生成村民後，建立初始關係
         self._generate_initial_relationships()
