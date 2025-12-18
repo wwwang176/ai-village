@@ -710,10 +710,18 @@ export class Game {
         this.camera.follow(villager);
         this.camera.centerOn(villager);
       }
+      // 同步更新 Dashboard 選中狀態（不回調遊戲）
+      if (this.dashboard) {
+        this.dashboard.selectVillager(villager.id, false);
+      }
     } else {
       // 取消關注時也取消跟隨
       this.isFollowing = false;
       this.camera.follow(null);
+      // 清除 Dashboard 選中狀態（不回調遊戲）
+      if (this.dashboard) {
+        this.dashboard.selectVillager(null, false);
+      }
     }
     // 更新跟隨按鈕狀態
     this.updateFollowButton();
@@ -748,6 +756,8 @@ export class Game {
     const villager = this.villagerManager.getVillagerById(villagerId);
     if (villager) {
       this.selectVillager(villager);
+      // 鏡頭跳到村民位置（但不跟隨）
+      this.camera.centerOn(villager);
       // 同步更新 Dashboard 選擇狀態
       if (this.dashboard) {
         this.dashboard.selectedVillagerId = villagerId;

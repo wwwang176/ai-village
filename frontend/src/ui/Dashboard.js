@@ -59,8 +59,10 @@ export class Dashboard {
   
   /**
    * 選擇村民
+   * @param {string} villagerId - 村民 ID
+   * @param {boolean} notifyGame - 是否通知遊戲（避免循環調用）
    */
-  selectVillager(villagerId) {
+  selectVillager(villagerId, notifyGame = true) {
     this.selectedVillagerId = villagerId;
     
     // 更新列表選中狀態
@@ -69,8 +71,8 @@ export class Dashboard {
       item.classList.toggle('selected', item.dataset.villagerId === villagerId);
     });
     
-    // 通知遊戲追蹤這個村民
-    if (this.game) {
+    // 通知遊戲追蹤這個村民（避免循環調用）
+    if (this.game && notifyGame) {
       this.game.selectVillagerById(villagerId);
     }
     
