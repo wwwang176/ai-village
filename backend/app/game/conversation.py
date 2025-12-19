@@ -336,7 +336,7 @@ class ConversationSystem:
         other_name = other['name'] if familiarity >= 1 else "這個人"
         
         prompt = f"""你是中古世紀村莊的村民「{villager['name']}」，正在和「{other_name}」聊天。
-根據你的性格、背景、記憶來聊天，保持對話自然、簡短；可以利用對方記憶、個人訊息、他人記憶等等所有資訊來當聊天內容。
+根據你的性格、背景、記憶來聊天，保持對話自然、簡短；可以延續對方記憶、分享個人訊息、分享他人記憶等等所有資訊來當話題。
 
 【你的資訊】
 - 年齡：{villager.get('age', 25)} 歲

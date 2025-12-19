@@ -25,7 +25,7 @@ TOOLS = {
 FOODS = {
     "bread",        # 麵包
     "meat_raw",     # 生肉
-    "meat_cooked",  # 熟肉
+    "meat",         # 熟肉
 }
 
 

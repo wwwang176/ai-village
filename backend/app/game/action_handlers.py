@@ -383,21 +383,22 @@ class BuyFoodActionHandler(ActionHandler):
                     logger.info(f"🌾 {villager['name']} 是麵包師且有麵粉，去工作做麵包")
                     return GoWorkActionHandler().create_tasks(villager, ctx)
         
-        # 1. 檢查背包有沒有食物（麵包/生肉隨機二選一）
+        # 1. 檢查背包有沒有食物（麵包/熟肉可直接吃，生肉需灶台）
         bag_options = []
         for slot in inventory:
-            if slot and slot.get("item_id") == "bread":
-                bag_options.append("bread")
+            if slot and slot.get("item_id") in ("bread", "meat"):  # 麵包、熟肉可直接吃
+                bag_options.append(slot.get("item_id"))
                 break
         for slot in inventory:
-            if slot and slot.get("item_id") == "meat_raw" and stove:  # 生肉要有灶台才能選
+            if slot and slot.get("item_id") == "meat_raw" and stove:  # 生肉要有灶台才能煮
                 bag_options.append("meat_raw")
                 break
         
         if bag_options:
             choice = random.choice(bag_options)
-            if choice == "bread":
-                logger.info(f"🍞 {villager['name']} 背包有麵包，原地吃")
+            if choice in ("bread", "meat"):
+                food_name = "麵包" if choice == "bread" else "熟肉"
+                logger.info(f"🍖 {villager['name']} 背包有{food_name}，原地吃")
                 return [Task(type="eat", duration=2).to_dict()]
             else:
                 logger.info(f"🥩 {villager['name']} 背包有生肉，回家煮")
@@ -406,15 +407,18 @@ class BuyFoodActionHandler(ActionHandler):
                     Task(type="cook", duration=3).to_dict()
                 ]
         
-        # 2. 檢查地上有沒有自己的食物（麵包/生肉隨機二選一）
+        # 2. 檢查地上有沒有自己的食物（麵包/熟肉可直接吃，生肉需灶台）
         ground_bread = self._find_owned_ground_item(villager, "bread", ctx)
-        ground_meat = self._find_owned_ground_item(villager, "meat_raw", ctx) if stove else None
+        ground_cooked = self._find_owned_ground_item(villager, "meat", ctx)
+        ground_raw = self._find_owned_ground_item(villager, "meat_raw", ctx) if stove else None
         
         ground_options = []
         if ground_bread:
             ground_options.append(("bread", ground_bread))
-        if ground_meat:
-            ground_options.append(("meat_raw", ground_meat))
+        if ground_cooked:
+            ground_options.append(("meat", ground_cooked))
+        if ground_raw:
+            ground_options.append(("meat_raw", ground_raw))
         
         if ground_options:
             choice, ground_item = random.choice(ground_options)
@@ -428,8 +432,9 @@ class BuyFoodActionHandler(ActionHandler):
                     logger.info(f"🎒 {villager['name']} 背包滿了，先丟一個東西")
                     tasks.append(Task(type="drop_item", duration=1).to_dict())
             
-            if choice == "bread":
-                logger.info(f"🍞 {villager['name']} 地上有自己的麵包，去撿來吃")
+            if choice in ("bread", "meat"):
+                food_name = "麵包" if choice == "bread" else "熟肉"
+                logger.info(f"🍖 {villager['name']} 地上有自己的{food_name}，去撿來吃")
                 tasks.extend([
                     Task(type="move", target=(ground_item["x"], ground_item["y"])).to_dict(),
                     Task(type="pickup", item_id=ground_item["id"], duration=1).to_dict(),

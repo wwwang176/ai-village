@@ -53,27 +53,30 @@ class TaskEffect(ABC):
 # ==================== 基本任務效果 ====================
 
 class EatEffect(TaskEffect):
-    """吃東西效果 - 消耗背包裡的食物"""
+    """吃東西效果 - 消耗背包裡的食物（麵包或熟肉）"""
     
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
         inventory = villager.get("inventory", [None] * 5)
         stats = villager.get("stats", {})
         old_satiety = stats.get("satiety", 100)
+        from .production import FOOD_INFO
         
-        # 尋找背包裡的麵包
+        # 尋找背包裡可直接吃的食物（麵包或熟肉）
         for i, slot in enumerate(inventory):
-            if slot and slot.get("item_id") == "bread":
-                # 消耗一個麵包
+            if slot and slot.get("item_id") in ("bread", "meat"):
+                item_id = slot.get("item_id")
+                # 消耗一個
                 if slot.get("quantity", 1) > 1:
                     slot["quantity"] -= 1
                 else:
                     villager["inventory"][i] = None
                 
                 # 恢復飽足度
-                from .production import FOOD_INFO
-                bread_restore = FOOD_INFO.get("bread", {}).get("satiety_restore", 35)
-                stats["satiety"] = min(100, old_satiety + bread_restore)
-                logger.info(f"🍞 {villager['name']} 吃了麵包 (飽足: {old_satiety:.0f} → {stats['satiety']:.0f})")
+                food_info = FOOD_INFO.get(item_id, {})
+                restore = food_info.get("satiety_restore", 35)
+                food_name = food_info.get("name", item_id)
+                stats["satiety"] = min(100, old_satiety + restore)
+                logger.info(f"🍖 {villager['name']} 吃了{food_name} (飽足: {old_satiety:.0f} → {stats['satiety']:.0f})")
                 return True
         
         # 沒有食物可吃
@@ -487,35 +490,46 @@ class CookEffect(TaskEffect):
     """煮飯效果 - 使用灶台把生肉煮成熟肉並吃掉"""
     
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
-        # 檢查是否有生肉
         inventory = villager.get("inventory", [None] * 5)
-        meat_slot = None
-        meat_index = -1
         
+        # 第一步：把背包裡所有生肉轉換成熟肉
+        total_converted = 0
         for i, slot in enumerate(inventory):
             if slot and slot.get("item_id") == "meat_raw":
+                qty = slot.get("quantity", 1)
+                villager["inventory"][i] = {"item_id": "meat", "quantity": qty}
+                total_converted += qty
+        
+        if total_converted > 0:
+            logger.info(f"🍳 {villager['name']} 用灶台把 {total_converted} 個生肉煮成熟肉")
+        
+        # 第二步：吃一個熟肉
+        meat_slot = None
+        meat_index = -1
+        for i, slot in enumerate(villager["inventory"]):
+            if slot and slot.get("item_id") == "meat":
                 meat_slot = slot
                 meat_index = i
                 break
         
         if not meat_slot:
-            logger.info(f"🍳 {villager['name']} 沒有生肉可以煮")
+            logger.info(f"🍳 {villager['name']} 沒有熟肉可以吃")
             return False
         
-        # 消耗一個生肉
+        # 消耗一個熟肉
         if meat_slot.get("quantity", 1) > 1:
             meat_slot["quantity"] -= 1
         else:
             villager["inventory"][meat_index] = None
         
-        # 煮熟並吃掉，恢復飽足度
+        # 恢復飽足度
         from .production import FOOD_INFO
         stats = villager.get("stats", {})
         old_satiety = stats.get("satiety", 100)
         meat_restore = FOOD_INFO.get("meat", {}).get("satiety_restore", 50)
         stats["satiety"] = min(100, old_satiety + meat_restore)
         
-        logger.info(f"🍳 {villager['name']} 用灶台煮了生肉吃 (飽足: {old_satiety:.0f} → {stats['satiety']:.0f})")
+        logger.info(f"🍳 {villager['name']} 吃了熟肉 (飽足: {old_satiety:.0f} → {stats['satiety']:.0f})")
         return True
 
 

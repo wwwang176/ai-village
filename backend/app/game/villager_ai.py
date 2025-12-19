@@ -488,9 +488,9 @@ class VillagerAI:
         money = villager.get("money", 0)
         has_stove = game_state.get_stove_by_residence(villager["id"]) is not None
         
-        # 1. 背包有麵包 → 可以直接吃
+        # 1. 背包有麵包或熟肉 → 可以直接吃
         for slot in inventory:
-            if slot and slot.get("item_id") == "bread":
+            if slot and slot.get("item_id") in ("bread", "meat"):
                 return True
         
         # 2. 背包有生肉 + 有灶台 → 可以回家煮
