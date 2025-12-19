@@ -180,6 +180,8 @@ class ConversationSystem:
             conversation.add_message("a", first_message["text"], first_message.get("end", False))
             await self.broadcast_chat_message(conversation, "a", first_message["text"])
             logger.info(f"💬 對話開始: {villager_a['name']} 對 {villager_b['name']} 說：{first_message['text'][:30]}...")
+            # 社交對話消耗飽足度
+            villager_a.get("stats", {})["satiety"] = max(0, villager_a.get("stats", {}).get("satiety", 100) - 0.5)
     
     async def start_direct_conversation(self, villager_a: dict, villager_b: dict, ai_semaphore: asyncio.Semaphore):
         """直接發起對話（主動社交，100% 觸發）"""
@@ -214,6 +216,8 @@ class ConversationSystem:
             conversation.add_message("a", first_message["text"], first_message.get("end", False))
             await self.broadcast_chat_message(conversation, "a", first_message["text"])
             logger.info(f"💬 主動對話開始: {villager_a['name']} 對 {villager_b['name']} 說：{first_message['text'][:30]}...")
+            # 社交對話消耗飽足度
+            villager_a.get("stats", {})["satiety"] = max(0, villager_a.get("stats", {}).get("satiety", 100) - 0.5)
     
     async def process_conversations(self, ai_semaphore: asyncio.Semaphore):
         """處理所有進行中的對話"""
@@ -253,6 +257,9 @@ class ConversationSystem:
                         speaker = conv.villager_a if conv.history[-1]["speaker"] == "a" else conv.villager_b
                         await self.broadcast_chat_message(conv, conv.history[-1]["speaker"], response["text"])
                         logger.info(f"💬 {speaker['name']}: {response['text'][:30]}...")
+                        # 社交對話消耗飽足度
+                        speaker_stats = speaker.get("stats", {})
+                        speaker_stats["satiety"] = max(0, speaker_stats.get("satiety", 100) - 0.5)
                 except Exception as e:
                     logger.error(f"❌ 對話處理失敗: {e}")
                 finally:
@@ -441,6 +448,18 @@ class ConversationSystem:
                 stats_a["happiness"] = max(0, min(100, stats_a.get("happiness", 70) + affection_a_to_b * 5))
                 stats_b = villager_b.get("stats", {})
                 stats_b["happiness"] = max(0, min(100, stats_b.get("happiness", 70) + affection_b_to_a * 5))
+                
+                # 吵架/負面事件扣除飽足度
+                if base_affection <= -3:
+                    satiety_drain = 8  # 吵架
+                elif base_affection <= -1:
+                    satiety_drain = 3  # 小摩擦
+                else:
+                    satiety_drain = 0
+                if satiety_drain > 0:
+                    stats_a["satiety"] = max(0, stats_a.get("satiety", 100) - satiety_drain)
+                    stats_b["satiety"] = max(0, stats_b.get("satiety", 100) - satiety_drain)
+                    logger.info(f"😤 {villager_a['name']} 和 {villager_b['name']} 因負面互動飽足度 -{satiety_drain}")
         else:
             # 對話太短，只更新熟悉度
             personality_a = villager_a.get("personality", [])

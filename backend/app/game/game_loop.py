@@ -184,8 +184,48 @@ class GameLoop:
         hour = game_time.get("hour", 12)
         is_daytime = 6 <= hour < 18
         
-        # 飽足度緩慢下降（0.2/秒)
-        stats["satiety"] = max(0, stats.get("satiety", 100) - delta_time * 0.2)
+        # 飽足度動態消耗（基礎 0.15/秒）
+        satiety_rate = 0.15
+        state = villager.get("state", "idle")
+        occupation = villager.get("occupation", "")
+        
+        # 行為倍率
+        state_multipliers = {
+            "sleeping": 0.3,
+            "idle": 0.8,
+            "waiting": 0.8,
+            "eating": 1.0,
+            "socializing": 1.0,
+            "walking": 1.2,
+            "shearing": 1.5,
+            "slaughtering": 1.5,
+        }
+        satiety_rate *= state_multipliers.get(state, 1.0)
+        
+        # 工作時依職業調整
+        if state == "working":
+            heavy_jobs = ["miner", "lumberjack", "farmer", "blacksmith"]
+            light_jobs = ["weaver", "tailor", "merchant", "tanner", "carpenter"]
+            # 服務業: bartender, baker, miller, shepherd, butcher → 1.0x
+            if occupation in heavy_jobs:
+                satiety_rate *= 1.5
+            elif occupation in light_jobs:
+                satiety_rate *= 1.25
+            # else: 1.0x (服務業)
+        
+        # 天氣倍率（室外時）
+        if self.game_state.is_villager_outdoor(villager):
+            weather_info = self.game_state.get_weather_info()
+            weather_type = weather_info.get("type", "sunny")
+            weather_satiety_multipliers = {
+                "sunny": 1.0,
+                "cloudy": 1.0,
+                "rainy": 1.2,
+                "stormy": 1.5,
+            }
+            satiety_rate *= weather_satiety_multipliers.get(weather_type, 1.0)
+        
+        stats["satiety"] = max(0, stats.get("satiety", 100) - delta_time * satiety_rate)
         
         # 體力緩慢下降（非睡眠時）
         if villager.get("state") != "sleeping":
