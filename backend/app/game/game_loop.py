@@ -37,7 +37,7 @@ class GameLoop:
         # AI 決策限制
         self.ai_decisions_per_tick = 2  # 每 tick 最多處理幾個 AI 決策
         self.last_ai_tick = 0
-        self.ai_tick_interval = 1.0  # AI 決策間隔（秒）
+        self.ai_tick_interval = 2.0  # AI 決策間隔（秒）
         
         # 狀態廣播間隔
         self.broadcast_interval = 0.1  # 每 0.1 秒廣播一次狀態
@@ -48,7 +48,7 @@ class GameLoop:
         self.conversation_tick_interval = 1.5  # 對話回應間隔（秒）
         
         # AI 並行控制（限制同時請求數，避免超過 API 速率限制）
-        self.ai_semaphore = asyncio.Semaphore(8)  # 最多 8 個同時 AI 請求
+        self.ai_semaphore = asyncio.Semaphore(6)  # 最多 6 個同時 AI 請求
         
         # 子系統
         self.sheep_system = SheepSystem(game_state)

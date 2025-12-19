@@ -21,6 +21,38 @@ logger = logging.getLogger("VillagerAI")
 DEBUG_OPENAI = os.getenv("DEBUG_OPENAI", "true").lower() == "true"
 
 
+def format_memories(memories: List[dict], target_name: str = None, exclude_name: str = None, limit: int = 5, style: str = "simple") -> str:
+    """
+    格式化記憶列表
+    
+    Args:
+        memories: 記憶列表
+        target_name: 只包含與此人相關的記憶（可選）
+        exclude_name: 排除與此人相關的記憶（可選）
+        limit: 最多取幾條記憶
+        style: 格式風格 - "simple"（分號分隔）或 "detailed"（換行+對象名）
+    """
+    if not memories:
+        return "無"
+    
+    recent = memories[-limit:]
+    
+    # 過濾
+    if target_name:
+        recent = [m for m in recent if m.get("with") == target_name]
+    elif exclude_name:
+        recent = [m for m in recent if m.get("with") != exclude_name and m.get("summary")]
+    
+    if not recent:
+        return "無"
+    
+    # 格式化
+    prefix = "- " if style == "detailed" else ""
+    separator = "\n" if style == "detailed" else "; "
+    formatted = [f"{prefix}和 {m.get('with', '某人')}：{m.get('summary', '')}" for m in recent if m.get("summary")]
+    return separator.join(formatted) if formatted else "無"
+
+
 class VillagerAI:
     def __init__(self):
         api_key = os.getenv("OPENAI_API_KEY")
@@ -29,7 +61,7 @@ class VillagerAI:
         
         # 每個村民的上次 API 呼叫時間（避免 rate limit）
         self._last_api_call: Dict[str, float] = {}
-        self._api_interval = 3.0  # 每村民至少間隔 3 秒
+        self._api_interval = 4.0  # 每村民至少間隔 4 秒
         
         if not self.client:
             raise RuntimeError("❌ OpenAI API Key 未設定，無法啟動遊戲")
@@ -173,28 +205,35 @@ class VillagerAI:
     
     def _build_system_prompt(self, villager: dict) -> str:
         """生成靜態系統提示詞"""
-        return """你是中古世紀村莊模擬遊戲的村民 AI。
-根據村民的性格和當前狀態，選擇最符合角色個性的行為。
+        return """你是中古世紀村莊模擬遊戲的村民。
+根據村民的性格和當前狀態，選擇最符合角色狀態、角色個性的行為。
 
 【決策原則】
-1. 🚨 危急（<20%）：必須立即處理，無視性格
-2. ⚠️ 偏低（20-50%）：建議處理，可依性格延後
-3. 正常（>50%）：自由選擇
+1. 狀態危急：必須立即處理，無視性格
+2. 狀態偏低：建議處理，可依性格延後
+3. 狀態正常或滿足：自由選擇
 4. 同類型選項請隨機選一個，不要總是選同一個
 
 【回應格式】JSON
 {
   "action": "行為類型（從可用行為中選擇）",
-  "reason": "主觀理由（繁體中文，15字內）
+  "reason": "村民的主觀理由（繁體中文，15字內）
 }"""
     
     def _get_status_tag(self, value: float) -> str:
-        """取得狀態標記"""
-        if value < 20:
-            return " 🚨 危急"
-        elif value < 50:
-            return " ⚠️ 偏低"
-        return ""
+        """取得狀態標記（隨機閾值讓 AI 行為更有變化）"""
+        import random
+        critical_threshold = random.randint(10, 30)  # 危急閾值：10~30
+        low_threshold = random.randint(40, 60)       # 偏低閾值：40~60
+        satisfied_threshold = random.randint(70, 90) # 滿足閾值：70~90
+        
+        if value < critical_threshold:
+            return "危急"
+        elif value < low_threshold:
+            return "偏低"
+        elif value >= satisfied_threshold:
+            return "滿足"
+        return "正常"
     
     def _build_action_list(self, villager: dict, game_state) -> str:
         """建構可用行為列表"""
@@ -582,9 +621,9 @@ class VillagerAI:
 {occupation_trait}
 
 【狀態】
-- 飽足度：{satiety:.0f}%{self._get_status_tag(satiety)}
-- 體力：{energy:.0f}%{self._get_status_tag(energy)}
-- 社交滿足度：{social:.0f}%{self._get_status_tag(social)}
+- 飽足度：{satiety:.0f}% ({self._get_status_tag(satiety)})
+- 體力：{energy:.0f}% ({self._get_status_tag(energy)})
+- 社交滿足度：{social:.0f}% ({self._get_status_tag(social)})
 - 金錢：${money}
 
 【可用行為】
@@ -593,7 +632,7 @@ class VillagerAI:
 【位置】{location_text}
 【時間】第 {time_info['day']} 天 {time_info['hour']:02d}:{time_info['minute']:02d}
 【天氣】{weather_text}
-【記憶】{self._format_memories(villager.get('memories', []))}
+【記憶】{format_memories(villager.get('memories', []), limit=5)}
 
 請選擇一個行為。"""
 
@@ -655,12 +694,6 @@ class VillagerAI:
 
 請模擬他們的相遇互動。"""
 
-    def _format_memories(self, memories: List[dict]) -> str:
-        if not memories:
-            return "無"
-        recent = memories[-3:]
-        return "; ".join([m.get("event", "") for m in recent])
-    
     def _get_occupation_name(self, occupation: str) -> str:
         from ..data.occupations import OCCUPATIONS
         occ = OCCUPATIONS.get(occupation)

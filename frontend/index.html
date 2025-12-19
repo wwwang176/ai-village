@@ -315,14 +315,24 @@
     
     .detail-row {
       display: flex;
-      justify-content: space-between;
       color: #ccc;
       font-size: 12px;
       margin-bottom: 4px;
+      gap: 8px;
     }
     
-    .detail-row .label { color: #888; }
-    .detail-row .value { color: #fff; }
+    .detail-row .label { 
+      color: #888; 
+      white-space: nowrap;
+      flex-shrink: 0;
+      min-width: 50px;
+    }
+    .detail-row .value { 
+      color: #fff; 
+      word-break: break-word;
+      flex: 1;
+      text-align: right;
+    }
     
     .task-list, .memory-list, .relationship-list {
       font-size: 11px;

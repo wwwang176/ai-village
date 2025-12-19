@@ -9,6 +9,7 @@ import json
 import logging
 import os
 from typing import Dict, List, Optional, TYPE_CHECKING
+from .villager_ai import format_memories
 from dataclasses import dataclass, field
 
 if TYPE_CHECKING:
@@ -275,25 +276,28 @@ class ConversationSystem:
         affection = rel.get("affection", 0)
         
         memories = villager.get("memories", [])
-        recent_memories = [m for m in memories[-5:] if m.get("with") == other["name"]]
-        memories_text = "\n".join([f"- {m.get('summary', '')}" for m in recent_memories]) or "無"
+        memories_text = format_memories(memories, target_name=other["name"], limit=5, style="simple")
+        other_memories_text = format_memories(memories, exclude_name=other["name"], limit=5, style="detailed")
         
         history_text = conv.get_history_text() or "（對話剛開始）"
         turn_count = conv.get_turn_count()
         
         game_time = self.game_state.get_time()
+        weather_info = self.game_state.get_weather_info()
+        weather_text = f"{weather_info['icon']} {weather_info['name']}"
         my_stats = villager.get("stats", {})
         
         def get_mood(stats):
+            moods = []
             if stats.get("energy", 100) < 30:
-                return "很累"
+                moods.append("很累")
             if stats.get("satiety", 100) < 30:
-                return "很餓"
+                moods.append("很餓")
             if stats.get("social", 50) < 20:
-                return "寂寞"
+                moods.append("寂寞")
             if stats.get("happiness", 50) > 70:
-                return "開心"
-            return "普通"
+                moods.append("開心")
+            return "、".join(moods) if moods else "普通"
         
         my_mood = get_mood(my_stats)
         
@@ -325,6 +329,7 @@ class ConversationSystem:
         other_name = other['name'] if familiarity >= 1 else "這個人"
         
         prompt = f"""你是中古世紀村莊的村民「{villager['name']}」，正在和「{other_name}」聊天。
+根據你的性格、背景、記憶來聊天，保持對話自然、簡短；可以利用對方記憶、個人訊息、他人記憶等等所有資訊來當聊天內容。
 
 【你的資訊】
 - 年齡：{villager.get('age', 25)} 歲
@@ -343,7 +348,11 @@ class ConversationSystem:
 【你對 {other_name} 的記憶】
 {memories_text}
 
+【你對其他人的記憶】
+{other_memories_text}
+
 【現在時間】第 {game_time['day']} 天 {game_time['hour']:02d}:{game_time['minute']:02d}
+【天氣】{weather_text}
 
 【目前對話】（第 {turn_count + 1} 輪，最多 6 輪）
 {history_text}
@@ -487,7 +496,7 @@ class ConversationSystem:
             if "{" in content:
                 json_str = content[content.find("{"):content.rfind("}")+1]
                 result = json.loads(json_str)
-                result["summary"] = result.get("summary", "")[:50]
+                result["summary"] = result.get("summary", "")[:150]
                 result["affection_change"] = max(-3, min(3, result.get("affection_change", 1)))
                 return result
             else:
