@@ -61,6 +61,12 @@ async def lifespan(app: FastAPI):
     app.state.villager_ai = VillagerAI()
     app.state.manager = manager
     
+    # 嘗試讀取自動存檔
+    if app.state.game_state.load_autosave():
+        print("📂 已載入自動存檔")
+    else:
+        print("📂 無自動存檔，等待新遊戲")
+    
     # 啟動遊戲主循環
     app.state.game_loop = GameLoop(
         game_state=app.state.game_state,

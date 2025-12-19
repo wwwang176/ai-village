@@ -778,13 +778,21 @@ class GameState:
             "villagers": self.get_villagers_summary()
         }
     
-    def save(self) -> str:
-        """儲存遊戲"""
-        save_id = f"save_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    def save(self, auto: bool = False) -> str:
+        """儲存遊戲
+        
+        Args:
+            auto: 是否為自動存檔（自動存檔會覆蓋 autosave 資料夾）
+        """
+        if auto:
+            save_id = "autosave"
+        else:
+            save_id = f"save_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
         save_path = self.save_dir / save_id
         save_path.mkdir(exist_ok=True)
         
-        # 儲存各部分資料
+        # 儲存元資料
         with open(save_path / "meta.json", "w", encoding="utf-8") as f:
             json.dump({
                 "save_id": save_id,
@@ -793,6 +801,7 @@ class GameState:
                 "seed": self.seed
             }, f, ensure_ascii=False, indent=2)
         
+        # 儲存遊戲狀態
         with open(save_path / "game_state.json", "w", encoding="utf-8") as f:
             json.dump({
                 "time": self.game_time.to_dict(),
@@ -800,13 +809,22 @@ class GameState:
                 "player": self.player,
                 "villagers": self.villagers,
                 "weather": self.weather,
-                "weather_end_hour": self.weather_end_hour
+                "weather_end_hour": self.weather_end_hour,
+                "world_items": self.world_items,
+                "next_item_id": self.next_item_id,
+                "sheep": self.sheep,
+                "next_sheep_id": self.next_sheep_id,
+                "furniture": self.furniture,
+                "next_furniture_id": self.next_furniture_id,
+                "history": self.history,
+                "last_history_hour": self.last_history_hour
             }, f, ensure_ascii=False, indent=2)
         
+        # 儲存地圖
         with open(save_path / "map.json", "w", encoding="utf-8") as f:
             json.dump(self.map_data, f, ensure_ascii=False)
         
-        print(f"💾 遊戲已儲存: {save_id}")
+        print(f"💾 遊戲已儲存: {save_id} (Day {self.game_time.day})")
         return str(save_path)
     
     def load(self, save_id: str) -> bool:
@@ -819,6 +837,8 @@ class GameState:
         try:
             with open(save_path / "game_state.json", "r", encoding="utf-8") as f:
                 data = json.load(f)
+                
+                # 時間
                 if "time" in data:
                     self.game_time = GameTime.from_dict(data["time"])
                 else:
@@ -828,23 +848,56 @@ class GameState:
                         hour=data.get("hour", 8),
                         minute=data.get("minute", 0)
                     )
+                
+                # 基本資料
                 self.seed = data["seed"]
                 self.player = data["player"]
                 self.villagers = data["villagers"]
                 
-                # 讀取天氣狀態（相容舊存檔）
+                # 天氣（相容舊存檔）
                 self.weather = data.get("weather", "sunny")
                 self.weather_end_hour = data.get("weather_end_hour", self.game_time.total_hours + 4)
+                
+                # 地上物品（相容舊存檔）
+                self.world_items = data.get("world_items", [])
+                self.next_item_id = data.get("next_item_id", len(self.world_items))
+                
+                # 羊群（相容舊存檔）
+                self.sheep = data.get("sheep", {})
+                self.next_sheep_id = data.get("next_sheep_id", len(self.sheep))
+                
+                # 家具（相容舊存檔）
+                self.furniture = data.get("furniture", {})
+                self.next_furniture_id = data.get("next_furniture_id", len(self.furniture))
+                
+                # 歷史數據（相容舊存檔）
+                self.history = data.get("history", [])
+                self.last_history_hour = data.get("last_history_hour", -1)
             
             with open(save_path / "map.json", "r", encoding="utf-8") as f:
                 self.map_data = json.load(f)
             
+            # 重建路徑尋找器
+            if self.map_data:
+                self.pathfinder = PathFinding(
+                    self.map_data["width"],
+                    self.map_data["height"]
+                )
+                self.pathfinder.set_collision_map(self.map_data["collision"])
+            
+            # 重建目標解析器
+            self.target_resolver = TargetResolver(self)
+            
             self.initialized = True
-            print(f"📂 遊戲已讀取: {save_id}")
+            print(f"📂 遊戲已讀取: {save_id} (Day {self.game_time.day})")
             return True
         except Exception as e:
             print(f"❌ 讀取失敗: {e}")
             return False
+    
+    def load_autosave(self) -> bool:
+        """嘗試讀取自動存檔"""
+        return self.load("autosave")
     
     def update_player_position(self, x: float, y: float):
         """更新玩家位置"""

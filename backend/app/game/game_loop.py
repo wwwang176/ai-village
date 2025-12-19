@@ -47,6 +47,9 @@ class GameLoop:
         self.last_conversation_tick = 0
         self.conversation_tick_interval = 1.5  # 對話回應間隔（秒）
         
+        # 自動存檔（追蹤日期變化）
+        self.last_save_day = -1
+        
         # AI 並行控制（限制同時請求數，避免超過 API 速率限制）
         self.ai_semaphore = asyncio.Semaphore(6)  # 最多 6 個同時 AI 請求
         
@@ -105,7 +108,15 @@ class GameLoop:
         
         # 1. 更新遊戲時間（所有村民休息時加速 2 倍）
         time_scale = self._get_time_scale()
+        old_day = self.game_state.game_time.day
         self.game_state.update_time(delta_time * time_scale)
+        new_day = self.game_state.game_time.day
+        
+        # 1.1. 日期變化時自動存檔
+        if new_day != old_day and self.last_save_day != new_day:
+            self.last_save_day = new_day
+            self.game_state.save(auto=True)
+            logger.info(f"💾 自動存檔完成 (Day {new_day})")
         
         # 1.5. 更新天氣
         self.game_state.update_weather()
