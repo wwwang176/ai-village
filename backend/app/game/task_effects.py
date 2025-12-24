@@ -487,12 +487,12 @@ class SlaughterSheepEffect(TaskEffect):
 # ==================== 煮飯相關效果 ====================
 
 class CookEffect(TaskEffect):
-    """煮飯效果 - 使用灶台把生肉煮成熟肉並吃掉"""
+    """煮飯效果 - 使用灶台把生肉煮成熟肉"""
     
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
         inventory = villager.get("inventory", [None] * 5)
         
-        # 第一步：把背包裡所有生肉轉換成熟肉
+        # 把背包裡所有生肉轉換成熟肉
         total_converted = 0
         for i, slot in enumerate(inventory):
             if slot and slot.get("item_id") == "meat_raw":
@@ -502,43 +502,20 @@ class CookEffect(TaskEffect):
         
         if total_converted > 0:
             logger.info(f"🍳 {villager['name']} 用灶台把 {total_converted} 個生肉煮成熟肉")
-        
-        # 第二步：吃一個熟肉
-        meat_slot = None
-        meat_index = -1
-        for i, slot in enumerate(villager["inventory"]):
-            if slot and slot.get("item_id") == "meat":
-                meat_slot = slot
-                meat_index = i
-                break
-        
-        if not meat_slot:
-            logger.info(f"🍳 {villager['name']} 沒有熟肉可以吃")
-            return False
-        
-        # 消耗一個熟肉
-        if meat_slot.get("quantity", 1) > 1:
-            meat_slot["quantity"] -= 1
+            return True
         else:
-            villager["inventory"][meat_index] = None
-        
-        # 恢復飽足度
-        from .production import FOOD_INFO
-        stats = villager.get("stats", {})
-        old_satiety = stats.get("satiety", 100)
-        meat_restore = FOOD_INFO.get("meat", {}).get("satiety_restore", 50)
-        stats["satiety"] = min(100, old_satiety + meat_restore)
-        
-        logger.info(f"🍳 {villager['name']} 吃了熟肉 (飽足: {old_satiety:.0f} → {stats['satiety']:.0f})")
-        return True
+            logger.info(f"🍳 {villager['name']} 沒有生肉可煮")
+            return False
 
 
 class PickupEffect(TaskEffect):
     """撿起地上物品效果"""
     
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
+        world_item_id = task.get("world_item_id")
         item_id = task.get("item_id")
-        if not item_id:
+        
+        if not world_item_id:
             logger.info(f"📦 {villager['name']} 沒有指定要撿的物品")
             return False
         
@@ -558,10 +535,10 @@ class PickupEffect(TaskEffect):
                 logger.info(f"📦 {villager['name']} 背包滿了且沒有可丟的物品，無法撿取")
                 return False
         
-        # 找到並移除地上的物品
-        item = game_state.remove_world_item(item_id)
+        # 找到並移除地上的物品（使用世界物品唯一 ID）
+        item = game_state.remove_world_item(world_item_id)
         if not item:
-            logger.info(f"📦 {villager['name']} 找不到物品 {item_id}")
+            logger.info(f"📦 {villager['name']} 找不到物品 {item_id} (id: {world_item_id})")
             return False
         
         # 放到村民背包
@@ -765,6 +742,7 @@ class SellExcessEffect(TaskEffect):
 TASK_EFFECTS: Dict[str, TaskEffect] = {
     "eat": EatEffect(),
     "rest": RestEffect(),
+    "sleep": RestEffect(),  # sleep 與 rest 使用相同效果（恢復體力）
     "socialize": SocializeEffect(),
     "work": WorkEffect(),
     "buy_tool": BuyToolEffect(),

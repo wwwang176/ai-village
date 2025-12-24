@@ -32,6 +32,7 @@ class TargetResolver:
         """
         action_targets = {
             "go_work": lambda v: self._get_work_target(v),
+            "go_workplace": lambda v: self._get_work_target(v),  # 多輪決策別名
             "go_home": lambda v: self._get_bed_target(v),
             "go_market": lambda v: self._get_building_target("market"),
             "go_bar": lambda v: self._get_building_target("tavern"),
