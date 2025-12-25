@@ -454,6 +454,7 @@ class VillagerAI:
         weather_info = game_state.get_weather_info()
         weather_text = f"{weather_info['icon']} {weather_info['name']}"
         memories_text = format_memories(villager.get('memories', []), limit=3)
+        action_history_text = self._format_action_history(villager)
         
         # 背包物品
         inventory_text = self._format_inventory(villager)
@@ -478,6 +479,7 @@ class VillagerAI:
 【時間】第 {time_info['day']} 天 {time_info['hour']:02d}:{time_info['minute']:02d}
 【天氣】{weather_text}
 【最近】{memories_text}
+【前幾次行為】{action_history_text}
 
 你要做什麼？"""
     
@@ -500,6 +502,7 @@ class VillagerAI:
         weather_info = game_state.get_weather_info()
         weather_text = f"{weather_info['icon']} {weather_info['name']}"
         memories_text = format_memories(villager.get('memories', []), limit=3)
+        action_history_text = self._format_action_history(villager)
         
         return f"""【{villager['name']}】{occupation_name}，性格：{traits_text}
 【位置】{context['location_name']}
@@ -524,6 +527,7 @@ class VillagerAI:
 【時間】第 {time_info['day']} 天 {time_info['hour']:02d}:{time_info['minute']:02d}
 【天氣】{weather_text}
 【最近】{memories_text}
+【前幾次行為】{action_history_text}
 
 你要做什麼？"""
     
@@ -628,17 +632,39 @@ class VillagerAI:
         return "、".join(items) if items else "空"
     
     def _format_ground_items(self, villager: dict, game_state) -> str:
-        """格式化地上物品（自己擁有的）"""
+        """格式化地上物品（自己擁有的），相同物品合併顯示"""
         owned_items = game_state.get_items_by_owner(villager["id"])
         if not owned_items:
             return "無"
         
-        items = []
+        # 合併相同物品的數量
+        totals = {}
         for item in owned_items:
             item_id = item.get("item_id")
             qty = item.get("quantity", 1)
-            items.append(f"{item_id} x{qty}")
+            totals[item_id] = totals.get(item_id, 0) + qty
+        
+        items = [f"{item_id} x{qty}" for item_id, qty in totals.items()]
         return "、".join(items) if items else "無"
+    
+    def _format_action_history(self, villager: dict) -> str:
+        """格式化行為歷史"""
+        history = villager.get("action_history", [])
+        if not history:
+            return "無"
+        
+        lines = []
+        for record in history:
+            action = record.get("action", "unknown")
+            result = record.get("result", "unknown")
+            detail = record.get("detail", "")
+            icon = "✅" if result == "success" else "❌"
+            if detail:
+                lines.append(f"{action} → {icon} {detail}")
+            else:
+                lines.append(f"{action} → {icon}")
+        
+        return "; ".join(lines)
     
     def _format_nearby_villagers(self, nearby: List[dict], me: dict) -> str:
         if not nearby:

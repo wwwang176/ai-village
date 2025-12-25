@@ -369,6 +369,10 @@ class GameLoop:
                 # 所有任務完成
                 villager["state"] = "idle"
                 
+                # 記錄決策成功（如果不是要觸發下一階段決策）
+                if not trigger_decision:
+                    self._record_decision_result(villager, True, "完成")
+                
                 # 觸發第二階段決策
                 if trigger_decision:
                     asyncio.create_task(self.trigger_action_decision(villager))
@@ -449,9 +453,10 @@ class GameLoop:
             # 執行效果
             success = self.apply_task_effect(villager, task)
             
-            # 如果任務失敗，清空後續任務
+            # 如果任務失敗，清空後續任務並記錄
             if not success:
                 logger.info(f"❌ {villager['name']} 任務 {task_type} 失敗，清空後續任務")
+                self._record_decision_result(villager, False, f"任務 {task_type} 失敗")
                 villager["task_queue"] = []
                 villager["state"] = "idle"
             
@@ -699,6 +704,9 @@ class GameLoop:
                 
                 logger.info(f"🎯 決策: {villager['name']} → {action} (原因: {reason})")
                 
+                # 記錄待完成決策
+                villager["pending_decision"] = {"action": action, "reason": reason}
+                
                 # 建立任務
                 tasks = self._create_destination_tasks(villager, action, decision)
                 
@@ -740,6 +748,9 @@ class GameLoop:
                 reason = decision.get("reason", "")
                 
                 logger.info(f"🎯 動作決策: {villager['name']} → {action} (原因: {reason})")
+                
+                # 記錄待完成決策
+                villager["pending_decision"] = {"action": action, "reason": reason}
                 
                 # 建立動作任務
                 tasks = self._create_action_tasks(villager, action, target, item, destination)
@@ -1045,6 +1056,34 @@ class GameLoop:
         await self.manager.broadcast(state)
     
     # ========== 新選項輔助方法 ==========
+    
+    def _record_decision_result(self, villager: dict, success: bool, detail: str = ""):
+        """記錄決策結果到 action_history"""
+        pending = villager.get("pending_decision")
+        if not pending:
+            return
+        
+        # 初始化 action_history
+        if "action_history" not in villager:
+            villager["action_history"] = []
+        
+        # 記錄結果
+        record = {
+            "action": pending.get("action", "unknown"),
+            "result": "success" if success else "fail",
+            "detail": detail
+        }
+        villager["action_history"].append(record)
+        
+        # 只保留最近 3 筆
+        if len(villager["action_history"]) > 3:
+            villager["action_history"] = villager["action_history"][-3:]
+        
+        # 清除待完成決策
+        villager["pending_decision"] = None
+        
+        result_icon = "✅" if success else "❌"
+        logger.info(f"📝 {villager['name']} 決策記錄: {pending.get('action')} {result_icon} {detail}")
     
     def _find_sell_target(self, villager: dict, target_item: str = None) -> dict:
         """找到可賣物品的商人
