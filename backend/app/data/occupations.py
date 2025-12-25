@@ -114,7 +114,7 @@ OCCUPATIONS = {
     # ========== 特殊 ==========
     "merchant": OccupationType(
         id="merchant", name="商人", tier=0, chain="trade",
-        building="market",
+        building="plaza",
         required_tool=None,
         input_materials=[],
         output_product="", output_quantity=0, work_time=0,

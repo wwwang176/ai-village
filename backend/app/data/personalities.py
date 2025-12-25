@@ -7,7 +7,7 @@ PERSONALITY_DIMENSIONS = {
         "positive": "extrovert",
         "negative": "introvert",
         "descriptions": {
-            "extrovert": "喜歡社交，常去市集",
+            "extrovert": "喜歡社交，常去廣場",
             "introvert": "偏好獨處，專注工作"
         }
     },

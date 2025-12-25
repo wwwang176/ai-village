@@ -332,8 +332,8 @@ class VillagerAI:
         # 8. go_sleep - 回家睡覺
         actions.append("- go_sleep：回家睡覺 → 恢復體力")
         
-        # 8. go_market - 去市集社交
-        actions.append("- go_market：去市集找人聊天 → 恢復社交")
+        # 8. go_plaza - 去廣場社交
+        actions.append("- go_plaza：去廣場找人聊天 → 恢復社交")
         
         # 9. go_bar - 去酒吧
         if is_night or money >= 100:
@@ -368,7 +368,7 @@ class VillagerAI:
                 actions.append("- work：在這裡工作")
         if location_type == "house":
             actions.append("- rest：在家休息")
-        actions.append("- leave：離開此地（需指定 destination: market/home/workplace/bar/wander）")
+        actions.append("- leave：離開此地（需指定 destination: plaza/home/workplace/bar/wander）")
         
         return "\n".join(actions) if actions else "- leave：離開此地"
     

@@ -723,6 +723,11 @@ class GameLoop:
         """第二階段：抵達目的地後選擇動作"""
         async with self.ai_semaphore:
             try:
+                # 檢查村民是否已有任務（防止異步回應覆蓋新任務）
+                if villager.get("task_queue"):
+                    logger.info(f"⏭️ {villager['name']} 已有任務，跳過動作決策")
+                    return
+                
                 decision = await self.villager_ai.make_action_decision(
                     villager,
                     self.game_state
@@ -800,7 +805,7 @@ class GameLoop:
             if sell_info:
                 merchant = self.game_state.get_villager(sell_info["merchant_id"])
                 if merchant:
-                    tasks.append(Task(type="move", target=(merchant["x"], merchant["y"])).to_dict())
+                    tasks.append(Task(type="move_to_villager", target=(merchant["x"], merchant["y"]), target_villager_id=merchant["id"]).to_dict())
                     tasks.append(Task(
                         type="sell_to_merchant",
                         merchant_id=sell_info["merchant_id"],
@@ -814,7 +819,7 @@ class GameLoop:
             if food_info:
                 seller = self.game_state.get_villager(food_info["seller_id"])
                 if seller:
-                    tasks.append(Task(type="move", target=(seller["x"], seller["y"])).to_dict())
+                    tasks.append(Task(type="move_to_villager", target=(seller["x"], seller["y"]), target_villager_id=seller["id"]).to_dict())
                     tasks.append(Task(
                         type="buy_food",
                         seller_id=food_info["seller_id"],
@@ -848,7 +853,7 @@ class GameLoop:
             if material_info:
                 supplier = self.game_state.get_villager(material_info["supplier_id"])
                 if supplier:
-                    tasks.append(Task(type="move", target=(supplier["x"], supplier["y"])).to_dict())
+                    tasks.append(Task(type="move_to_villager", target=(supplier["x"], supplier["y"]), target_villager_id=supplier["id"]).to_dict())
                     tasks.append(Task(
                         type="buy_material",
                         supplier_id=material_info["supplier_id"],
@@ -864,7 +869,7 @@ class GameLoop:
                     blacksmith_villager = v
                     break
             if blacksmith_villager:
-                tasks.append(Task(type="move", target=(blacksmith_villager["x"], blacksmith_villager["y"])).to_dict())
+                tasks.append(Task(type="move_to_villager", target=(blacksmith_villager["x"], blacksmith_villager["y"]), target_villager_id=blacksmith_villager["id"]).to_dict())
                 tasks.append(Task(type="buy_tool", duration=2).to_dict())
         
         elif action == "go_sleep":
@@ -874,9 +879,9 @@ class GameLoop:
                 tasks.append(Task(type="move", target=(bed["x"], bed["y"])).to_dict())
             tasks.append(Task(type="sleep", duration=10).to_dict())
         
-        elif action == "go_market":
-            # 去市集（觸發第二輪決策）
-            target_pos = self.game_state.resolve_action_target(villager, "go_market")
+        elif action == "go_plaza":
+            # 去廣場（觸發第二輪決策）
+            target_pos = self.game_state.resolve_action_target(villager, "go_plaza")
             if target_pos:
                 tasks.append(Task(type="move", target=target_pos, trigger_action_decision=True).to_dict())
         

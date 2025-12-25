@@ -163,7 +163,7 @@ class GameState:
             "射箭", "騎馬", "養蜂", "編織", "製陶", "草藥學", "養鴿", "飼養獵犬",
             "吹笛", "彈琴", "雕刻", "打鐵藝術", "石雕", "馴鷹", "賭博", "打獵",
             "寫詩", "散步", "採集蘑菇", "摔角", "擊劍", "雜耍", "占卜", "製作蠟燭",
-            "製作珠寶", "祈禱", "參觀市集", "玩牌", "擲骰子", "賽跑", "爬樹", "製作花環",
+            "製作珠寶", "祈禱", "參觀廣場", "玩牌", "擲骰子", "賽跑", "爬樹", "製作花環",
             "尋寶", "寫日記", "觀看戲劇", "演戲", "吹口哨", "整理花園", "觀鳥", "製作果醬",
             "曬太陽", "泡茶", "研究歷史", "練習劍術", "照顧孤兒", "修理工具", "交換八卦", "放風箏"
         ]
@@ -202,7 +202,7 @@ class GameState:
             "tanner",       # 皮革坊 - 皮革匠
             "tailor",       # 裁縫店 - 裁縫
             # 特殊
-            "merchant",     # 市集 - 商人
+            "merchant",     # 廣場 - 商人
             "bartender",    # 酒吧 - 酒保
         ]
         
@@ -257,7 +257,7 @@ class GameState:
                 "weaver": "weaver_shop",
                 "tanner": "tannery",
                 "tailor": "tailor_shop",
-                "merchant": "market",
+                "merchant": "plaza",
                 "bartender": "tavern",
             }
             
@@ -1175,7 +1175,7 @@ class GameState:
     
     def is_outdoor_building(self, building_type: str) -> bool:
         """判斷建築物是否為開放式（室外）建築"""
-        outdoor_types = {"pasture", "farm", "mine", "lumber_camp", "market"}
+        outdoor_types = {"pasture", "farm", "mine", "lumber_camp", "plaza"}
         return building_type in outdoor_types
     
     # ==================== 目標位置解析 ====================

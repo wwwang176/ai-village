@@ -59,7 +59,7 @@ WEATHER_DURATION_MAX = 8
 # ============================================================
 
 # 開放式建築（沒有遮蔽，受天氣影響）
-OUTDOOR_BUILDINGS = ['farm', 'mine', 'lumber_camp', 'pasture', 'market']
+OUTDOOR_BUILDINGS = ['farm', 'mine', 'lumber_camp', 'pasture', 'plaza']
 
 
 # ============================================================

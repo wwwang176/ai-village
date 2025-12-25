@@ -226,7 +226,7 @@ export class TileRenderer extends BaseRenderer {
       case 7: // 牧場
         this.renderPasture(screenX, screenY, tileX, tileY);
         break;
-      case 8: // 市集廣場
+      case 8: // 廣場
         this.renderPlaza(screenX, screenY, tileX, tileY);
         break;
       case 9: // 河流
@@ -514,7 +514,7 @@ export class TileRenderer extends BaseRenderer {
   }
   
   /**
-   * 渲染市集廣場
+   * 渲染廣場
    */
   renderPlaza(screenX, screenY, tileX, tileY) {
     const size = this.tileSize;

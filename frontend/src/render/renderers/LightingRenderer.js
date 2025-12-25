@@ -17,7 +17,7 @@ export class LightingRenderer extends BaseRenderer {
     this.canvasCenterY = 0;
     
     // 開放式建築（不渲染光源，村民在內視為室外）
-    this.openBuildings = ['farm', 'mine', 'lumber_camp', 'pasture', 'market'];
+    this.openBuildings = ['farm', 'mine', 'lumber_camp', 'pasture', 'plaza'];
     
     // 火焰閃爍效果的時間變數
     this.flickerTime = 0;
