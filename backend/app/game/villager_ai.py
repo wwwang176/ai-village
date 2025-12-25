@@ -71,7 +71,7 @@ class VillagerAI:
     # ========== 多輪決策系統 ==========
     
     async def make_destination_decision(self, villager: dict, game_state) -> dict:
-        """第一階段決策：選擇要去哪裡"""
+        """第一階段決策：選擇要去哪裡（使用 Function Calling）"""
         villager_id = villager.get("id", "unknown")
         now = time.time()
         last_call = self._last_api_call.get(villager_id, 0)
@@ -83,6 +83,10 @@ class VillagerAI:
         self._last_api_call[villager_id] = time.time()
         
         try:
+            # 取得可用動作和 tools schema
+            available_actions, pickup_items, sell_items = self._get_available_destination_actions(villager, game_state)
+            tools = self._build_destination_tools(available_actions, pickup_items, sell_items)
+            
             prompt = self._build_destination_prompt(villager, game_state)
             system_prompt = self._build_destination_system_prompt()
             
@@ -100,11 +104,14 @@ class VillagerAI:
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                max_tokens=150,
-                response_format={"type": "json_object"}
+                tools=tools,
+                tool_choice={"type": "function", "function": {"name": "choose_destination"}},
+                max_tokens=150
             )
             
-            result = json.loads(response.choices[0].message.content)
+            # 解析 function call 結果
+            tool_call = response.choices[0].message.tool_calls[0]
+            result = json.loads(tool_call.function.arguments)
             
             if DEBUG_OPENAI:
                 logger.info(f"📥 回傳: action={result.get('action')}, reason={result.get('reason')}")
@@ -117,7 +124,7 @@ class VillagerAI:
             return {"action": "wander", "reason": "不知道要做什麼"}
     
     async def make_action_decision(self, villager: dict, game_state) -> dict:
-        """第二階段決策：在當前位置選擇要做什麼"""
+        """第二階段決策：在當前位置選擇要做什麼（使用 Function Calling）"""
         villager_id = villager.get("id", "unknown")
         now = time.time()
         last_call = self._last_api_call.get(villager_id, 0)
@@ -130,6 +137,11 @@ class VillagerAI:
         
         try:
             context = game_state.get_location_context(villager)
+            
+            # 取得可用動作和 tools schema
+            available_actions, action_params = self._get_available_location_actions(villager, game_state, context)
+            tools = self._build_action_tools(available_actions, action_params)
+            
             prompt = self._build_action_prompt(villager, game_state, context)
             system_prompt = self._build_action_system_prompt()
             
@@ -147,11 +159,14 @@ class VillagerAI:
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                max_tokens=200,
-                response_format={"type": "json_object"}
+                tools=tools,
+                tool_choice={"type": "function", "function": {"name": "choose_action"}},
+                max_tokens=200
             )
             
-            result = json.loads(response.choices[0].message.content)
+            # 解析 function call 結果
+            tool_call = response.choices[0].message.tool_calls[0]
+            result = json.loads(tool_call.function.arguments)
             
             if DEBUG_OPENAI:
                 logger.info(f"📥 回傳: action={result.get('action')}, target={result.get('target')}")
@@ -162,6 +177,231 @@ class VillagerAI:
         except Exception as e:
             logger.error(f"動作決策錯誤: {e}")
             return {"action": "leave", "destination": "home", "reason": "不知道要做什麼"}
+    
+    # ========== Function Calling Tools 構建 ==========
+    
+    def _get_available_destination_actions(self, villager: dict, game_state) -> tuple:
+        """取得可用的目的地動作列表，返回 (動作列表, 可撿物品列表)"""
+        actions = []
+        pickup_items = []
+        money = villager.get("money", 0)
+        hour = game_state.get_time()["hour"]
+        is_night = hour >= 19 or hour < 4
+        
+        # 1. go_work
+        if self._can_work(villager, game_state):
+            actions.append("go_work")
+        
+        # 2. go_sell
+        sell_items = self._get_sellable_items_list(villager, game_state)
+        if sell_items:
+            actions.append("go_sell")
+        
+        # 3. go_buy_food
+        if self._get_buy_food_info(villager, game_state):
+            actions.append("go_buy_food")
+        
+        # 4. eat
+        if self._get_eat_info(villager):
+            actions.append("eat")
+        
+        # 4.5. go_cook
+        if self._get_cook_info(villager, game_state):
+            actions.append("go_cook")
+        
+        # 5. go_pickup
+        pickup_info = self._get_pickup_info(villager, game_state)
+        if pickup_info:
+            actions.append("go_pickup")
+            # 解析可撿物品
+            ground_items = self._get_ground_items_list(villager, game_state)
+            pickup_items = ground_items
+        
+        # 6. go_buy_material
+        if self._get_buy_material_info(villager, game_state):
+            actions.append("go_buy_material")
+        
+        # 7. go_buy_tool
+        if self._get_buy_tool_info(villager, game_state):
+            actions.append("go_buy_tool")
+        
+        # 8. go_sleep（總是可用）
+        actions.append("go_sleep")
+        
+        # 9. go_plaza（總是可用）
+        actions.append("go_plaza")
+        
+        # 10. go_bar
+        if is_night or money >= 100:
+            actions.append("go_bar")
+        
+        # 11. wander（總是可用）
+        actions.append("wander")
+        
+        return actions, pickup_items, sell_items
+    
+    def _get_ground_items_list(self, villager: dict, game_state) -> List[str]:
+        """取得地上可撿物品列表"""
+        items = []
+        villager_id = villager.get("id")
+        for obj in game_state.map_data.get("objects", []):
+            if obj.get("type") == "ground_item" and obj.get("owner_id") == villager_id:
+                item_id = obj.get("item_id")
+                if item_id and item_id not in items:
+                    items.append(item_id)
+        return items
+    
+    def _get_sellable_items_list(self, villager: dict, game_state) -> List[str]:
+        """取得可賣給商人的物品列表"""
+        from ..data.item_categories import TOOLS
+        from ..data.supply_chain import MERCHANT_BUY_PRICES
+        
+        items = []
+        inventory = villager.get("inventory", [])
+        for slot in inventory:
+            if slot:
+                item_id = slot.get("item_id")
+                if item_id and item_id not in TOOLS and item_id in MERCHANT_BUY_PRICES:
+                    if item_id not in items:
+                        items.append(item_id)
+        return items
+    
+    def _build_destination_tools(self, available_actions: List[str], pickup_items: List[str], sell_items: List[str] = None) -> List[dict]:
+        """構建目的地決策的 tools schema"""
+        if sell_items is None:
+            sell_items = []
+        
+        # 基本 properties
+        properties = {
+            "action": {
+                "type": "string",
+                "enum": available_actions,
+                "description": "要執行的動作"
+            },
+            "reason": {
+                "type": "string",
+                "description": "選擇這個動作的原因（15字內）"
+            }
+        }
+        required = ["action", "reason"]
+        
+        # 如果有 go_pickup 或 go_sell，加入 item 參數
+        all_items = []
+        if "go_pickup" in available_actions and pickup_items:
+            all_items.extend(pickup_items)
+        if "go_sell" in available_actions and sell_items:
+            all_items.extend([i for i in sell_items if i not in all_items])
+        
+        if all_items:
+            properties["item"] = {
+                "type": ["string", "null"],
+                "enum": all_items + [None],
+                "description": "要操作的物品（go_pickup/go_sell 時需要）"
+            }
+            required.append("item")
+        
+        return [{
+            "type": "function",
+            "function": {
+                "name": "choose_destination",
+                "description": "選擇要前往的目的地或執行的動作",
+                "strict": True,
+                "parameters": {
+                    "type": "object",
+                    "properties": properties,
+                    "required": required,
+                    "additionalProperties": False
+                }
+            }
+        }]
+    
+    def _get_available_location_actions(self, villager: dict, game_state, context: dict) -> tuple:
+        """取得當前位置可用的動作列表，返回 (動作列表, 參數資訊)"""
+        actions = []
+        params = {
+            "targets": [],      # talk 的目標
+            "buy_items": [],    # buy 的物品
+            "sell_items": [],   # sell 的物品
+        }
+        
+        location_type = context["location_type"]
+        trade_options = context["trade_options"]
+        nearby = context["nearby_villagers"]
+        
+        # talk
+        if nearby:
+            actions.append("talk")
+            params["targets"] = [v["id"] for v in nearby]
+        
+        # buy
+        if trade_options["can_buy"]:
+            actions.append("buy")
+            params["buy_items"] = [opt["item"] for opt in trade_options["can_buy"]]
+        
+        # sell
+        if trade_options["can_sell"]:
+            actions.append("sell")
+            params["sell_items"] = [opt["item"] for opt in trade_options["can_sell"]]
+        
+        # eat
+        if self._has_food_in_inventory(villager):
+            actions.append("eat")
+        
+        # idle（總是可用）
+        actions.append("idle")
+        
+        return actions, params
+    
+    def _build_action_tools(self, available_actions: List[str], params: dict) -> List[dict]:
+        """構建動作決策的 tools schema"""
+        properties = {
+            "action": {
+                "type": "string",
+                "enum": available_actions,
+                "description": "要執行的動作"
+            },
+            "reason": {
+                "type": "string",
+                "description": "選擇這個動作的原因（15字內）"
+            }
+        }
+        required = ["action", "reason"]
+        
+        # target（talk 需要）
+        if "talk" in available_actions and params["targets"]:
+            properties["target"] = {
+                "type": ["string", "null"],
+                "enum": params["targets"] + [None],
+                "description": "目標村民 ID（talk 時需要）"
+            }
+            required.append("target")
+        
+        # item（buy/sell 需要）
+        all_items = list(set(params.get("buy_items", []) + params.get("sell_items", [])))
+        if all_items:
+            properties["item"] = {
+                "type": ["string", "null"],
+                "enum": all_items + [None],
+                "description": "物品名稱（buy/sell 時需要）"
+            }
+            required.append("item")
+        
+        return [{
+            "type": "function",
+            "function": {
+                "name": "choose_action",
+                "description": "選擇要在當前位置執行的動作",
+                "strict": True,
+                "parameters": {
+                    "type": "object",
+                    "properties": properties,
+                    "required": required,
+                    "additionalProperties": False
+                }
+            }
+        }]
+    
+    # ========== System Prompts ==========
     
     def _build_destination_system_prompt(self) -> str:
         return """你是中古世紀村莊模擬遊戲中勤勞的村民。
@@ -177,14 +417,9 @@ class VillagerAI:
 1. 工作必須有工具，缺少工具可以去買或撿地上的
 2. 工作必須要有材料，缺少材料可以去買或撿地上的
 3. 吃飽了就不要再吃
+4. 睡飽了白天就不要再睡
 
-根據你的狀態、優先級和性格，選擇行動。
-
-【回應格式】JSON
-{
-  "action": "行動代碼",
-  "reason": "簡短理由（15字內）
-}"""
+根據你的狀態、優先級和性格，呼叫 choose_destination 選擇行動。"""
     
     def _build_action_system_prompt(self) -> str:
         return """你是中古世紀村莊模擬遊戲中勤勞的村民。
@@ -195,15 +430,7 @@ class VillagerAI:
 3. 休息（在家時休息恢復體力）
 4. 社交（以上都滿足時才聊天）
 
-根據優先級選擇動作。
-
-【回應格式】JSON
-{
-  "action": "動作代碼",
-  "target": "目標ID（如果需要）",
-  "item": "物品ID（如果需要）",
-  "reason": "簡短理由（15字內）"
-}"""
+根據優先級呼叫 choose_action 選擇動作。"""
     
     def _build_destination_prompt(self, villager: dict, game_state) -> str:
         time_info = game_state.get_time()
@@ -249,6 +476,7 @@ class VillagerAI:
 你要做什麼？"""
     
     def _build_action_prompt(self, villager: dict, game_state, context: dict) -> str:
+        time_info = game_state.get_time()
         stats = villager["stats"]
         
         satiety = stats.get('satiety', 100)
@@ -257,15 +485,24 @@ class VillagerAI:
         money = villager.get('money', 0)
         
         occupation_name = self._get_occupation_name(villager.get('occupation', ''))
+        traits = villager.get("personality", [])
+        traits_text = "、".join(traits) if traits else "普通"
         inventory_text = self._format_inventory(villager)
         nearby_text = self._format_nearby_villagers(context["nearby_villagers"], villager)
         trade_text = self._format_trade_options(context["trade_options"])
         actions_text = self._build_location_actions(villager, game_state, context)
+        weather_info = game_state.get_weather_info()
+        weather_text = f"{weather_info['icon']} {weather_info['name']}"
+        memories_text = format_memories(villager.get('memories', []), limit=3)
         
-        return f"""【{villager['name']}】{occupation_name}
+        return f"""【{villager['name']}】{occupation_name}，性格：{traits_text}
 【位置】{context['location_name']}
 
-【狀態】飽足 {satiety:.0f}% | 體力 {energy:.0f}% | 社交 {social:.0f}% | ${money}
+【狀態】
+- 飽足：{satiety:.0f}%（{self._get_status_tag(satiety)}）
+- 體力：{energy:.0f}%（{self._get_status_tag(energy)}）
+- 社交：{social:.0f}%（{self._get_status_tag(social)}）
+- 金錢：${money}
 
 【背包】{inventory_text}
 
@@ -277,6 +514,10 @@ class VillagerAI:
 
 【可執行動作】
 {actions_text}
+
+【時間】第 {time_info['day']} 天 {time_info['hour']:02d}:{time_info['minute']:02d}
+【天氣】{weather_text}
+【最近】{memories_text}
 
 你要做什麼？"""
     
@@ -361,16 +602,9 @@ class VillagerAI:
             actions.append("- sell：出售物品（需指定 item）")
         if self._has_food_in_inventory(villager):
             actions.append("- eat：吃背包裡的食物")
-        if location_type in ("farm", "mine", "workshop", "shop", "mill", "bakery", 
-                             "blacksmith", "carpentry", "tannery", "tailor", "bar",
-                             "butcher", "pasture"):
-            if self._can_work(villager, game_state):
-                actions.append("- work：在這裡工作")
-        if location_type == "house":
-            actions.append("- rest：在家休息")
-        actions.append("- leave：離開此地（需指定 destination: plaza/home/workplace/bar/wander）")
+        actions.append("- idle：什麼都不做，在這裡待著")
         
-        return "\n".join(actions) if actions else "- leave：離開此地"
+        return "\n".join(actions) if actions else "- idle：什麼都不做"
     
     def _format_inventory(self, villager: dict) -> str:
         inventory = villager.get("inventory", [])
@@ -874,12 +1108,14 @@ class VillagerAI:
         if tool_info:
             tool_desc = f"使用{tool_info['name']}"
         
-        # 產出描述
+        # 產出描述（列出所有產品）
         product_desc = ""
         if products:
-            item_type = ITEM_TYPES.get(products[0])
-            product_name = item_type.name if item_type else products[0]
-            product_desc = f"生產{product_name}"
+            product_names = []
+            for prod in products:
+                item_type = ITEM_TYPES.get(prod)
+                product_names.append(item_type.name if item_type else prod)
+            product_desc = f"生產{'、'.join(product_names)}"
         else:
             product_desc = "賺錢"
         

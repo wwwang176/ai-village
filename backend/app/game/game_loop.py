@@ -745,12 +745,8 @@ class GameLoop:
                 tasks = self._create_action_tasks(villager, action, target, item, destination)
                 
                 if tasks:
-                    # 如果是 leave，標記為需要再次決策
-                    if action == "leave":
-                        tasks[-1]["trigger_action_decision"] = True
-                    else:
-                        # 其他動作完成後也觸發下一輪決策
-                        tasks[-1]["trigger_action_decision"] = True
+                    # 動作完成後觸發下一輪決策
+                    tasks[-1]["trigger_action_decision"] = True
                     
                     logger.info(f"📋 任務排程: {[t['type'] for t in tasks]}")
                     self.game_state.add_tasks(villager["id"], tasks)
@@ -800,8 +796,9 @@ class GameLoop:
                 tasks.append(Task(type="work", duration=5).to_dict())
         
         elif action == "go_sell":
-            # 去找商人賣東西
-            sell_info = self._find_sell_target(villager)
+            # 去找商人賣東西（根據 item 參數）
+            item_id = decision.get("item")
+            sell_info = self._find_sell_target(villager, item_id)
             if sell_info:
                 merchant = self.game_state.get_villager(sell_info["merchant_id"])
                 if merchant:
@@ -961,30 +958,9 @@ class GameLoop:
         elif action == "eat":
             tasks.append(Task(type="eat", duration=2).to_dict())
         
-        elif action == "work":
-            # 先移動到工作地點
-            work_target = self.game_state.resolve_action_target(villager, "go_work")
-            if work_target:
-                current = (villager["x"], villager["y"])
-                dx = work_target[0] - current[0]
-                dy = work_target[1] - current[1]
-                dist = (dx**2 + dy**2) ** 0.5
-                if dist > 3:  # 距離超過 3 格才需要移動
-                    tasks.append(Task(type="move", target=work_target).to_dict())
-            tasks.append(Task(type="work", duration=5).to_dict())
-        
-        elif action == "rest":
-            # 找到床
-            bed = self.game_state.get_bed_by_residence(villager["id"])
-            if bed:
-                tasks.append(Task(type="move", target=(bed["x"], bed["y"])).to_dict())
-            tasks.append(Task(type="sleep", duration=10).to_dict())
-        
-        elif action == "leave" and destination:
-            # 離開前往其他地點
-            target_pos = self.game_state.resolve_action_target(villager, f"go_{destination}")
-            if target_pos:
-                tasks.append(Task(type="move", target=target_pos).to_dict())
+        elif action == "idle":
+            # 什麼都不做，閒置一下
+            tasks.append(Task(type="idle", duration=3).to_dict())
         
         # 如果沒有產生任務，預設閒置一下
         if not tasks:
@@ -1066,8 +1042,13 @@ class GameLoop:
     
     # ========== 新選項輔助方法 ==========
     
-    def _find_sell_target(self, villager: dict) -> dict:
-        """找到可賣物品的商人"""
+    def _find_sell_target(self, villager: dict, target_item: str = None) -> dict:
+        """找到可賣物品的商人
+        
+        Args:
+            villager: 村民資料
+            target_item: 指定要賣的物品（由 GPT 決定），None 則找第一個可賣物品
+        """
         from ..data.item_categories import TOOLS
         from ..data.supply_chain import MERCHANT_BUY_PRICES
         
@@ -1081,8 +1062,15 @@ class GameLoop:
         if not merchant or merchant.get("money", 0) < 5:
             return None
         
-        # 找背包裡可賣的物品
+        # 如果有指定物品，檢查背包是否有該物品
         inventory = villager.get("inventory", [])
+        if target_item:
+            for slot in inventory:
+                if slot and slot.get("item_id") == target_item:
+                    if target_item not in TOOLS and target_item in MERCHANT_BUY_PRICES:
+                        return {"merchant_id": merchant["id"], "item": target_item}
+        
+        # 沒指定或指定物品不存在，fallback 到第一個可賣物品
         for slot in inventory:
             if slot:
                 item_id = slot.get("item_id")
