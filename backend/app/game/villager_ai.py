@@ -347,6 +347,12 @@ class VillagerAI:
         if self._has_food_in_inventory(villager):
             actions.append("eat")
         
+        # buy_beer（在酒吧且酒保在附近，需有足夠的錢）
+        if location_type == "tavern":
+            bartender_nearby = any(v.get("occupation") == "bartender" for v in nearby)
+            if bartender_nearby and villager.get("money", 0) > 100:
+                actions.append("buy_beer")
+        
         # idle（總是可用）
         actions.append("idle")
         
@@ -602,6 +608,11 @@ class VillagerAI:
             actions.append("- sell：出售物品（需指定 item）")
         if self._has_food_in_inventory(villager):
             actions.append("- eat：吃背包裡的食物")
+        # buy_beer（在酒吧且酒保在附近，需有足夠的錢）
+        if location_type == "tavern":
+            bartender_nearby = any(v.get("occupation") == "bartender" for v in nearby)
+            if bartender_nearby and villager.get("money", 0) > 100:
+                actions.append("- buy_beer：跟酒保買杯啤酒喝（$3）")
         actions.append("- idle：什麼都不做，在這裡待著")
         
         return "\n".join(actions) if actions else "- idle：什麼都不做"

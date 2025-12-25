@@ -958,6 +958,10 @@ class GameLoop:
         elif action == "eat":
             tasks.append(Task(type="eat", duration=2).to_dict())
         
+        elif action == "buy_beer":
+            # 跟酒保買啤酒
+            tasks.append(Task(type="buy_beer", duration=2).to_dict())
+        
         elif action == "idle":
             # 什麼都不做，閒置一下
             tasks.append(Task(type="idle", duration=3).to_dict())
