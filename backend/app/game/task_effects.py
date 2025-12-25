@@ -114,53 +114,51 @@ class WorkEffect(TaskEffect):
         stats = villager.get("stats", {})
         stats["energy"] = max(0, stats.get("energy", 100) - 3)
         
-        # 檢查並消耗工具耐久度
-        tool_result = ctx.production.use_tool(villager)
-        if tool_result == "no_tool":
+        # 先檢查是否有工具（不消耗）
+        if not ctx.production.has_tool(villager):
             logger.info(f"⚒️ {villager['name']} 沒有工具，無法工作")
             return False
         
-        # 執行生產
+        # 先執行生產（檢查材料並消耗）
         production_result = ctx.production.produce(villager)
         
-        if production_result["success"]:
-            product = production_result["product"]
-            quantity = production_result["quantity"]
-            location = production_result["location"]
-            
-            # 觸發生產動畫（物品從自己飛到自己）
-            from ..data.items import ITEM_TYPES
-            item_type = ITEM_TYPES.get(product)
-            icon = item_type.icon if item_type else "📦"
-            
-            villager_x = villager.get("x", 0)
-            villager_y = villager.get("y", 0)
-            
-            ctx.queue_broadcast({
-                "type": "trade_animation",
-                "data": {
-                    "from_pos": {"x": villager_x, "y": villager_y - 1},  # 從頭頂飛出
-                    "to_pos": {"x": villager_x, "y": villager_y},
-                    "item_id": product,
-                    "icon": icon,
-                    "quantity": quantity
-                }
-            })
-            
-            if tool_result == "broken":
-                logger.info(f"⚒️ {villager['name']} 生產了 {product} x{quantity}（{location}），工具損壞！")
-            else:
-                logger.info(f"⚒️ {villager['name']} 生產了 {product} x{quantity}（{location}），工具耐久度: {tool_result}%")
-            return True
-        else:
+        if not production_result["success"]:
+            # 材料不足，不消耗工具耐久度
             reason = production_result.get("reason", "未知原因")
-            if tool_result == "broken":
-                logger.info(f"⚒️ {villager['name']} 無法生產：{reason}，工具損壞！")
-            elif tool_result != "no_need":
-                logger.info(f"⚒️ {villager['name']} 無法生產：{reason}（工具耐久度: {tool_result}%）")
-            else:
-                logger.info(f"⚒️ {villager['name']} 無法生產：{reason}")
+            logger.info(f"⚒️ {villager['name']} 無法生產：{reason}")
             return True  # 工作失敗不清空任務，讓村民繼續嘗試
+        
+        # 生產成功，才消耗工具耐久度
+        tool_result = ctx.production.use_tool(villager)
+        
+        product = production_result["product"]
+        quantity = production_result["quantity"]
+        location = production_result["location"]
+        
+        # 觸發生產動畫（物品從自己飛到自己）
+        from ..data.items import ITEM_TYPES
+        item_type = ITEM_TYPES.get(product)
+        icon = item_type.icon if item_type else "📦"
+        
+        villager_x = villager.get("x", 0)
+        villager_y = villager.get("y", 0)
+        
+        ctx.queue_broadcast({
+            "type": "trade_animation",
+            "data": {
+                "from_pos": {"x": villager_x, "y": villager_y - 1},  # 從頭頂飛出
+                "to_pos": {"x": villager_x, "y": villager_y},
+                "item_id": product,
+                "icon": icon,
+                "quantity": quantity
+            }
+        })
+        
+        if tool_result == "broken":
+            logger.info(f"⚒️ {villager['name']} 生產了 {product} x{quantity}（{location}），工具損壞！")
+        else:
+            logger.info(f"⚒️ {villager['name']} 生產了 {product} x{quantity}（{location}），工具耐久度: {tool_result}%")
+        return True
 
 
 # ==================== 購買相關效果 ====================

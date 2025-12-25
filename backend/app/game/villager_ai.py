@@ -173,6 +173,11 @@ class VillagerAI:
 3. 休息（體力低時）
 4. 社交（以上都滿足時才考慮）
 
+【行為注意事項】
+1. 工作必須有工具，缺少工具可以去買或撿地上的
+2. 工作必須要有材料，缺少材料可以去買或撿地上的
+3. 吃飽了就不要再吃
+
 根據你的狀態、優先級和性格，選擇行動。
 
 【回應格式】JSON
@@ -368,21 +373,17 @@ class VillagerAI:
         return "\n".join(actions) if actions else "- leave：離開此地"
     
     def _format_inventory(self, villager: dict) -> str:
-        from ..data.items import ITEM_TYPES
         inventory = villager.get("inventory", [])
         items = []
         for slot in inventory:
             if slot:
                 item_id = slot.get("item_id")
                 qty = slot.get("quantity", 1)
-                item_type = ITEM_TYPES.get(item_id)
-                name = item_type.name if item_type else item_id
-                items.append(f"{name} x{qty}")
+                items.append(f"{item_id} x{qty}")
         return "、".join(items) if items else "空"
     
     def _format_ground_items(self, villager: dict, game_state) -> str:
         """格式化地上物品（自己擁有的）"""
-        from ..data.items import ITEM_TYPES
         owned_items = game_state.get_items_by_owner(villager["id"])
         if not owned_items:
             return "無"
@@ -391,9 +392,7 @@ class VillagerAI:
         for item in owned_items:
             item_id = item.get("item_id")
             qty = item.get("quantity", 1)
-            item_type = ITEM_TYPES.get(item_id)
-            name = item_type.name if item_type else item_id
-            items.append(f"{name} x{qty}")
+            items.append(f"{item_id} x{qty}")
         return "、".join(items) if items else "無"
     
     def _format_nearby_villagers(self, nearby: List[dict], me: dict) -> str:
@@ -413,18 +412,13 @@ class VillagerAI:
         return "\n".join(lines)
     
     def _format_trade_options(self, trade_options: dict) -> str:
-        from ..data.items import ITEM_TYPES
         lines = []
         
         for opt in trade_options.get("can_buy", [])[:3]:
-            item_type = ITEM_TYPES.get(opt["item"])
-            item_name = item_type.name if item_type else opt["item"]
-            lines.append(f"- 向 {opt['from_name']} 購買 {item_name} ${opt['price']}")
+            lines.append(f"- 向 {opt['from_name']} 購買 {opt['item']} ${opt['price']}")
         
         for opt in trade_options.get("can_sell", [])[:3]:
-            item_type = ITEM_TYPES.get(opt["item"])
-            item_name = item_type.name if item_type else opt["item"]
-            lines.append(f"- 賣 {item_name} 給 {opt['to_name']} ${opt['price']}")
+            lines.append(f"- 賣 {opt['item']} 給 {opt['to_name']} ${opt['price']}")
         
         return "\n".join(lines)
     
