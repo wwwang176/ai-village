@@ -19,7 +19,6 @@ from .conversation import ConversationSystem, Conversation
 from .production import ProductionSystem
 from .models import Task
 from .task_effects import TaskContext, TaskEffectExecutor
-from .action_handlers import ActionContext, ActionHandlerExecutor
 
 logger = logging.getLogger("GameLoop")
 
@@ -53,9 +52,6 @@ class GameLoop:
         # AI 並行控制（限制同時請求數，避免超過 API 速率限制）
         self.ai_semaphore = asyncio.Semaphore(6)  # 最多 6 個同時 AI 請求
         
-        # 多輪決策模式（True = 新系統，False = 舊系統）
-        self.multi_round_mode = True
-        
         # 子系統
         self.sheep_system = SheepSystem(game_state)
         self.inventory_system = InventorySystem(game_state)
@@ -70,15 +66,6 @@ class GameLoop:
             manager=connection_manager
         )
         self.task_executor = TaskEffectExecutor(task_context)
-        
-        # 行為處理器執行器
-        action_context = ActionContext(
-            game_state=game_state,
-            production=self.production_system,
-            inventory=self.inventory_system,
-            sheep=self.sheep_system
-        )
-        self.action_executor = ActionHandlerExecutor(action_context)
     
     async def run(self):
         """主循環"""
@@ -86,25 +73,38 @@ class GameLoop:
         last_time = time.time()
         
         print("🔄 遊戲主循環啟動")
+        logger.info("🔄 Game loop started")
         
-        while self.running:
-            current_time = time.time()
-            delta_time = current_time - last_time
-            last_time = current_time
-            
-            # 只在有連線時處理
-            if self.manager.active_connections:
-                # 確保遊戲已初始化
-                if not self.game_state.initialized:
-                    self.game_state.initialize()
+        try:
+            while self.running:
+                current_time = time.time()
+                delta_time = current_time - last_time
+                last_time = current_time
                 
-                # 更新遊戲狀態
-                await self.tick(delta_time, current_time)
-            
-            # 控制 tick 頻率
-            elapsed = time.time() - current_time
-            sleep_time = max(0, self.tick_interval - elapsed)
-            await asyncio.sleep(sleep_time)
+                # 調試：每 5 秒輸出一次連線狀態
+                if not hasattr(self, '_debug_conn_time'):
+                    self._debug_conn_time = 0
+                if current_time - self._debug_conn_time > 5:
+                    self._debug_conn_time = current_time
+                    logger.info(f"🔍 連線數: {len(self.manager.active_connections)}")
+                
+                # 只在有連線時處理
+                if self.manager.active_connections:
+                    # 確保遊戲已初始化
+                    if not self.game_state.initialized:
+                        self.game_state.initialize()
+                    
+                    # 更新遊戲狀態
+                    await self.tick(delta_time, current_time)
+                
+                # 控制 tick 頻率
+                elapsed = time.time() - current_time
+                sleep_time = max(0, self.tick_interval - elapsed)
+                await asyncio.sleep(sleep_time)
+        except Exception as e:
+            logger.error(f"❌ Game loop error: {e}")
+            import traceback
+            traceback.print_exc()
     
     async def tick(self, delta_time: float, current_time: float):
         """單次遊戲更新"""
@@ -369,8 +369,8 @@ class GameLoop:
                 # 所有任務完成
                 villager["state"] = "idle"
                 
-                # 多輪決策：觸發第二階段決策
-                if trigger_decision and self.multi_round_mode:
+                # 觸發第二階段決策
+                if trigger_decision:
                     asyncio.create_task(self.trigger_action_decision(villager))
     
     def process_move_task(self, villager: dict, task: dict, delta_time: float) -> bool:
@@ -665,10 +665,6 @@ class GameLoop:
         
         return result
     
-    def create_task_queue(self, villager: dict, action: str) -> list:
-        """將 AI 決策轉換為任務排程（委託給 ActionHandlerExecutor）"""
-        return self.action_executor.create_tasks(villager, action)
-    
     async def process_ai_decisions(self):
         """處理需要 AI 決策的村民（並行處理）"""
         import random
@@ -680,47 +676,9 @@ class GameLoop:
         # 隨機選擇，確保每個村民都有機會被處理
         random.shuffle(pending)
         
-        if self.multi_round_mode:
-            # 新系統：多輪決策
-            await asyncio.gather(*[self._process_multi_round_decision(v) for v in pending])
-        else:
-            # 舊系統：單次決策
-            await asyncio.gather(*[self._process_single_decision(v) for v in pending])
+        await asyncio.gather(*[self._process_decision(v) for v in pending])
     
-    async def _process_single_decision(self, villager):
-        """舊系統：單次決策"""
-        async with self.ai_semaphore:
-            try:
-                decision = await self.villager_ai.make_decision(
-                    villager, 
-                    self.game_state
-                )
-                
-                action = decision.get("action", "wander")
-                reason = decision.get("reason", "")
-                
-                if villager.get("task_queue"):
-                    logger.info(f"⏭️ {villager['name']} 已有任務，丟棄此決策")
-                    return
-                
-                tasks = self.create_task_queue(villager, action)
-                
-                logger.info(f"🤖 AI決策: {villager['name']} → {action} (原因: {reason})")
-                logger.info(f"📋 任務排程: {[t['type'] for t in tasks]}")
-                
-                self.game_state.add_tasks(villager["id"], tasks)
-                
-                await self.manager.broadcast({
-                    "type": "villager_decision",
-                    "data": {
-                        "villager_id": villager["id"],
-                        "decision": {"action": action, "reason": reason}
-                    }
-                })
-            except Exception as e:
-                logger.error(f"❌ AI決策失敗 {villager['name']}: {e}")
-    
-    async def _process_multi_round_decision(self, villager):
+    async def _process_decision(self, villager):
         """新系統：一次決定行動（方向 A）"""
         async with self.ai_semaphore:
             try:
@@ -897,6 +855,17 @@ class GameLoop:
                         material=material_info["material"],
                         duration=2
                     ).to_dict())
+        
+        elif action == "go_buy_tool":
+            # 去鐵匠買工具（找鐵匠村民）
+            blacksmith_villager = None
+            for v in self.game_state.villagers.values():
+                if v.get("occupation") == "blacksmith":
+                    blacksmith_villager = v
+                    break
+            if blacksmith_villager:
+                tasks.append(Task(type="move", target=(blacksmith_villager["x"], blacksmith_villager["y"])).to_dict())
+                tasks.append(Task(type="buy_tool", duration=2).to_dict())
         
         elif action == "go_sleep":
             # 回家睡覺
