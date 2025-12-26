@@ -824,6 +824,21 @@ class GameLoop:
                 tasks.append(Task(type="move_to_villager", target=(blacksmith_villager["x"], blacksmith_villager["y"]), target_villager_id=blacksmith_villager["id"]).to_dict())
                 tasks.append(Task(type="buy_tool", duration=2).to_dict())
         
+        elif action == "go_buy_goods":
+            # 商人主動去收購物品（根據 buy_target 參數）
+            target_villager_id = decision.get("buy_target")
+            goods_info = self._find_goods_seller(villager, target_villager_id)
+            if goods_info:
+                seller = self.game_state.get_villager(goods_info["seller_id"])
+                if seller:
+                    tasks.append(Task(type="move_to_villager", target=(seller["x"], seller["y"]), target_villager_id=seller["id"]).to_dict())
+                    tasks.append(Task(
+                        type="buy_from_villager",
+                        seller_id=goods_info["seller_id"],
+                        item=goods_info["item"],
+                        duration=2
+                    ).to_dict())
+        
         elif action == "go_sleep":
             # 回家睡覺
             bed = self.game_state.get_bed_by_residence(villager["id"])
@@ -994,20 +1009,35 @@ class GameLoop:
         if not merchant or merchant.get("money", 0) < 5:
             return None
         
-        # 如果有指定物品，檢查背包是否有該物品
+        # 統計背包和地上的物品
         inventory = villager.get("inventory", [])
+        ground_items = self.game_state.get_items_by_owner(villager["id"])
+        
+        # 如果有指定物品，檢查背包或地上是否有該物品
         if target_item:
+            # 檢查背包
             for slot in inventory:
                 if slot and slot.get("item_id") == target_item:
                     if target_item not in TOOLS and target_item in MERCHANT_BUY_PRICES:
                         return {"merchant_id": merchant["id"], "item": target_item}
+            # 檢查地上
+            for item in ground_items:
+                if item.get("item_id") == target_item:
+                    if target_item not in TOOLS and target_item in MERCHANT_BUY_PRICES:
+                        return {"merchant_id": merchant["id"], "item": target_item}
         
         # 沒指定或指定物品不存在，fallback 到第一個可賣物品
+        # 先檢查背包
         for slot in inventory:
             if slot:
                 item_id = slot.get("item_id")
                 if item_id and item_id not in TOOLS and item_id in MERCHANT_BUY_PRICES:
                     return {"merchant_id": merchant["id"], "item": item_id}
+        # 再檢查地上
+        for item in ground_items:
+            item_id = item.get("item_id")
+            if item_id and item_id not in TOOLS and item_id in MERCHANT_BUY_PRICES:
+                return {"merchant_id": merchant["id"], "item": item_id}
         
         return None
     
@@ -1117,6 +1147,79 @@ class GameLoop:
                 for item in owner_items:
                     if item.get("item_id") == material and item.get("quantity", 0) >= 1:
                         return {"supplier_id": v["id"], "material": material}
+        
+        return None
+    
+    def _find_goods_seller(self, villager: dict, target_villager_id: str = None) -> dict:
+        """找到可收購物品的村民（商人專用）
+        
+        Args:
+            villager: 商人資料
+            target_villager_id: 指定要收購的村民 ID（由 GPT 決定），None 則找第一個
+        """
+        from ..data.supply_chain import MERCHANT_BUY_PRICES, EXCESS_THRESHOLDS
+        from ..data.item_categories import TOOLS
+        
+        money = villager.get("money", 0)
+        if money < 10:
+            return None
+        
+        # 如果有指定目標，只檢查該村民
+        villagers_to_check = []
+        if target_villager_id:
+            target = self.game_state.get_villager(target_villager_id)
+            if target:
+                villagers_to_check = [target]
+        else:
+            villagers_to_check = list(self.game_state.villagers.values())
+        
+        # 遍歷村民，找有過剩物品的
+        for v in villagers_to_check:
+            if v["id"] == villager["id"]:
+                continue
+            
+            v_money = v.get("money", 0)
+            v_stats = v.get("stats", {})
+            v_satiety = v_stats.get("satiety", 100)
+            is_broke_and_hungry = v_money < 12 and v_satiety < 50
+            
+            # 統計該村民的物品（背包 + 地上）
+            item_counts = {}
+            
+            inventory = v.get("inventory", [])
+            for slot in inventory:
+                if slot:
+                    item_id = slot.get("item_id")
+                    if item_id and item_id not in TOOLS:
+                        qty = slot.get("quantity", 1)
+                        item_counts[item_id] = item_counts.get(item_id, 0) + qty
+            
+            ground_items = self.game_state.get_items_by_owner(v["id"])
+            for item in ground_items:
+                item_id = item.get("item_id")
+                if item_id and item_id not in TOOLS:
+                    qty = item.get("quantity", 1)
+                    item_counts[item_id] = item_counts.get(item_id, 0) + qty
+            
+            # 找出可收購的物品
+            purchasable_items = []
+            for item_id, qty in item_counts.items():
+                if item_id not in MERCHANT_BUY_PRICES:
+                    continue
+                threshold = EXCESS_THRESHOLDS.get(item_id, 10)
+                if qty >= threshold or (is_broke_and_hungry and qty >= 1):
+                    price = MERCHANT_BUY_PRICES[item_id]
+                    if money >= price:
+                        purchasable_items.append({"item_id": item_id, "qty": qty, "price": price})
+            
+            if purchasable_items:
+                # 只取第一個可收購物品
+                first_item = purchasable_items[0]
+                return {
+                    "seller_id": v["id"],
+                    "item": first_item["item_id"],
+                    "price": first_item["price"]
+                }
         
         return None
     

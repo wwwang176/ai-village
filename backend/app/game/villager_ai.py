@@ -139,8 +139,8 @@ class VillagerAI:
         location_type = context["location_type"]
         nearby = context["nearby_villagers"]
         
-        # 1. go_work
-        if self._can_work(villager, game_state):
+        # 1. go_work（商人除外，商人改用 go_buy_goods）
+        if villager.get("occupation") != "merchant" and self._can_work(villager, game_state):
             actions.append("go_work")
         
         # 2. go_sell
@@ -174,6 +174,13 @@ class VillagerAI:
         # 7. go_buy_tool
         if self._get_buy_tool_info(villager, game_state):
             actions.append("go_buy_tool")
+        
+        # 7.5. go_buy_goods（商人專用：主動收購）
+        buy_targets = []
+        buy_goods_info = self._get_buy_goods_targets(villager, game_state)
+        if buy_goods_info:
+            actions.append("go_buy_goods")
+            buy_targets = [t["villager_id"] for t in buy_goods_info]
         
         # 8. go_sleep（總是可用）
         actions.append("go_sleep")
@@ -209,6 +216,7 @@ class VillagerAI:
             "pickup_items": pickup_items,
             "sell_items": sell_items,
             "talk_targets": talk_targets,
+            "buy_targets": buy_targets,
             "context": context
         }
     
@@ -309,6 +317,16 @@ class VillagerAI:
             }
             required.append("target")
         
+        # 如果有 go_buy_goods，加入 buy_target 參數
+        buy_targets = action_info.get("buy_targets", [])
+        if "go_buy_goods" in available_actions and buy_targets:
+            properties["buy_target"] = {
+                "type": ["string", "null"],
+                "enum": buy_targets + [None],
+                "description": "要收購的村民 ID（go_buy_goods 時需要）"
+            }
+            required.append("buy_target")
+        
         return [{
             "type": "function",
             "function": {
@@ -340,8 +358,8 @@ class VillagerAI:
 1. 如果金錢超過200，則吃飽比工作更重要
 2. 工作必須有工具，缺少工具可以去買或撿地上的
 3. 工作必須要有材料，缺少材料可以去買或撿地上的
-4. 吃飽了就不要再吃
-5. 睡飽了白天就不要再睡
+4. 飽足滿足時，不需要吃東西
+5. 白天且體力滿足時，不需要睡覺
 6. 如果行為失敗很多次，就不要再重覆選擇
 
 根據你的狀態、優先級和性格，呼叫 choose_action 選擇行動。"""
@@ -455,6 +473,11 @@ class VillagerAI:
         if "go_buy_tool" in available:
             tool_info = self._get_buy_tool_info(villager, game_state) or "去買工具"
             actions.append(f"- go_buy_tool：{tool_info}")
+        
+        # 7.5. go_buy_goods（商人專用）
+        if "go_buy_goods" in available:
+            buy_goods_info = self._get_buy_goods_info(villager, game_state) or "去收購物品"
+            actions.append(f"- go_buy_goods：{buy_goods_info}")
         
         # 8. go_sleep
         if "go_sleep" in available:
@@ -1196,3 +1219,86 @@ class VillagerAI:
                 return f"去買{name}（工作材料，需 ${price}）"
         
         return ""
+    
+    def _get_buy_goods_targets(self, villager: dict, game_state) -> List[dict]:
+        """取得可收購物品的村民列表（商人專用）"""
+        # 只有商人可以收購
+        if villager.get("occupation") != "merchant":
+            return []
+        
+        money = villager.get("money", 0)
+        if money < 10:
+            return []
+        
+        # 找所有有可收購物品的村民
+        purchasable = []
+        for v in game_state.villagers.values():
+            if v["id"] == villager["id"]:
+                continue
+            
+            # 檢查該村民的背包和地上物品
+            items_to_buy = self._get_villager_purchasable_items(v, game_state)
+            if items_to_buy:
+                purchasable.append({
+                    "villager_id": v["id"],
+                    "villager_name": v["name"],
+                    "items": items_to_buy
+                })
+        
+        return purchasable
+    
+    def _get_buy_goods_info(self, villager: dict, game_state) -> str:
+        """取得可收購物品資訊描述（商人專用）"""
+        from ..data.items import ITEM_TYPES
+        
+        purchasable = self._get_buy_goods_targets(villager, game_state)
+        if not purchasable:
+            return ""
+        
+        # 生成描述（列出可收購的村民，格式：人名(ID)）
+        desc_parts = []
+        for p in purchasable[:3]:
+            desc_parts.append(f"{p['villager_name']}({p['villager_id']})")
+        
+        return f"去收購物品賺錢（需指定 buy_target: {'; '.join(desc_parts)}）"
+    
+    def _get_villager_purchasable_items(self, villager: dict, game_state) -> List[tuple]:
+        """取得某村民可被商人收購的物品列表"""
+        from ..data.supply_chain import MERCHANT_BUY_PRICES, EXCESS_THRESHOLDS
+        from ..data.item_categories import TOOLS
+        
+        money = villager.get("money", 0)
+        stats = villager.get("stats", {})
+        satiety = stats.get("satiety", 100)
+        is_broke_and_hungry = money < 12 and satiety < 50
+        
+        # 統計所有物品（背包 + 地上）
+        item_counts = {}
+        
+        # 背包物品
+        inventory = villager.get("inventory", [])
+        for slot in inventory:
+            if slot:
+                item_id = slot.get("item_id")
+                if item_id and item_id not in TOOLS:
+                    qty = slot.get("quantity", 1)
+                    item_counts[item_id] = item_counts.get(item_id, 0) + qty
+        
+        # 地上物品
+        ground_items = game_state.get_items_by_owner(villager["id"])
+        for item in ground_items:
+            item_id = item.get("item_id")
+            if item_id and item_id not in TOOLS:
+                qty = item.get("quantity", 1)
+                item_counts[item_id] = item_counts.get(item_id, 0) + qty
+        
+        # 找出過剩或缺錢可賣的物品
+        result = []
+        for item_id, qty in item_counts.items():
+            if item_id not in MERCHANT_BUY_PRICES:
+                continue
+            threshold = EXCESS_THRESHOLDS.get(item_id, 10)
+            if qty >= threshold or (is_broke_and_hungry and qty >= 1):
+                result.append((item_id, qty))
+        
+        return result
