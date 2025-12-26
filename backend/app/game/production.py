@@ -319,7 +319,7 @@ class ProductionSystem:
             item_id=food_item,
             want_quantity=2,
             price_per_unit=food_info["price"],
-            flexible_quantity=False
+            flexible_quantity=True  # 有多少買多少，不要空手而歸
         )
         
         if result["success"]:

@@ -353,9 +353,6 @@ class GameLoop:
         
         # 如果任務完成，移除並處理下一個
         if completed:
-            # 檢查是否需要觸發動作決策（多輪決策系統）
-            trigger_decision = current_task.get("trigger_action_decision", False)
-            
             task_queue.pop(0)
             
             if task_queue:
@@ -368,14 +365,7 @@ class GameLoop:
             else:
                 # 所有任務完成
                 villager["state"] = "idle"
-                
-                # 記錄決策成功（如果不是要觸發下一階段決策）
-                if not trigger_decision:
-                    self._record_decision_result(villager, True, "完成")
-                
-                # 觸發第二階段決策
-                if trigger_decision:
-                    asyncio.create_task(self.trigger_action_decision(villager))
+                self._record_decision_result(villager, True, "完成")
     
     def process_move_task(self, villager: dict, task: dict, delta_time: float) -> bool:
         """處理移動任務，返回是否完成"""
@@ -685,7 +675,7 @@ class GameLoop:
         await asyncio.gather(*[self._process_decision(v) for v in pending])
     
     async def _process_decision(self, villager):
-        """新系統：一次決定行動（方向 A）"""
+        """統一決策系統：一次決定所有行動"""
         async with self.ai_semaphore:
             try:
                 # 檢查村民是否已有任務
@@ -693,14 +683,13 @@ class GameLoop:
                     logger.info(f"⏭️ {villager['name']} 已有任務，跳過")
                     return
                 
-                # 選擇行動（一次決定，直接執行）
-                decision = await self.villager_ai.make_destination_decision(
+                # 統一決策（合併目的地和動作決策）
+                decision = await self.villager_ai.make_decision(
                     villager, 
                     self.game_state
                 )
                 
-                # 支援 action 或 destination（向後相容）
-                action = decision.get("action") or decision.get("destination", "wander")
+                action = decision.get("action", "wander")
                 reason = decision.get("reason", "")
                 
                 logger.info(f"🎯 決策: {villager['name']} → {action} (原因: {reason})")
@@ -727,52 +716,6 @@ class GameLoop:
                     
             except Exception as e:
                 logger.error(f"❌ 多輪決策失敗 {villager['name']}: {e}")
-    
-    async def trigger_action_decision(self, villager):
-        """第二階段：抵達目的地後選擇動作"""
-        async with self.ai_semaphore:
-            try:
-                # 檢查村民是否已有任務（防止異步回應覆蓋新任務）
-                if villager.get("task_queue"):
-                    logger.info(f"⏭️ {villager['name']} 已有任務，跳過動作決策")
-                    return
-                
-                decision = await self.villager_ai.make_action_decision(
-                    villager,
-                    self.game_state
-                )
-                
-                action = decision.get("action", "leave")
-                target = decision.get("target")
-                item = decision.get("item")
-                destination = decision.get("destination")
-                reason = decision.get("reason", "")
-                
-                logger.info(f"🎯 動作決策: {villager['name']} → {action} (原因: {reason})")
-                
-                # 記錄待完成決策
-                villager["pending_decision"] = {"action": action, "reason": reason}
-                
-                # 建立動作任務
-                tasks = self._create_action_tasks(villager, action, target, item, destination)
-                
-                if tasks:
-                    # 動作完成後觸發下一輪決策
-                    tasks[-1]["trigger_action_decision"] = True
-                    
-                    logger.info(f"📋 任務排程: {[t['type'] for t in tasks]}")
-                    self.game_state.add_tasks(villager["id"], tasks)
-                    
-                    await self.manager.broadcast({
-                        "type": "villager_decision",
-                        "data": {
-                            "villager_id": villager["id"],
-                            "decision": {"action": action, "reason": reason}
-                        }
-                    })
-                    
-            except Exception as e:
-                logger.error(f"❌ 動作決策失敗 {villager['name']}: {e}")
     
     def _create_destination_tasks(self, villager, action: str, decision: dict = None) -> List[dict]:
         """建立行動任務（方向 A：一次決定，直接執行）"""
@@ -889,16 +832,16 @@ class GameLoop:
             tasks.append(Task(type="sleep", duration=10).to_dict())
         
         elif action == "go_plaza":
-            # 去廣場（觸發第二輪決策）
+            # 去廣場
             target_pos = self.game_state.resolve_action_target(villager, "go_plaza")
             if target_pos:
-                tasks.append(Task(type="move", target=target_pos, trigger_action_decision=True).to_dict())
+                tasks.append(Task(type="move", target=target_pos).to_dict())
         
         elif action == "go_bar":
-            # 去酒吧（觸發第二輪決策）
+            # 去酒吧
             target_pos = self.game_state.resolve_action_target(villager, "go_bar")
             if target_pos:
-                tasks.append(Task(type="move", target=target_pos, trigger_action_decision=True).to_dict())
+                tasks.append(Task(type="move", target=target_pos).to_dict())
         
         elif action == "wander":
             # 閒逛
@@ -906,69 +849,14 @@ class GameLoop:
             if target_pos:
                 tasks.append(Task(type="move", target=target_pos).to_dict())
         
-        # 如果沒有產生任務，預設閒置
-        if not tasks:
-            tasks.append(Task(type="idle", duration=2).to_dict())
-        
-        return tasks
-    
-    def _create_action_tasks(self, villager, action: str, target: str = None, 
-                             item: str = None, destination: str = None) -> List[dict]:
-        """建立動作任務"""
-        tasks = []
-        
-        if action == "talk" and target:
-            # 找到目標村民位置
-            target_villager = self.game_state.get_villager(target)
-            if target_villager:
-                tasks.append(Task(type="move", target=(target_villager["x"], target_villager["y"])).to_dict())
-                tasks.append(Task(type="initiate_chat", target_villager_id=target, duration=3).to_dict())
-        
-        elif action == "buy" and item:
-            # 購買物品（使用現有的任務類型）
-            context = self.game_state.get_location_context(villager)
-            for opt in context["trade_options"]["can_buy"]:
-                if opt["item"] == item:
-                    if opt["type"] == "food":
-                        # 買食物
-                        tasks.append(Task(
-                            type="buy_food",
-                            seller_id=opt["from_id"],
-                            food_item=item,
-                            duration=2
-                        ).to_dict())
-                    elif opt["type"] == "material":
-                        # 買原料
-                        tasks.append(Task(
-                            type="buy_material",
-                            supplier_id=opt["from_id"],
-                            material=item,
-                            duration=2
-                        ).to_dict())
-                    elif opt["type"] == "livestock":
-                        # 買羊
-                        tasks.append(Task(
-                            type="buy_sheep",
-                            seller_id=opt["from_id"],
-                            duration=2
-                        ).to_dict())
-                    break
-        
-        elif action == "sell" and item:
-            # 出售物品給商人
-            context = self.game_state.get_location_context(villager)
-            for opt in context["trade_options"]["can_sell"]:
-                if opt["item"] == item:
-                    tasks.append(Task(
-                        type="sell_to_merchant",
-                        merchant_id=opt["to_id"],
-                        item=item,
-                        duration=2
-                    ).to_dict())
-                    break
-        
-        elif action == "eat":
-            tasks.append(Task(type="eat", duration=2).to_dict())
+        elif action == "talk":
+            # 找人聊天
+            target_id = decision.get("target")
+            if target_id:
+                target_villager = self.game_state.get_villager(target_id)
+                if target_villager:
+                    tasks.append(Task(type="move", target=(target_villager["x"], target_villager["y"])).to_dict())
+                    tasks.append(Task(type="initiate_chat", target_villager_id=target_id, duration=3).to_dict())
         
         elif action == "buy_beer":
             # 跟酒保買啤酒
@@ -978,7 +866,7 @@ class GameLoop:
             # 什麼都不做，閒置一下
             tasks.append(Task(type="idle", duration=3).to_dict())
         
-        # 如果沒有產生任務，預設閒置一下
+        # 如果沒有產生任務，預設閒置
         if not tasks:
             tasks.append(Task(type="idle", duration=2).to_dict())
         
