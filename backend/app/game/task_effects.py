@@ -608,21 +608,26 @@ class SellToMerchantEffect(TaskEffect):
         
         # 計算賣家地上庫存
         ground_items = []
-        ground_qty = 0
         for item in game_state.get_items_by_owner(villager["id"]):
             if item.get("item_id") == item_id:
                 ground_items.append(item)
-                ground_qty += item.get("quantity", 0)
         
-        total_available = bag_qty + ground_qty
-        
-        if total_available == 0:
+        # 決定賣出來源：背包有則只賣背包，背包沒有則賣地上一堆
+        if bag_qty > 0:
+            # 賣背包的全部
+            sell_qty = bag_qty
+            sell_from = "bag"
+        elif ground_items:
+            # 賣地上隨機一堆（取第一堆）
+            import random
+            target_item = random.choice(ground_items)
+            sell_qty = target_item.get("quantity", 1)
+            sell_from = "ground"
+        else:
             logger.info(f"💰 {villager['name']} 沒有 {item_id} 可賣")
             task["fail_reason"] = f"賣給 {merchant_name}：沒有 {item_id}"
             return False
         
-        # 計算賣出數量（全部賣出，但受商人錢限制）
-        sell_qty = total_available
         total_price = price * sell_qty
         
         # 檢查商人是否有足夠的錢買全部
@@ -635,34 +640,29 @@ class SellToMerchantEffect(TaskEffect):
                 return False
             total_price = price * sell_qty
         
-        # 執行交易 - 從賣家扣除物品（優先從背包）
-        remaining = sell_qty
-        
-        # 1. 先從背包扣
-        for i, slot in bag_slots:
-            if remaining <= 0:
-                break
-            slot_qty = slot.get("quantity", 0)
-            deduct = min(slot_qty, remaining)
-            if slot_qty <= deduct:
-                villager["inventory"][i] = None
-            else:
-                slot["quantity"] = slot_qty - deduct
-            remaining -= deduct
-        
-        # 2. 不夠再從地上扣（直接移除，視為出口）
-        for item in ground_items:
-            if remaining <= 0:
-                break
-            item_qty = item.get("quantity", 0)
-            deduct = min(item_qty, remaining)
-            if item_qty <= deduct:
-                # 整個移除（商人出口，物品消失）
-                game_state.remove_world_item(item["id"])
+        # 執行交易 - 從賣家扣除物品
+        if sell_from == "bag":
+            # 從背包扣
+            remaining = sell_qty
+            for i, slot in bag_slots:
+                if remaining <= 0:
+                    break
+                slot_qty = slot.get("quantity", 0)
+                deduct = min(slot_qty, remaining)
+                if slot_qty <= deduct:
+                    villager["inventory"][i] = None
+                else:
+                    slot["quantity"] = slot_qty - deduct
+                remaining -= deduct
+        else:
+            # 從地上扣（整堆移除或部分扣除）
+            item_qty = target_item.get("quantity", 0)
+            if sell_qty >= item_qty:
+                # 整堆移除
+                game_state.remove_world_item(target_item["id"])
             else:
                 # 部分扣除
-                item["quantity"] = item_qty - deduct
-            remaining -= deduct
+                target_item["quantity"] = item_qty - sell_qty
         
         # 2. 金錢轉移
         villager["money"] = villager.get("money", 0) + total_price
