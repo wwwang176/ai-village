@@ -455,8 +455,9 @@ class GameLoop:
             
             # 如果任務失敗，清空後續任務並記錄
             if not success:
-                logger.info(f"❌ {villager['name']} 任務 {task_type} 失敗，清空後續任務")
-                self._record_decision_result(villager, False, f"任務 {task_type} 失敗")
+                fail_reason = task.get("fail_reason", f"任務 {task_type} 失敗")
+                logger.info(f"❌ {villager['name']} {fail_reason}，清空後續任務")
+                self._record_decision_result(villager, False, fail_reason)
                 villager["task_queue"] = []
                 villager["state"] = "idle"
             
