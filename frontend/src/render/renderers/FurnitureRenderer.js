@@ -41,6 +41,9 @@ export class FurnitureRenderer extends BaseRenderer {
       case 'bed':
         this.renderBed(screenX + offset, screenY + offset, size);
         break;
+      case 'workbench':
+        this.renderWorkbench(screenX + offset, screenY + offset, size);
+        break;
       default:
         this.renderGeneric(screenX + offset, screenY + offset, size);
     }
@@ -123,6 +126,50 @@ export class FurnitureRenderer extends BaseRenderer {
     this.ctx.fillStyle = '#C49A6C';
     this.ctx.fillRect(x, startY + bedHeight * 0.85, size * 0.1, bedHeight * 0.15);
     this.ctx.fillRect(x + size * 0.9, startY + bedHeight * 0.85, size * 0.1, bedHeight * 0.15);
+  }
+  
+  /**
+   * 渲染工作台（2.5D 風格，向北延伸）
+   */
+  renderWorkbench(x, y, size) {
+    // 桌面 1 格 + 桌腳 0.3 格，總高度 1.3 格
+    // 向北偏移 0.3 格，讓桌腳底部貼到格子南端
+    const startY = y - size * 0.3;
+    
+    // 桌腳（左右，先畫在最底層）- 從 startY + size 到 startY + 1.3*size
+    this.ctx.fillStyle = '#5D3A1A';
+    this.ctx.fillRect(x + size * 0.1, startY + size, size * 0.12, size * 0.3);
+    this.ctx.fillRect(x + size * 0.78, startY + size, size * 0.12, size * 0.3);
+    
+    // 桌子正面（厚度）- 在桌面底部
+    this.ctx.fillStyle = '#6B4423';
+    this.ctx.fillRect(x, startY + size * 0.85, size, size * 0.15);
+    
+    // 桌面（俯視面積，淺棕色）- 從 startY 到 startY + 0.85*size
+    this.ctx.fillStyle = '#A0724B';
+    this.ctx.fillRect(x, startY, size, size * 0.85);
+    
+    // 桌面邊框
+    this.ctx.strokeStyle = '#5D3A1A';
+    this.ctx.lineWidth = 1;
+    this.ctx.strokeRect(x, startY, size, size);
+    
+    // 桌面木紋（水平線條）
+    this.ctx.strokeStyle = '#8B5A2B';
+    this.ctx.beginPath();
+    this.ctx.moveTo(x + size * 0.1, startY + size * 0.3);
+    this.ctx.lineTo(x + size * 0.9, startY + size * 0.3);
+    this.ctx.moveTo(x + size * 0.1, startY + size * 0.6);
+    this.ctx.lineTo(x + size * 0.9, startY + size * 0.6);
+    this.ctx.stroke();
+    
+    // 桌上工具（左：灰色方塊代表錘子/工具）
+    this.ctx.fillStyle = '#505050';
+    this.ctx.fillRect(x + size * 0.15, startY + size * 0.1, size * 0.2, size * 0.15);
+    
+    // 桌上工具（右：橘色方塊代表材料）
+    this.ctx.fillStyle = '#CD853F';
+    this.ctx.fillRect(x + size * 0.65, startY + size * 0.1, size * 0.2, size * 0.15);
   }
   
   /**

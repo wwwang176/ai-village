@@ -54,7 +54,13 @@ class TargetResolver:
         return self._get_wander_target(villager)
     
     def _get_work_target(self, villager: dict) -> Optional[Tuple[int, int]]:
-        """取得工作地點"""
+        """取得工作地點（優先找工作台，沒有則去建築門口）"""
+        # 優先找工作台
+        workbench = self.game_state.get_workbench_by_workplace(villager.get("id"))
+        if workbench:
+            return self._get_furniture_interact_pos(workbench)
+        
+        # 沒有工作台（開放式建築），去建築門口
         workplace_id = villager.get("workplace")
         if workplace_id:
             building = self.game_state.get_building_by_id(workplace_id)

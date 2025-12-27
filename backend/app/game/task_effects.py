@@ -115,6 +115,18 @@ class WorkEffect(TaskEffect):
         stats = villager.get("stats", {})
         stats["energy"] = max(0, stats.get("energy", 100) - 3)
         
+        # 檢查是否在工作台附近（如果工作場所有工作台的話）
+        game_state = ctx.production.game_state
+        workbench = game_state.get_workbench_by_workplace(villager.get("id"))
+        if workbench:
+            vx, vy = int(villager.get("x", 0)), int(villager.get("y", 0))
+            wx, wy = int(workbench["x"]), int(workbench["y"])
+            distance = abs(vx - wx) + abs(vy - wy)  # 曼哈頓距離
+            if distance > 1:
+                logger.info(f"⚒️ {villager['name']} 不在工作台附近（距離 {distance}），無法工作")
+                task["fail_reason"] = "工作：不在工作台附近"
+                return False
+        
         # 先檢查是否有工具（不消耗）
         if not ctx.production.has_tool(villager):
             logger.info(f"⚒️ {villager['name']} 沒有工具，無法工作")

@@ -242,6 +242,7 @@ class Sheep:
 FURNITURE_INTERACT_OFFSETS = {
     "bed": [(0, 0)],              # 站在床上
     "stove": [(0, 1), (-1, 0), (1, 0)],  # 站在灶台前面或左右
+    "workbench": [(-1, 0), (1, 0), (0, -1), (0, 1)],  # 四面都可互動
 }
 
 @dataclass

@@ -455,41 +455,59 @@ class GameState:
         print(f"🐑 生成了 {len(self.sheep)} 隻羊")
     
     def _generate_furniture(self):
-        """為每個住宅生成灶台和床"""
+        """為每個住宅生成灶台和床，為工作建築生成工作台"""
         buildings = self.map_data.get("buildings", [])
         
+        # 不需要工作台的建築類型（開放式建築 + 酒吧）
+        NO_WORKBENCH_BUILDINGS = ["farm", "mine", "lumber_camp", "pasture", "plaza", "tavern"]
+        
         for building in buildings:
-            # 只為住宅類建築生成家具
-            if building.get("type") not in ["house", "cottage"]:
-                continue
-            
+            building_type = building.get("type")
             building_id = building.get("id")
             bx = building.get("x", 0)
             by = building.get("y", 0)
             bw = building.get("width", 3)
             bh = building.get("height", 3)
             
-            # 在建築內部放置灶台（左下角）
-            stove = Furniture(
-                id=f"furniture_{self.next_furniture_id}",
-                type="stove",
-                x=bx + 1,
-                y=by + bh - 2,
-                building_id=building_id
-            )
-            self.furniture[stove.id] = stove.to_dict()
-            self.next_furniture_id += 1
+            # 住宅類建築：生成灶台和床
+            if building_type in ["house", "cottage"]:
+                # 在建築內部放置灶台（左下角）
+                stove = Furniture(
+                    id=f"furniture_{self.next_furniture_id}",
+                    type="stove",
+                    x=bx + 1,
+                    y=by + bh - 2,
+                    building_id=building_id
+                )
+                self.furniture[stove.id] = stove.to_dict()
+                self.next_furniture_id += 1
+                
+                # 在建築內部放置床（右上角）
+                bed = Furniture(
+                    id=f"furniture_{self.next_furniture_id}",
+                    type="bed",
+                    x=bx + bw - 2,
+                    y=by + 1,
+                    building_id=building_id
+                )
+                self.furniture[bed.id] = bed.to_dict()
+                self.next_furniture_id += 1
             
-            # 在建築內部放置床（右上角）
-            bed = Furniture(
-                id=f"furniture_{self.next_furniture_id}",
-                type="bed",
-                x=bx + bw - 2,
-                y=by + 1,
-                building_id=building_id
-            )
-            self.furniture[bed.id] = bed.to_dict()
-            self.next_furniture_id += 1
+            # 工作建築：生成工作台（排除開放式建築和酒吧）
+            elif building_type not in NO_WORKBENCH_BUILDINGS:
+                # 在建築內部中央放置工作台
+                center_x = bx + bw // 2
+                center_y = by + bh // 2
+                
+                workbench = Furniture(
+                    id=f"furniture_{self.next_furniture_id}",
+                    type="workbench",
+                    x=center_x,
+                    y=center_y,
+                    building_id=building_id
+                )
+                self.furniture[workbench.id] = workbench.to_dict()
+                self.next_furniture_id += 1
         
         print(f"🏠 生成了 {len(self.furniture)} 件家具")
     
@@ -580,6 +598,16 @@ class GameState:
         if not residence_id:
             return None
         return self.get_furniture_by_type(residence_id, "bed")
+    
+    def get_workbench_by_workplace(self, villager_id: str) -> Optional[dict]:
+        """取得村民工作場所的工作台"""
+        villager = self.villagers.get(villager_id)
+        if not villager:
+            return None
+        workplace_id = villager.get("workplace")
+        if not workplace_id:
+            return None
+        return self.get_furniture_by_type(workplace_id, "workbench")
     
     def use_furniture(self, furniture_id: str, user_id: str) -> bool:
         """使用家具"""
