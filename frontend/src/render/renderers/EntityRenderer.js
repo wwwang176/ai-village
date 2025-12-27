@@ -222,6 +222,10 @@ export class EntityRenderer extends BaseRenderer {
    * 渲染睡覺 ZZZ 動畫
    */
   renderSleepZZZ(x, y) {
+    // LOD: 極遠景不渲染 ZZZ
+    const zoom = this.camera.zoom || 1;
+    if (zoom <= 0.5) return;
+    
     const time = performance.now() / 1000;
     const letters = ['Z', 'z', 'z'];
     
