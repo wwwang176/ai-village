@@ -96,29 +96,66 @@ export class LightingRenderer extends BaseRenderer {
     const minute = timeSystem.minute;
     const timeValue = hour + minute / 60; // 小數形式的時間
     
-    let darkness = 0;
-    let tint = { r: 0, g: 0, b: 0 };
+    // 定義各時段的光照參數
+    const phases = {
+      night:  { darkness: 0.6, tint: { r: 10, g: 15, b: 40 } },   // 深藍夜晚
+      dawn:   { darkness: 0.3, tint: { r: 30, g: 15, b: 25 } },   // 粉紫黎明
+      day:    { darkness: 0,   tint: { r: 0,  g: 0,  b: 0 } },    // 明亮白天
+      dusk:   { darkness: 0.3, tint: { r: 25, g: 15, b: 35 } },   // 橙紫黃昏
+    };
+    
+    // 線性插值函數
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const lerpPhase = (from, to, t) => ({
+      darkness: lerp(from.darkness, to.darkness, t),
+      tint: {
+        r: lerp(from.tint.r, to.tint.r, t),
+        g: lerp(from.tint.g, to.tint.g, t),
+        b: lerp(from.tint.b, to.tint.b, t),
+      }
+    });
+    
+    // 時段定義（每個過渡持續 1 小時）
+    // 04:00-05:00：夜晚 → 黎明
+    // 05:00-06:00：黎明
+    // 06:00-07:00：黎明 → 白天
+    // 07:00-17:00：白天
+    // 17:00-18:00：白天 → 黃昏
+    // 18:00-19:00：黃昏
+    // 19:00-20:00：黃昏 → 夜晚
+    // 20:00-04:00：夜晚
     
     if (timeValue >= 7 && timeValue < 17) {
-      // 白天 07:00-17:00：無遮罩
-      darkness = 0;
-    } else if (timeValue >= 17 && timeValue < 19) {
-      // 黃昏 17:00-19:00：漸暗，橙黃調
-      const progress = (timeValue - 17) / 2; // 0 到 1
-      darkness = progress * 0.5;
-      tint = { r: 20, g: 10, b: 40 }; // 偏紫藍
-    } else if (timeValue >= 19 || timeValue < 5) {
-      // 夜晚 19:00-05:00：最暗，深藍調
-      darkness = 0.6;
-      tint = { r: 10, g: 15, b: 40 }; // 深藍
-    } else if (timeValue >= 5 && timeValue < 7) {
-      // 黎明 05:00-07:00：漸亮，粉橙調
-      const progress = (timeValue - 5) / 2; // 0 到 1
-      darkness = 0.6 * (1 - progress);
-      tint = { r: 30, g: 15, b: 25 }; // 偏粉紫
+      // 白天 07:00-17:00
+      return phases.day;
+    } else if (timeValue >= 17 && timeValue < 18) {
+      // 白天 → 黃昏 17:00-18:00
+      const progress = timeValue - 17;
+      return lerpPhase(phases.day, phases.dusk, progress);
+    } else if (timeValue >= 18 && timeValue < 19) {
+      // 黃昏 18:00-19:00
+      return phases.dusk;
+    } else if (timeValue >= 19 && timeValue < 20) {
+      // 黃昏 → 夜晚 19:00-20:00
+      const progress = timeValue - 19;
+      return lerpPhase(phases.dusk, phases.night, progress);
+    } else if (timeValue >= 20 || timeValue < 4) {
+      // 夜晚 20:00-04:00
+      return phases.night;
+    } else if (timeValue >= 4 && timeValue < 5) {
+      // 夜晚 → 黎明 04:00-05:00
+      const progress = timeValue - 4;
+      return lerpPhase(phases.night, phases.dawn, progress);
+    } else if (timeValue >= 5 && timeValue < 6) {
+      // 黎明 05:00-06:00
+      return phases.dawn;
+    } else if (timeValue >= 6 && timeValue < 7) {
+      // 黎明 → 白天 06:00-07:00
+      const progress = timeValue - 6;
+      return lerpPhase(phases.dawn, phases.day, progress);
     }
     
-    return { darkness, tint };
+    return phases.day;
   }
   
   /**

@@ -640,11 +640,9 @@ export class Game {
    * 更新遊戲狀態
    */
   update(deltaTime) {
-    // 離線模式：本地更新時間
-    // 後端模式：時間由後端 tick 推送同步
-    if (!this.config.useBackend) {
-      this.timeSystem.update(deltaTime);
-    }
+    // 無論離線或後端模式，都讓前端平滑更新時間
+    // 後端 tick 會定期校正時間，前端在兩次 tick 之間平滑遞增
+    this.timeSystem.update(deltaTime);
     
     // 更新鏡頭移動（鍵盤/邊緣捲動）
     this.inputHandler.updateCameraMovement(deltaTime);
