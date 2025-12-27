@@ -44,20 +44,26 @@ export class FurnitureRenderer extends BaseRenderer {
     }
     
     // 檢查是否有村民在此工作台工作
-    const isInUse = item.type === 'workbench' && workingVillagers.some(v => {
+    const isWorkbenchInUse = item.type === 'workbench' && workingVillagers.some(v => {
       const dist = Math.abs(Math.round(v.x) - item.x) + Math.abs(Math.round(v.y) - item.y);
       return v.state === 'work' && dist <= 1;
     });
     
+    // 檢查是否有村民在此灶台烹飪
+    const isStoveInUse = item.type === 'stove' && workingVillagers.some(v => {
+      const dist = Math.abs(Math.round(v.x) - item.x) + Math.abs(Math.round(v.y) - item.y);
+      return v.state === 'cook' && dist <= 1;
+    });
+    
     switch (item.type) {
       case 'stove':
-        this.renderStove(screenX + offset, screenY + offset, size, zoom);
+        this.renderStove(screenX + offset, screenY + offset, size, zoom, isStoveInUse);
         break;
       case 'bed':
         this.renderBed(screenX + offset, screenY + offset, size, zoom);
         break;
       case 'workbench':
-        this.renderWorkbench(screenX + offset, screenY + offset, size, zoom, isInUse);
+        this.renderWorkbench(screenX + offset, screenY + offset, size, zoom, isWorkbenchInUse);
         break;
       default:
         this.renderGeneric(screenX + offset, screenY + offset, size);
@@ -80,7 +86,7 @@ export class FurnitureRenderer extends BaseRenderer {
   /**
    * 渲染灶台
    */
-  renderStove(x, y, size, zoom = 1) {
+  renderStove(x, y, size, zoom = 1, isInUse = false) {
     // 棕色底座
     this.ctx.fillStyle = '#8B4513';
     this.ctx.fillRect(x, y, size, size);
@@ -113,6 +119,11 @@ export class FurnitureRenderer extends BaseRenderer {
     this.ctx.lineTo(x + size * 0.65, y + size * 0.5);
     
     this.ctx.stroke();
+    
+    // 烹飪中顯示黑色煙霧動畫
+    if (isInUse) {
+      this.renderStoveSmoke(x + size * 0.5, y - size * 0.1, size);
+    }
   }
   
   /**
@@ -236,9 +247,13 @@ export class FurnitureRenderer extends BaseRenderer {
   }
   
   /**
-   * 渲染煙霧動畫
+   * 渲染煙霧動畫（白色，工作台用）
    */
   renderSmoke(x, y, size) {
+    // LOD: 極遠景不渲染粒子
+    const zoom = this.camera.zoom || 1;
+    if (zoom <= 0.5) return;
+    
     const time = performance.now() / 1000;
     const particleCount = 5;
     
@@ -253,6 +268,34 @@ export class FurnitureRenderer extends BaseRenderer {
       this.ctx.save();
       this.ctx.globalAlpha = alpha;
       this.ctx.fillStyle = '#ffffff';
+      this.ctx.beginPath();
+      this.ctx.arc(x + floatX, y + floatY, particleSize, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.restore();
+    }
+  }
+  
+  /**
+   * 渲染灶台煙霧動畫（黑色）
+   */
+  renderStoveSmoke(x, y, size) {
+    // LOD: 極遠景不渲染粒子
+    const zoom = this.camera.zoom || 1;
+    if (zoom <= 0.5) return;
+    
+    const time = performance.now() / 1000;
+    const particleCount = 5;
+    
+    for (let i = 0; i < particleCount; i++) {
+      const phase = (time * 1.5 + i * 0.7) % 2;
+      const floatY = -phase * size * 0.5;
+      const floatX = Math.sin(time * 2 + i * 1.5) * size * 0.2;
+      const alpha = Math.max(0, 0.5 - phase * 0.3);
+      const particleSize = (2.5 + i * 0.6) * (1 - phase * 0.3);
+      
+      this.ctx.save();
+      this.ctx.globalAlpha = alpha;
+      this.ctx.fillStyle = '#333333';
       this.ctx.beginPath();
       this.ctx.arc(x + floatX, y + floatY, particleSize, 0, Math.PI * 2);
       this.ctx.fill();

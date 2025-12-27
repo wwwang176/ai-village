@@ -162,6 +162,60 @@ export class EntityRenderer extends BaseRenderer {
     if (villager.state === 'sleeping') {
       this.renderSleepZZZ(cx, screenY - 5);
     }
+    
+    // 開放式職業工作時顯示粒子動畫
+    const openFieldJobs = ['farmer', 'miner', 'lumberjack'];
+    if (villager.state === 'work' && openFieldJobs.includes(villager.occupation)) {
+      this.renderWorkParticles(cx, screenY + 5, villager.occupation);
+    }
+    // 剪羊毛時顯示粒子動畫
+    if (villager.state === 'shear_sheep') {
+      this.renderWorkParticles(cx, screenY + 5, 'shepherd');
+    }
+    // 屠宰羊時顯示粒子動畫
+    if (villager.state === 'slaughter_sheep') {
+      this.renderWorkParticles(cx, screenY + 5, 'butcher');
+    }
+  }
+  
+  /**
+   * 渲染開放式職業工作粒子動畫
+   */
+  renderWorkParticles(x, y, occupation) {
+    // LOD: 極遠景不渲染粒子
+    const zoom = this.camera.zoom || 1;
+    if (zoom <= 0.5) return;
+    
+    const time = performance.now() / 1000;
+    const particleCount = 4;
+    
+    // 根據職業決定顏色
+    const colors = {
+      'farmer': '#8B4513',     // 棕色土塵
+      'miner': '#FFA500',      // 橙黃火花
+      'lumberjack': '#DEB887', // 淺棕木屑
+      'shepherd': '#FFFFFF',   // 白色羊毛
+      'butcher': '#8B0000'     // 暗紅色血滴
+    };
+    const color = colors[occupation] || '#FFFFFF';
+    
+    for (let i = 0; i < particleCount; i++) {
+      const phase = (time * 2 + i * 0.5) % 1.5;
+      const angle = (i / particleCount) * Math.PI * 2 + time;
+      const radius = 8 + phase * 10;
+      const floatX = Math.cos(angle) * radius;
+      const floatY = -phase * 15 + Math.sin(angle) * 3;
+      const alpha = Math.max(0, 0.8 - phase * 0.6);
+      const size = 2 + (1 - phase) * 1.5;
+      
+      this.ctx.save();
+      this.ctx.globalAlpha = alpha;
+      this.ctx.fillStyle = color;
+      this.ctx.beginPath();
+      this.ctx.arc(x + floatX, y + floatY, size, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.restore();
+    }
   }
   
   /**
