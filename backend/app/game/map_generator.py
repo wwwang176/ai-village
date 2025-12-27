@@ -324,21 +324,21 @@ def _add_river(terrain: List[List[int]], collision: List[List[int]], buildings: 
 
 
 def _add_roads(terrain: List[List[int]], collision: List[List[int]], buildings: List[dict], width: int, height: int):
-    """添加道路：中央主幹道 + 建築連接最近支線"""
+    """添加道路：中央主幹道 + 自動分群連接"""
     
     center_x = width // 2
-    center_y = height // 2
     
     # 河流相關常數
     river_start = RIVER_X - RIVER_WIDTH // 2
     river_end = RIVER_X + RIVER_WIDTH // 2
-    bridge_y = BRIDGE_Y  # 橋樑 Y 座標（水平主幹道經過這裡）
+    bridge_y = BRIDGE_Y
     
-    # 主幹道位置（十字）- 水平主幹道改為經過橋樑
-    main_roads_x = [center_x, center_x + 1]  # 垂直主幹道（河流左側）
-    main_roads_y = [bridge_y, bridge_y + 1]  # 水平主幹道（經過橋樑）
+    # 主幹道位置
+    main_roads_x = [center_x, center_x + 1]
+    main_roads_y = [bridge_y, bridge_y + 1]
+    right_main_x = [RIVER_X + RIVER_WIDTH // 2 + 8, RIVER_X + RIVER_WIDTH // 2 + 9]
     
-    # 畫主幹道（水平方向穿越整個地圖，包括橋樑）
+    # 畫主幹道（水平）
     for x in range(4, width - 4):
         for y in main_roads_y:
             _set_road(terrain, x, y, width, height)
@@ -348,55 +348,123 @@ def _add_roads(terrain: List[List[int]], collision: List[List[int]], buildings: 
         for x in main_roads_x:
             _set_road(terrain, x, y, width, height)
     
-    # 河流右側也需要一條垂直主幹道
-    right_main_x = [RIVER_X + RIVER_WIDTH // 2 + 8, RIVER_X + RIVER_WIDTH // 2 + 9]
+    # 河流右側垂直主幹道
     for y in range(4, height - 4):
         for x in right_main_x:
             _set_road(terrain, x, y, width, height)
     
-    # 建築物周圍一圈設定為道路（排除開放空間）
+    # 建築物周圍一圈道路（排除開放空間）
     for b in buildings:
         if b["type"] in OPEN_BUILDINGS:
-            continue  # 開放空間不需要周圍道路
+            continue
         bx, by, bw, bh = b["x"], b["y"], b["width"], b["height"]
-        # 上邊（北）
         for x in range(bx - 1, bx + bw + 1):
             _set_road(terrain, x, by - 1, width, height)
-        # 下邊（南）
-        for x in range(bx - 1, bx + bw + 1):
             _set_road(terrain, x, by + bh, width, height)
-        # 左邊（西）
         for y in range(by - 1, by + bh + 1):
             _set_road(terrain, bx - 1, y, width, height)
-        # 右邊（東）
-        for y in range(by - 1, by + bh + 1):
             _set_road(terrain, bx + bw, y, width, height)
     
-    # 每個建築門口用最短路徑連到主幹道
-    for b in buildings:
+    # === 自動分群連接 ===
+    DIRECT_THRESHOLD = 3  # 離主幹道 ≤3 格直接連
+    CLUSTER_THRESHOLD = 15  # 建築間距 ≤15 格視為同群
+    
+    # 計算每個建築的門口位置和到主幹道的距離
+    def get_door_info(b):
         door_x = b.get("doorX", b["x"] + b["width"] // 2)
         door_y = b.get("doorY", b["y"] + b["height"] - 1) + 1
-        
-        # 判斷建築在河流哪一側
-        is_right_side = door_x > river_end
-        
-        # 選擇對應的垂直主幹道
-        target_main_x = right_main_x[0] if is_right_side else center_x
-        
-        # 判斷連接水平還是垂直主幹道（選最近的）
-        dist_to_h = abs(door_y - bridge_y)  # 到水平主幹道的距離
-        dist_to_v = abs(door_x - target_main_x)  # 到垂直主幹道的距離
-        
-        if dist_to_h <= dist_to_v:
-            # 垂直連接到水平主幹道
-            y_start, y_end = (door_y, bridge_y) if door_y < bridge_y else (bridge_y + 1, door_y)
-            for y in range(y_start, y_end + 1):
+        is_right = door_x > river_end
+        target_x = right_main_x[0] if is_right else center_x
+        dist_h = abs(door_y - bridge_y)
+        dist_v = abs(door_x - target_x)
+        return {"b": b, "door_x": door_x, "door_y": door_y, "dist": min(dist_h, dist_v), 
+                "is_right": is_right, "target_x": target_x}
+    
+    # 計算兩建築邊緣距離
+    def building_distance(b1, b2):
+        dx = max(0, max(b1["x"], b2["x"]) - min(b1["x"] + b1["width"], b2["x"] + b2["width"]))
+        dy = max(0, max(b1["y"], b2["y"]) - min(b1["y"] + b1["height"], b2["y"] + b2["height"]))
+        return dx + dy
+    
+    # 連接兩點（L 形道路）
+    def connect_points(x1, y1, x2, y2):
+        # 先水平再垂直
+        for x in range(min(x1, x2), max(x1, x2) + 1):
+            _set_road(terrain, x, y1, width, height)
+        for y in range(min(y1, y2), max(y1, y2) + 1):
+            _set_road(terrain, x2, y, width, height)
+    
+    # 連接門口到主幹道
+    def connect_to_main(door_x, door_y, is_right):
+        target_x = right_main_x[0] if is_right else center_x
+        dist_h = abs(door_y - bridge_y)
+        dist_v = abs(door_x - target_x)
+        if dist_h <= dist_v:
+            for y in range(min(door_y, bridge_y), max(door_y, bridge_y) + 1):
                 _set_road(terrain, door_x, y, width, height)
         else:
-            # 水平連接到垂直主幹道
-            x_start, x_end = (door_x, target_main_x) if door_x < target_main_x else (target_main_x + 1, door_x)
-            for x in range(x_start, x_end + 1):
+            for x in range(min(door_x, target_x), max(door_x, target_x) + 1):
                 _set_road(terrain, x, door_y, width, height)
+    
+    # 所有建築都需要道路連接（包括開放空間）
+    valid_buildings = [b for b in buildings]
+    door_infos = [get_door_info(b) for b in valid_buildings]
+    
+    # 分類：近距離直連 vs 需要分群
+    direct_connect = []
+    need_cluster = []
+    for info in door_infos:
+        if info["dist"] <= DIRECT_THRESHOLD:
+            direct_connect.append(info)
+        else:
+            need_cluster.append(info)
+    
+    # 近距離建築直接連主幹道
+    for info in direct_connect:
+        connect_to_main(info["door_x"], info["door_y"], info["is_right"])
+    
+    # Union-Find 分群
+    n = len(need_cluster)
+    if n > 0:
+        parent = list(range(n))
+        
+        def find(x):
+            if parent[x] != x:
+                parent[x] = find(parent[x])
+            return parent[x]
+        
+        def union(x, y):
+            px, py = find(x), find(y)
+            if px != py:
+                parent[px] = py
+        
+        # 依距離合併
+        for i in range(n):
+            for j in range(i + 1, n):
+                if building_distance(need_cluster[i]["b"], need_cluster[j]["b"]) <= CLUSTER_THRESHOLD:
+                    union(i, j)
+        
+        # 分組
+        clusters = {}
+        for i in range(n):
+            root = find(i)
+            if root not in clusters:
+                clusters[root] = []
+            clusters[root].append(need_cluster[i])
+        
+        # 處理每個集群
+        for cluster in clusters.values():
+            # 集群內建築互相連接（用最小生成樹概念，連接相鄰的）
+            if len(cluster) > 1:
+                # 簡單做法：按 x+y 排序後依序連接
+                sorted_cluster = sorted(cluster, key=lambda c: c["door_x"] + c["door_y"])
+                for i in range(len(sorted_cluster) - 1):
+                    c1, c2 = sorted_cluster[i], sorted_cluster[i + 1]
+                    connect_points(c1["door_x"], c1["door_y"], c2["door_x"], c2["door_y"])
+            
+            # 選離主幹道最近的作為代表點連主幹道
+            rep = min(cluster, key=lambda c: c["dist"])
+            connect_to_main(rep["door_x"], rep["door_y"], rep["is_right"])
 
 
 def _set_road(terrain: List[List[int]], x: int, y: int, width: int, height: int):
