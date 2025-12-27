@@ -157,6 +157,41 @@ export class EntityRenderer extends BaseRenderer {
     this.ctx.shadowBlur = 0;
     this.ctx.shadowOffsetX = 0;
     this.ctx.shadowOffsetY = 0;
+    
+    // 睡覺時顯示 ZZZ 動畫
+    if (villager.state === 'sleeping') {
+      this.renderSleepZZZ(cx, screenY - 5);
+    }
+  }
+  
+  /**
+   * 渲染睡覺 ZZZ 動畫
+   */
+  renderSleepZZZ(x, y) {
+    const time = performance.now() / 1000;
+    const letters = ['Z', 'z', 'z'];
+    
+    this.ctx.font = 'bold 8px Arial';
+    this.ctx.textAlign = 'left';
+    this.ctx.textBaseline = 'middle';
+    
+    for (let i = 0; i < letters.length; i++) {
+      // 每個 Z 有不同的動畫相位
+      const phase = time * 2 + i * 0.8;
+      const floatY = Math.sin(phase) * 3;
+      const floatX = i * 6 + Math.sin(phase * 0.5) * 2;
+      const alpha = 0.5 + Math.sin(phase) * 0.3;
+      const scale = 1 - i * 0.15;
+      
+      this.ctx.save();
+      this.ctx.globalAlpha = alpha;
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+      this.ctx.shadowBlur = 2;
+      this.ctx.font = `bold ${8 * scale}px Arial`;
+      this.ctx.fillText(letters[i], x + floatX, y - 8 - i * 5 + floatY);
+      this.ctx.restore();
+    }
   }
   
   darkenColor(hex, amount) {

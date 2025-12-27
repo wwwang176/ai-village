@@ -10,26 +10,28 @@ export class FurnitureRenderer extends BaseRenderer {
   
   /**
    * 渲染所有家具
+   * @param {Array} furniture - 家具陣列
+   * @param {Array} workingVillagers - 工作中村民陣列（用於判斷工作台是否在使用）
    */
-  render(furniture) {
+  render(furniture, workingVillagers = []) {
     if (!furniture || furniture.length === 0) return;
     
     for (const item of furniture) {
-      this.renderItem(item);
+      this.renderItem(item, workingVillagers);
     }
   }
   
   /**
    * 渲染單一家具（用於 Y-sort）
    */
-  renderSingle(item) {
-    this.renderItem(item);
+  renderSingle(item, workingVillagers = []) {
+    this.renderItem(item, workingVillagers);
   }
   
   /**
    * 渲染單一家具
    */
-  renderItem(item) {
+  renderItem(item, workingVillagers = []) {
     const { x: screenX, y: screenY } = this.toScreen(item.x, item.y);
     const size = this.tileSize * 0.6;
     const offset = (this.tileSize - size) / 2;
@@ -41,6 +43,12 @@ export class FurnitureRenderer extends BaseRenderer {
       return;
     }
     
+    // 檢查是否有村民在此工作台工作
+    const isInUse = item.type === 'workbench' && workingVillagers.some(v => {
+      const dist = Math.abs(Math.round(v.x) - item.x) + Math.abs(Math.round(v.y) - item.y);
+      return v.state === 'work' && dist <= 1;
+    });
+    
     switch (item.type) {
       case 'stove':
         this.renderStove(screenX + offset, screenY + offset, size, zoom);
@@ -49,7 +57,7 @@ export class FurnitureRenderer extends BaseRenderer {
         this.renderBed(screenX + offset, screenY + offset, size, zoom);
         break;
       case 'workbench':
-        this.renderWorkbench(screenX + offset, screenY + offset, size, zoom);
+        this.renderWorkbench(screenX + offset, screenY + offset, size, zoom, isInUse);
         break;
       default:
         this.renderGeneric(screenX + offset, screenY + offset, size);
@@ -170,7 +178,7 @@ export class FurnitureRenderer extends BaseRenderer {
   /**
    * 渲染工作台（2.5D 風格，向北延伸）
    */
-  renderWorkbench(x, y, size, zoom = 1) {
+  renderWorkbench(x, y, size, zoom = 1, isInUse = false) {
     // 桌面 1 格 + 桌腳 0.3 格，總高度 1.3 格
     // 向北偏移 0.3 格，讓桌腳底部貼到格子南端
     const startY = y - size * 0.3;
@@ -220,6 +228,36 @@ export class FurnitureRenderer extends BaseRenderer {
     // 桌上工具（右：橘色方塊代表材料）
     this.ctx.fillStyle = '#CD853F';
     this.ctx.fillRect(x + size * 0.65, startY + size * 0.1, size * 0.2, size * 0.15);
+    
+    // 工作中顯示煙霧動畫
+    if (isInUse) {
+      this.renderSmoke(x + size * 0.5, startY - size * 0.1, size);
+    }
+  }
+  
+  /**
+   * 渲染煙霧動畫
+   */
+  renderSmoke(x, y, size) {
+    const time = performance.now() / 1000;
+    const particleCount = 5;
+    
+    for (let i = 0; i < particleCount; i++) {
+      // 每個粒子有不同的相位
+      const phase = (time * 1.5 + i * 0.7) % 2;
+      const floatY = -phase * size * 0.4;
+      const floatX = Math.sin(time * 2 + i * 1.5) * size * 0.15;
+      const alpha = Math.max(0, 0.6 - phase * 0.4);
+      const particleSize = (2 + i * 0.5) * (1 - phase * 0.3);
+      
+      this.ctx.save();
+      this.ctx.globalAlpha = alpha;
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.beginPath();
+      this.ctx.arc(x + floatX, y + floatY, particleSize, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.restore();
+    }
   }
   
   /**

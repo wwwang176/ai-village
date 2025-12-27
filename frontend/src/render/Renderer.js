@@ -56,8 +56,8 @@ export class Renderer {
   /**
    * 渲染家具
    */
-  renderFurniture(furniture) {
-    this.furniture.render(furniture);
+  renderFurniture(furniture, villagers = []) {
+    this.furniture.render(furniture, villagers);
   }
   
   /**
@@ -274,7 +274,7 @@ export class Renderer {
           this.entity.renderSingleVillager(item.data.villager, item.data.isSelected);
           break;
         case 'furniture':
-          this.furniture.renderSingle(item.data);
+          this.furniture.renderSingle(item.data, villagers);
           break;
         case 'tree':
           this.object.renderSingleObject(item.data);
