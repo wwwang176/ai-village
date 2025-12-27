@@ -163,7 +163,7 @@ class GameState:
             "射箭", "騎馬", "養蜂", "編織", "製陶", "草藥學", "養鴿", "飼養獵犬",
             "吹笛", "彈琴", "雕刻", "打鐵藝術", "石雕", "馴鷹", "賭博", "打獵",
             "寫詩", "散步", "採集蘑菇", "摔角", "擊劍", "雜耍", "占卜", "製作蠟燭",
-            "製作珠寶", "祈禱", "參觀市集", "玩牌", "擲骰子", "賽跑", "爬樹", "製作花環",
+            "製作珠寶", "祈禱", "參觀廣場", "玩牌", "擲骰子", "賽跑", "爬樹", "製作花環",
             "尋寶", "寫日記", "觀看戲劇", "演戲", "吹口哨", "整理花園", "觀鳥", "製作果醬",
             "曬太陽", "泡茶", "研究歷史", "練習劍術", "照顧孤兒", "修理工具", "交換八卦", "放風箏"
         ]
@@ -202,7 +202,7 @@ class GameState:
             "tanner",       # 皮革坊 - 皮革匠
             "tailor",       # 裁縫店 - 裁縫
             # 特殊
-            "merchant",     # 市集 - 商人
+            "merchant",     # 廣場 - 商人
             "bartender",    # 酒吧 - 酒保
         ]
         
@@ -257,7 +257,7 @@ class GameState:
                 "weaver": "weaver_shop",
                 "tanner": "tannery",
                 "tailor": "tailor_shop",
-                "merchant": "market",
+                "merchant": "plaza",
                 "bartender": "tavern",
             }
             
@@ -627,6 +627,175 @@ class GameState:
             }
             for v in self.villagers.values()
         ]
+    
+    # ========== 多輪決策支援方法 ==========
+    
+    def get_nearby_villagers(self, villager: dict, radius: float = 15.0) -> List[dict]:
+        """取得附近的村民（含關係描述）"""
+        my_x, my_y = villager["x"], villager["y"]
+        my_id = villager["id"]
+        my_relationships = villager.get("relationships", {})
+        
+        nearby = []
+        for v in self.villagers.values():
+            if v["id"] == my_id:
+                continue
+            
+            dx = v["x"] - my_x
+            dy = v["y"] - my_y
+            dist = (dx**2 + dy**2) ** 0.5
+            
+            if dist <= radius:
+                rel = my_relationships.get(v["id"], {})
+                affection = rel.get("affection", 0)
+                familiarity = rel.get("familiarity", 0)
+                
+                nearby.append({
+                    "id": v["id"],
+                    "name": v["name"],
+                    "occupation": v["occupation"],
+                    "state": v["state"],
+                    "affection": affection,
+                    "affection_desc": get_affection_desc(affection),
+                    "familiarity": familiarity,
+                    "familiarity_desc": get_familiarity_desc(familiarity),
+                    "distance": round(dist, 1)
+                })
+        
+        nearby.sort(key=lambda x: x["distance"])
+        return nearby
+    
+    def get_trade_options(self, villager: dict, nearby_villagers: List[dict]) -> dict:
+        """取得村民的交易選項（根據供應鏈過濾）"""
+        from .production import MATERIAL_PRICES, FOOD_INFO
+        from ..data.supply_chain import (
+            SUPPLY_CHAIN, MATERIAL_PRODUCERS, FOOD_SELLERS, 
+            MERCHANT_BUY_PRICES
+        )
+        
+        my_occupation = villager.get("occupation", "")
+        my_inventory = villager.get("inventory", [])
+        my_money = villager.get("money", 0)
+        my_suppliers = SUPPLY_CHAIN.get(my_occupation, [])
+        
+        can_buy = []
+        can_sell = []
+        
+        for npc in nearby_villagers:
+            npc_id = npc["id"]
+            npc_occupation = npc["occupation"]
+            npc_villager = self.villagers.get(npc_id)
+            if not npc_villager:
+                continue
+            
+            # 1. 原料交易：只能向供應鏈上游購買
+            if npc_occupation in my_suppliers:
+                for item_id, producer in MATERIAL_PRODUCERS.items():
+                    if producer != npc_occupation:
+                        continue
+                    stock = self._count_villager_stock(npc_villager, item_id)
+                    if stock > 0:
+                        price = MATERIAL_PRICES.get(item_id, 5)
+                        if my_money >= price:
+                            can_buy.append({
+                                "from_id": npc_id,
+                                "from_name": npc["name"],
+                                "from_occupation": npc_occupation,
+                                "item": item_id,
+                                "price": price,
+                                "stock": stock,
+                                "type": "material"
+                            })
+            
+            # 2. 食物交易：所有人都能買食物
+            for food_item, seller_occupation in FOOD_SELLERS:
+                if npc_occupation != seller_occupation:
+                    continue
+                stock = self._count_villager_stock(npc_villager, food_item)
+                if stock > 0:
+                    price = FOOD_INFO.get(food_item, {}).get("price", 5)
+                    if my_money >= price:
+                        can_buy.append({
+                            "from_id": npc_id,
+                            "from_name": npc["name"],
+                            "from_occupation": npc_occupation,
+                            "item": food_item,
+                            "price": price,
+                            "stock": stock,
+                            "type": "food"
+                        })
+            
+            # 3. 買羊：只有屠夫能向牧羊人買羊
+            if my_occupation == "butcher" and npc_occupation == "shepherd":
+                shepherd_sheep = self.get_sheep_by_owner(npc_id)
+                adult_sheep = [s for s in shepherd_sheep if s.get("is_adult")]
+                sellable = len(adult_sheep) - 2
+                if sellable > 0 and my_money >= 10:
+                    can_buy.append({
+                        "from_id": npc_id,
+                        "from_name": npc["name"],
+                        "from_occupation": npc_occupation,
+                        "item": "sheep",
+                        "price": 10,
+                        "stock": sellable,
+                        "type": "livestock"
+                    })
+            
+            # 4. 賣給商人
+            if npc_occupation == "merchant":
+                for slot in my_inventory:
+                    if not slot:
+                        continue
+                    item_id = slot.get("item_id")
+                    qty = slot.get("quantity", 0)
+                    if item_id in MERCHANT_BUY_PRICES and qty > 0:
+                        can_sell.append({
+                            "to_id": npc_id,
+                            "to_name": npc["name"],
+                            "to_occupation": npc_occupation,
+                            "item": item_id,
+                            "price": MERCHANT_BUY_PRICES[item_id],
+                            "my_stock": qty,
+                            "type": "merchant"
+                        })
+        
+        return {"can_buy": can_buy, "can_sell": can_sell}
+    
+    def _count_villager_stock(self, villager: dict, item_id: str) -> int:
+        """計算村民的某物品總庫存（背包+地上）"""
+        total = 0
+        for slot in villager.get("inventory", []):
+            if slot and slot.get("item_id") == item_id:
+                total += slot.get("quantity", 0)
+        for item in self.get_items_by_owner(villager["id"]):
+            if item.get("item_id") == item_id:
+                total += item.get("quantity", 0)
+        return total
+    
+    def get_location_context(self, villager: dict) -> dict:
+        """取得村民當前位置的情境資訊"""
+        x, y = villager["x"], villager["y"]
+        
+        location_type = "outdoor"
+        location_name = "戶外"
+        
+        for building in self.map_data.get("buildings", []):
+            bx, by = building["x"], building["y"]
+            bw, bh = building["width"], building["height"]
+            if bx <= x < bx + bw and by <= y < by + bh:
+                location_type = building.get("type", "building")
+                location_name = building.get("name", "建築")
+                break
+        
+        nearby = self.get_nearby_villagers(villager, radius=10.0)
+        trade_options = self.get_trade_options(villager, nearby)
+        
+        return {
+            "location_type": location_type,
+            "location_name": location_name,
+            "nearby_villagers": nearby,
+            "trade_options": trade_options
+        }
     
     # ========== 物品管理方法 ==========
     
@@ -1006,7 +1175,7 @@ class GameState:
     
     def is_outdoor_building(self, building_type: str) -> bool:
         """判斷建築物是否為開放式（室外）建築"""
-        outdoor_types = {"pasture", "farm", "mine", "lumber_camp", "market"}
+        outdoor_types = {"pasture", "farm", "mine", "lumber_camp", "plaza"}
         return building_type in outdoor_types
     
     # ==================== 目標位置解析 ====================

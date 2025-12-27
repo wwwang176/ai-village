@@ -68,11 +68,10 @@ class VillagerAI:
         
         logger.info(f"✅ OpenAI 已初始化，模型: {self.model}")
     
+    # ========== 多輪決策系統 ==========
+    
     async def make_decision(self, villager: dict, game_state) -> dict:
-        """為村民做出行為決策"""
-        
-        
-        # 檢查此村民的 API 呼叫間隔
+        """統一決策：選擇要執行的動作（合併目的地和動作決策）"""
         villager_id = villager.get("id", "unknown")
         now = time.time()
         last_call = self._last_api_call.get(villager_id, 0)
@@ -84,48 +83,516 @@ class VillagerAI:
         self._last_api_call[villager_id] = time.time()
         
         try:
-            # 建構提示詞
-            prompt = self._build_decision_prompt(villager, game_state)
-            system_prompt = self._build_system_prompt(villager)
+            # 取得可用動作和 tools schema
+            action_info = self._get_available_destination_actions(villager, game_state)
+            tools = self._build_destination_tools(action_info)
+            
+            prompt = self._build_destination_prompt(villager, game_state, action_info)
+            system_prompt = self._build_destination_system_prompt()
             
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ]
             
-            # 輸出請求日誌
             if DEBUG_OPENAI:
                 logger.info(f"\n{'='*50}")
-                logger.info(f"🤖 [決策請求] 村民: {villager.get('name', villager.get('id'))}")
-                logger.info(f"📤 System Prompt:\n{system_prompt}...")
-                logger.info(f"📤 User Prompt:\n{prompt}")
+                logger.info(f"🎯 [決策] 村民: {villager.get('name')}")
+                logger.info(f"📤 Prompt:\n{prompt}")
                 logger.info(f"{'='*50}")
             
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                # temperature=0.8,
-                max_tokens=200,
-                response_format={"type": "json_object"}
+                tools=tools,
+                tool_choice={"type": "function", "function": {"name": "choose_action"}},
+                max_tokens=150
             )
             
-            result_text = response.choices[0].message.content
-            result = json.loads(result_text)
+            # 解析 function call 結果
+            tool_call = response.choices[0].message.tool_calls[0]
+            result = json.loads(tool_call.function.arguments)
             
-            # 輸出回應日誌
             if DEBUG_OPENAI:
-                logger.info(f"{'='*50}")
-                logger.info(f"📥 OpenAI 回傳:")
-                logger.info(f"   action: {result.get('action')}")
-                logger.info(f"   reason: {result.get('reason')}")
+                logger.info(f"📥 回傳: action={result.get('action')}, reason={result.get('reason')}")
                 logger.info(f"💰 Tokens: {response.usage.total_tokens}")
-                logger.info(f"{'='*50}")
             
             return result
             
         except Exception as e:
-            logger.error(f"AI 決策錯誤: {e}")
-            return None  # 跳過這輪決策
+            logger.error(f"決策錯誤: {e}")
+            return {"action": "wander", "reason": "不知道要做什麼"}
+    
+    # ========== Function Calling Tools 構建 ==========
+    
+    def _get_available_destination_actions(self, villager: dict, game_state) -> dict:
+        """取得可用的動作列表（統一決策系統）"""
+        actions = []
+        pickup_items = []
+        talk_targets = []
+        money = villager.get("money", 0)
+        hour = game_state.get_time()["hour"]
+        is_night = hour >= 19 or hour < 4
+        
+        # 取得位置資訊
+        context = game_state.get_location_context(villager)
+        location_type = context["location_type"]
+        nearby = context["nearby_villagers"]
+        
+        # 1. go_work（商人除外，商人改用 go_buy_goods）
+        if villager.get("occupation") != "merchant" and self._can_work(villager, game_state):
+            actions.append("go_work")
+        
+        # 2. go_sell
+        sell_items = self._get_sellable_items_list(villager, game_state)
+        if sell_items:
+            actions.append("go_sell")
+        
+        # 3. go_buy_food
+        if self._get_buy_food_info(villager, game_state):
+            actions.append("go_buy_food")
+        
+        # 4. eat
+        if self._get_eat_info(villager):
+            actions.append("eat")
+        
+        # 4.5. go_cook
+        if self._get_cook_info(villager, game_state):
+            actions.append("go_cook")
+        
+        # 5. go_pickup
+        pickup_info = self._get_pickup_info(villager, game_state)
+        if pickup_info:
+            actions.append("go_pickup")
+            ground_items = self._get_ground_items_list(villager, game_state)
+            pickup_items = ground_items
+        
+        # 6. go_buy_material
+        if self._get_buy_material_info(villager, game_state):
+            actions.append("go_buy_material")
+        
+        # 7. go_buy_tool
+        if self._get_buy_tool_info(villager, game_state):
+            actions.append("go_buy_tool")
+        
+        # 7.5. go_buy_goods（商人專用：主動收購）
+        buy_targets = []
+        buy_goods_info = self._get_buy_goods_targets(villager, game_state)
+        if buy_goods_info:
+            actions.append("go_buy_goods")
+            buy_targets = [t["villager_id"] for t in buy_goods_info]
+        
+        # 8. go_sleep（總是可用）
+        actions.append("go_sleep")
+        
+        # 9. go_plaza（總是可用）
+        actions.append("go_plaza")
+        
+        # 10. go_bar
+        if is_night or money >= 100:
+            actions.append("go_bar")
+        
+        # 11. wander（總是可用）
+        actions.append("wander")
+        
+        # === 位置相關動作 ===
+        
+        # 12. talk（周圍有人時）
+        if nearby:
+            actions.append("talk")
+            talk_targets = [v["id"] for v in nearby]
+        
+        # 13. buy_beer（在酒吧且酒保在附近）
+        if location_type == "tavern":
+            bartender_nearby = any(v.get("occupation") == "bartender" for v in nearby)
+            if bartender_nearby and money > 100:
+                actions.append("buy_beer")
+        
+        # 14. idle（總是可用）
+        actions.append("idle")
+        
+        return {
+            "actions": actions,
+            "pickup_items": pickup_items,
+            "sell_items": sell_items,
+            "talk_targets": talk_targets,
+            "buy_targets": buy_targets,
+            "context": context
+        }
+    
+    def _get_ground_items_list(self, villager: dict, game_state) -> List[str]:
+        """取得地上可撿物品列表"""
+        items = []
+        villager_id = villager.get("id")
+        for obj in game_state.map_data.get("objects", []):
+            if obj.get("type") == "ground_item" and obj.get("owner_id") == villager_id:
+                item_id = obj.get("item_id")
+                if item_id and item_id not in items:
+                    items.append(item_id)
+        return items
+    
+    def _get_sellable_items_list(self, villager: dict, game_state) -> List[str]:
+        """取得可賣給商人的物品列表（必須過剩或缺錢且餓）"""
+        from ..data.item_categories import TOOLS
+        from ..data.supply_chain import EXCESS_THRESHOLDS, MERCHANT_BUY_PRICES
+        
+        money = villager.get("money", 0)
+        stats = villager.get("stats", {})
+        satiety = stats.get("satiety", 100)
+        is_broke_and_hungry = money < 12 and satiety < 50
+        
+        # 統計所有物品（背包 + 地上）
+        item_counts = {}
+        
+        # 背包物品
+        inventory = villager.get("inventory", [])
+        for slot in inventory:
+            if slot:
+                item_id = slot.get("item_id")
+                if item_id and item_id not in TOOLS:
+                    qty = slot.get("quantity", 1)
+                    item_counts[item_id] = item_counts.get(item_id, 0) + qty
+        
+        # 地上物品
+        ground_items = game_state.get_items_by_owner(villager["id"])
+        for item in ground_items:
+            item_id = item.get("item_id")
+            if item_id and item_id not in TOOLS:
+                qty = item.get("quantity", 1)
+                item_counts[item_id] = item_counts.get(item_id, 0) + qty
+        
+        # 找出過剩或缺錢可賣的物品
+        items = []
+        for item_id, qty in item_counts.items():
+            if item_id not in MERCHANT_BUY_PRICES:
+                continue
+            threshold = EXCESS_THRESHOLDS.get(item_id, 10)
+            if qty >= threshold or (is_broke_and_hungry and qty >= 1):
+                items.append(item_id)
+        
+        return items
+    
+    def _build_destination_tools(self, action_info: dict) -> List[dict]:
+        """構建決策的 tools schema（統一決策系統）"""
+        available_actions = action_info["actions"]
+        pickup_items = action_info.get("pickup_items", [])
+        sell_items = action_info.get("sell_items", [])
+        talk_targets = action_info.get("talk_targets", [])
+        
+        # 基本 properties
+        properties = {
+            "action": {
+                "type": "string",
+                "enum": available_actions,
+                "description": "要執行的動作"
+            },
+            "reason": {
+                "type": "string",
+                "description": "選擇這個動作的原因（15字內）"
+            }
+        }
+        required = ["action", "reason"]
+        
+        # 如果有 go_pickup 或 go_sell，加入 item 參數
+        all_items = []
+        if "go_pickup" in available_actions and pickup_items:
+            all_items.extend(pickup_items)
+        if "go_sell" in available_actions and sell_items:
+            all_items.extend([i for i in sell_items if i not in all_items])
+        
+        if all_items:
+            properties["item"] = {
+                "type": ["string", "null"],
+                "enum": all_items + [None],
+                "description": "要操作的物品（go_pickup/go_sell 時需要）"
+            }
+            required.append("item")
+        
+        # 如果有 talk，加入 target 參數
+        if "talk" in available_actions and talk_targets:
+            properties["target"] = {
+                "type": ["string", "null"],
+                "enum": talk_targets + [None],
+                "description": "目標村民 ID（talk 時需要）"
+            }
+            required.append("target")
+        
+        # 如果有 go_buy_goods，加入 buy_target 參數
+        buy_targets = action_info.get("buy_targets", [])
+        if "go_buy_goods" in available_actions and buy_targets:
+            properties["buy_target"] = {
+                "type": ["string", "null"],
+                "enum": buy_targets + [None],
+                "description": "要收購的村民 ID（go_buy_goods 時需要）"
+            }
+            required.append("buy_target")
+        
+        return [{
+            "type": "function",
+            "function": {
+                "name": "choose_action",
+                "description": "選擇要執行的動作",
+                "strict": True,
+                "parameters": {
+                    "type": "object",
+                    "properties": properties,
+                    "required": required,
+                    "additionalProperties": False
+                }
+            }
+        }]
+    
+    # ========== System Prompts ==========
+    
+    def _build_destination_system_prompt(self) -> str:
+        return """你是中古世紀村莊模擬遊戲中勤勞的村民。
+你需要工作來維持生計，這是你生存的基本。
+
+【行為優先級】（由高到低）
+1. 工作賺錢（最重要）
+2. 吃飽（飽足度低時）
+3. 休息（體力低時）
+4. 社交（以上都滿足時才考慮）
+
+【行為注意事項】
+1. 如果金錢超過200，則「吃飽」比「工作賺錢」優先級更高
+2. 工作必須有工具，缺少工具可以去買或撿地上的
+3. 工作必須要有材料，缺少材料可以去買或撿地上的
+4. 飽足滿足時，不需要吃東西
+5. 白天且體力滿足時，不需要睡覺
+6. 如果行為失敗很多次，就不要再重覆選擇
+
+根據你的狀態、優先級和性格，呼叫 choose_action 選擇行動。"""
+    
+    def _build_destination_prompt(self, villager: dict, game_state, action_info: dict = None) -> str:
+        time_info = game_state.get_time()
+        stats = villager["stats"]
+        
+        satiety = stats.get('satiety', 100)
+        energy = stats.get('energy', 100)
+        social = stats.get('social', 100)
+        money = villager.get('money', 0)
+        
+        occupation_name = self._get_occupation_name(villager.get('occupation', ''))
+        traits = villager.get("personality", [])
+        traits_text = "、".join(traits) if traits else "普通"
+        destinations = self._build_destination_list(villager, game_state, action_info)
+        weather_info = game_state.get_weather_info()
+        weather_text = f"{weather_info['icon']} {weather_info['name']}"
+        memories_text = format_memories(villager.get('memories', []), limit=3)
+        action_history_text = self._format_action_history(villager)
+        
+        # 背包物品
+        inventory_text = self._format_inventory(villager)
+        
+        # 地上物品（自己的）
+        ground_text = self._format_ground_items(villager, game_state)
+        
+        # 周圍的人（如果有）
+        nearby_text = ""
+        if action_info and action_info.get("context"):
+            nearby = action_info["context"].get("nearby_villagers", [])
+            if nearby:
+                nearby_text = self._format_nearby_villagers(nearby, villager)
+        
+        # 構建提示詞
+        prompt = f"""【{villager['name']}】{occupation_name}，性格：{traits_text}
+
+【狀態】
+- 飽足：{self._get_status_tag(satiety)}
+- 體力：{self._get_status_tag(energy)}
+- 社交：{self._get_status_tag(social)}
+- 金錢：${money}
+
+【背包】{inventory_text}
+【地上】{ground_text}
+"""
+        
+        # 如果周圍有人，加入周圍的人資訊
+        if nearby_text:
+            prompt += f"""
+【周圍的人】
+{nearby_text}
+"""
+        
+        prompt += f"""
+【可用行動】
+{destinations}
+
+【時間】第 {time_info['day']} 天 {time_info['hour']:02d}:{time_info['minute']:02d}
+【天氣】{weather_text}
+【最近】{memories_text}
+【前幾次行為】{action_history_text}
+
+你要做什麼？"""
+        
+        return prompt
+    
+    def _build_destination_list(self, villager: dict, game_state, action_info: dict = None) -> str:
+        """建構可用行動列表（統一決策系統）- 根據 action_info["actions"] 決定顯示"""
+        import random
+        actions = []
+        available = action_info["actions"] if action_info else []
+        
+        # 1. go_work
+        if "go_work" in available:
+            work_desc = self._get_work_description(villager)
+            actions.append(f"- go_work：{work_desc}")
+        
+        # 2. go_sell
+        if "go_sell" in available:
+            sell_info = self._get_sell_info(villager, game_state) or "賣東西給商人"
+            actions.append(f"- go_sell：{sell_info}")
+        
+        # 3. go_buy_food
+        if "go_buy_food" in available:
+            food_info = self._get_buy_food_info(villager, game_state) or "去買食物"
+            actions.append(f"- go_buy_food：{food_info}")
+        
+        # 4. eat
+        if "eat" in available:
+            eat_info = self._get_eat_info(villager) or "吃食物"
+            actions.append(f"- eat：{eat_info}")
+        
+        # 4.5. go_cook
+        if "go_cook" in available:
+            cook_info = self._get_cook_info(villager, game_state) or "回家煮生肉"
+            actions.append(f"- go_cook：{cook_info}")
+        
+        # 5. go_pickup
+        if "go_pickup" in available:
+            pickup_info = self._get_pickup_info(villager, game_state) or "撿地上的物品"
+            actions.append(f"- go_pickup：{pickup_info}")
+        
+        # 6. go_buy_material
+        if "go_buy_material" in available:
+            material_info = self._get_buy_material_info(villager, game_state) or "去買材料"
+            actions.append(f"- go_buy_material：{material_info}")
+        
+        # 7. go_buy_tool
+        if "go_buy_tool" in available:
+            tool_info = self._get_buy_tool_info(villager, game_state) or "去買工具"
+            actions.append(f"- go_buy_tool：{tool_info}")
+        
+        # 7.5. go_buy_goods（商人專用）
+        if "go_buy_goods" in available:
+            buy_goods_info = self._get_buy_goods_info(villager, game_state) or "去收購物品"
+            actions.append(f"- go_buy_goods：{buy_goods_info}")
+        
+        # 8. go_sleep
+        if "go_sleep" in available:
+            actions.append("- go_sleep：回家睡覺 → 只恢復體力")
+        
+        # 9. go_plaza
+        if "go_plaza" in available:
+            actions.append("- go_plaza：去廣場找人聊天 → 只恢復社交")
+        
+        # 10. go_bar
+        if "go_bar" in available:
+            actions.append("- go_bar：去酒吧社交喝酒 → 只恢復社交（需 $100）")
+        
+        # 11. wander
+        if "wander" in available:
+            actions.append("- wander：隨意閒逛")
+        
+        # 12. talk
+        if "talk" in available:
+            actions.append("- talk：找人聊天（需指定 target: villager_id）")
+        
+        # 13. buy_beer
+        if "buy_beer" in available:
+            actions.append("- buy_beer：跟酒保買杯啤酒喝（需 $3）")
+        
+        # 14. idle
+        if "idle" in available:
+            actions.append("- idle：什麼都不做，在這裡待著")
+        
+        # 隨機排序，避免總是選第一個
+        random.shuffle(actions)
+        
+        return "\n".join(actions)
+    
+    def _format_inventory(self, villager: dict) -> str:
+        inventory = villager.get("inventory", [])
+        items = []
+        for slot in inventory:
+            if slot:
+                item_id = slot.get("item_id")
+                qty = slot.get("quantity", 1)
+                items.append(f"{item_id} x{qty}")
+        return "、".join(items) if items else "空"
+    
+    def _format_ground_items(self, villager: dict, game_state) -> str:
+        """格式化地上物品（自己擁有的），相同物品合併顯示"""
+        owned_items = game_state.get_items_by_owner(villager["id"])
+        if not owned_items:
+            return "無"
+        
+        # 合併相同物品的數量
+        totals = {}
+        for item in owned_items:
+            item_id = item.get("item_id")
+            qty = item.get("quantity", 1)
+            totals[item_id] = totals.get(item_id, 0) + qty
+        
+        items = [f"{item_id} x{qty}" for item_id, qty in totals.items()]
+        return "、".join(items) if items else "無"
+    
+    def _format_action_history(self, villager: dict) -> str:
+        """格式化行為歷史"""
+        history = villager.get("action_history", [])
+        if not history:
+            return "無"
+        
+        lines = []
+        for record in history:
+            action = record.get("action", "unknown")
+            result = record.get("result", "unknown")
+            detail = record.get("detail", "")
+            icon = "✅" if result == "success" else "❌"
+            if detail:
+                lines.append(f"{action} → {icon} {detail}")
+            else:
+                lines.append(f"{action} → {icon}")
+        
+        return "; ".join(lines)
+    
+    def _format_nearby_villagers(self, nearby: List[dict], me: dict) -> str:
+        if not nearby:
+            return ""
+        
+        lines = []
+        for v in nearby[:5]:
+            occupation_name = self._get_occupation_name(v["occupation"])
+            rel_desc = ""
+            if v["familiarity"] > 30:
+                rel_desc = f"，{v['affection_desc']}"
+            elif v["familiarity"] > 10:
+                rel_desc = f"，{v['familiarity_desc']}"
+            lines.append(f"- {v['name']} ({v['id']})：{occupation_name}{rel_desc}")
+        
+        return "\n".join(lines)
+    
+    def _format_trade_options(self, trade_options: dict) -> str:
+        lines = []
+        
+        for opt in trade_options.get("can_buy", [])[:3]:
+            lines.append(f"- 向 {opt['from_name']} 購買 {opt['item']} ${opt['price']}")
+        
+        for opt in trade_options.get("can_sell", [])[:3]:
+            lines.append(f"- 賣 {opt['item']} 給 {opt['to_name']} ${opt['price']}")
+        
+        return "\n".join(lines)
+    
+    def _has_food_in_inventory(self, villager: dict) -> bool:
+        from ..data.item_categories import FOODS
+        inventory = villager.get("inventory", [])
+        for slot in inventory:
+            item_id = slot.get("item_id") if slot else None
+            # 生肉需要煮，不能直接吃
+            if item_id and item_id in FOODS and item_id != "meat_raw":
+                return True
+        return False
     
     async def generate_dialogue(
         self,
@@ -203,23 +670,6 @@ class VillagerAI:
             logger.error(f"相遇生成錯誤: {e}")
             return None  # 跳過這次相遇
     
-    def _build_system_prompt(self, villager: dict) -> str:
-        """生成靜態系統提示詞"""
-        return """你是中古世紀村莊模擬遊戲的村民。
-根據村民的性格和當前狀態，選擇最符合角色狀態、角色個性的行為。
-
-【決策原則】
-1. 狀態危急：必須立即處理，無視性格
-2. 狀態偏低：建議處理，可依性格延後
-3. 狀態正常或滿足：自由選擇
-4. 同類型選項請隨機選一個，不要總是選同一個
-
-【回應格式】JSON
-{
-  "action": "行為類型（從可用行為中選擇）",
-  "reason": "村民的主觀理由（繁體中文，15字內）
-}"""
-    
     def _get_status_tag(self, value: float) -> str:
         """取得狀態標記（隨機閾值讓 AI 行為更有變化）"""
         import random
@@ -234,64 +684,6 @@ class VillagerAI:
         elif value >= satisfied_threshold:
             return "滿足"
         return "正常"
-    
-    def _build_action_list(self, villager: dict, game_state) -> str:
-        """建構可用行為列表"""
-        import random
-        action_list = []
-        
-        # 檢查條件
-        sell_action = self._get_sell_action(villager, game_state)
-        can_work = self._can_work(villager, game_state)
-        can_buy_food = self._can_buy_food(villager, game_state)
-        occupation = villager.get("occupation", "")
-        food_chain_jobs = ["farmer", "miller", "baker"]
-        money = villager.get("money", 0)
-        hour = game_state.get_time()["hour"]
-        is_night = hour >= 19 or hour < 4
-        
-        # 1. 賣東西（有貨才顯示）
-        if sell_action:
-            action_list.append(f"- sell_goods：{sell_action}")
-        
-        # 2. 吃飯（能吃才顯示，食物鏈職業要很餓才買）
-        if can_buy_food:
-            if occupation in food_chain_jobs:
-                satiety = villager.get("stats", {}).get("satiety", 100)
-                if satiety <= 40:  # 食物鏈職業：飽足度 <= 40% 才買食物
-                    action_list.append("- buy_food：買食物吃 → 恢復飽足度（無法恢復體力與社交滿足度）")
-            else:
-                action_list.append("- buy_food：買食物吃 → 恢復飽足度（無法恢復體力與社交滿足度）")
-        
-        # 3. 休息（很餓時不顯示，強迫先吃飯）
-        satiety = villager.get("stats", {}).get("satiety", 100)
-        if satiety > 10:  # 飽足度 > 10% 才能回家睡覺
-            action_list.append("- go_home：回家睡覺 → 恢復體力（無法恢復飽足度與社交滿足度）")
-        
-        # 4. 工作（能工作才顯示，食物鏈職業加註）
-        if can_work:
-            if occupation in food_chain_jobs:
-                action_list.append("- go_work：產生食物 → 恢復飽足度（無法恢復體力與社交滿足度）")
-            else:
-                action_list.append("- go_work：去工作 → 賺錢")
-        
-        # 5. 社交（酒保晚上只能去酒吧，其他人晚上且有錢時只顯示酒吧，否則顯示市集）
-        if occupation == "bartender" and is_night:
-            action_list.append("- go_bar：去酒吧 → 恢復社交滿足度（無法恢復飽足度與體力）")
-        elif is_night and money >= 200:
-            action_list.append("- go_bar：去酒吧 → 恢復社交滿足度（無法恢復飽足度與體力）")
-        else:
-            action_list.append("- go_market：去市集 → 恢復社交滿足度（無法恢復飽足度與體力）")
-            if money >= 200:
-                action_list.append("- go_bar：去酒吧 → 恢復社交滿足度（無法恢復飽足度與體力）")
-        
-        # 6. 閒逛
-        action_list.append("- wander：閒逛 → 無特定目的（不恢復任何狀態）")
-        
-        # 隨機排序選項
-        random.shuffle(action_list)
-        
-        return "\n".join(action_list)
     
     def _get_sell_action(self, villager: dict, game_state) -> str:
         """檢查村民是否有過剩物品可賣給商人
@@ -394,43 +786,20 @@ class VillagerAI:
             return True
         
         inventory = villager.get("inventory", [])
-        money = villager.get("money", 0)
         
-        logger.info(f"🔍 _can_work: {villager['name']}({occupation}) 需要原料: {required}, 金錢: ${money}")
-        
-        # 檢查每種需要的原料
+        # 檢查每種需要的原料（必須背包有原料才能工作）
         for material in required:
-            # 背包有原料嗎？
             has_material = False
             for slot in inventory:
                 if slot and slot.get("item_id") == material and slot.get("quantity", 0) >= 1:
                     has_material = True
                     break
             
-            if has_material:
-                logger.info(f"   ✓ {material}: 背包有")
-                continue  # 這個原料有了，檢查下一個
-            
-            # 沒有原料，檢查：有錢 + 供應商有貨
-            price = MATERIAL_PRICES.get(material, 5)
-            if money < price:
-                logger.info(f"   ✗ {material}: 背包沒有，錢不夠(需${price})")
-                return False  # 沒錢買
-            
-            # 檢查供應商有沒有庫存
-            supplier_occupation = MATERIAL_PRODUCERS.get(material)
-            if not supplier_occupation:
-                logger.info(f"   ✗ {material}: 沒有供應商")
-                return False  # 沒有供應商
-            
-            supplier_has_stock = self._check_supplier_stock(game_state, supplier_occupation, material)
-            if not supplier_has_stock:
-                logger.info(f"   ✗ {material}: {supplier_occupation}沒有庫存")
-                return False  # 供應商沒貨
-            
-            logger.info(f"   ✓ {material}: 背包沒有，但有錢且{supplier_occupation}有貨")
+            if not has_material:
+                logger.info(f"🔍 _can_work: {villager['name']}({occupation}) 缺少原料 {material}")
+                return False
         
-        logger.info(f"   → 可以工作")
+        logger.info(f"🔍 _can_work: {villager['name']}({occupation}) 原料充足，可以工作")
         return True
     
     def _can_butcher_work(self, villager: dict, game_state) -> bool:
@@ -530,16 +899,24 @@ class VillagerAI:
             
             # 計算背包庫存
             inventory = v.get("inventory", [])
+            inv_qty = 0
             for slot in inventory:
-                if slot and slot.get("item_id") == material and slot.get("quantity", 0) >= 1:
-                    return True
+                if slot and slot.get("item_id") == material:
+                    inv_qty += slot.get("quantity", 0)
             
             # 計算地上庫存
+            ground_qty = 0
             owner_items = game_state.get_items_by_owner(v["id"])
             for item in owner_items:
-                if item.get("item_id") == material and item.get("quantity", 0) >= 1:
-                    return True
+                if item.get("item_id") == material:
+                    ground_qty += item.get("quantity", 0)
+            
+            total = inv_qty + ground_qty
+            if total > 0:
+                logger.info(f"🔍 _check_supplier_stock: {v['name']}({supplier_occupation}) 有 {material} 背包:{inv_qty} 地上:{ground_qty}")
+                return True
         
+        logger.info(f"🔍 _check_supplier_stock: 沒有 {supplier_occupation} 有 {material} 庫存")
         return False
 
     def _get_dialogue_system_prompt(self) -> str:
@@ -564,77 +941,6 @@ class VillagerAI:
     "b_to_a": {"affection": 數字, "familiarity": 數字}
   }
 }"""
-
-    def _build_decision_prompt(self, villager: dict, game_state) -> str:
-        """建構 User Prompt"""
-        time_info = game_state.get_time()
-        stats = villager["stats"]
-        
-        # 計算狀態值
-        satiety = stats.get('satiety', 100)
-        energy = stats.get('energy', 100)
-        social = stats.get('social', 100)
-        money = villager.get('money', 0)
-        
-        # 取得職業名稱
-        occupation_name = self._get_occupation_name(villager.get('occupation', ''))
-        
-        # 建構可用行為列表
-        action_list = self._build_action_list(villager, game_state)
-        
-        # 取得天氣資訊
-        weather_info = game_state.get_weather_info()
-        weather_text = f"{weather_info['icon']} {weather_info['name']}"
-        if weather_info['stamina_drain'] > 0:
-            weather_text += "（室外活動消耗更多體力）"
-        
-        # 取得村民所在位置
-        building = game_state.get_building_at_position(int(villager["x"]), int(villager["y"]))
-        if building:
-            if game_state.is_outdoor_building(building["type"]):
-                location_text = f"室外（{building['name']}）"
-            else:
-                location_text = f"{building['name']}內"
-        else:
-            location_text = "室外"
-        
-        # 建構村民性格描述
-        from ..data.personalities import get_trait_description
-        traits = villager.get("personality", [])
-        trait_lines = []
-        for trait in traits:
-            desc = get_trait_description(trait)
-            trait_lines.append(f"- {trait}：{desc}")
-        traits_section = "\n".join(trait_lines) if trait_lines else "- 無特殊性格"
-        
-        # 職業特性
-        food_chain_jobs = ["farmer", "miller", "baker"]
-        occupation = villager.get("occupation", "")
-        occupation_trait = ""
-        if occupation in food_chain_jobs:
-            occupation_trait = "\n\n【職業特性】\n- 農夫/磨坊主/麵包師：工作可生產食物鏈物資，餓了也可選擇工作"
-        
-        return f"""【村民】{villager['name']}（{occupation_name}）
-
-【此村民的性格】
-{traits_section}
-{occupation_trait}
-
-【狀態】
-- 飽足度：{satiety:.0f}% ({self._get_status_tag(satiety)})
-- 體力：{energy:.0f}% ({self._get_status_tag(energy)})
-- 社交滿足度：{social:.0f}% ({self._get_status_tag(social)})
-- 金錢：${money}
-
-【可用行為】
-{action_list}
-
-【位置】{location_text}
-【時間】第 {time_info['day']} 天 {time_info['hour']:02d}:{time_info['minute']:02d}
-【天氣】{weather_text}
-【記憶】{format_memories(villager.get('memories', []), limit=5)}
-
-請選擇一個行為。"""
 
     def _build_dialogue_prompt(
         self,
@@ -713,3 +1019,286 @@ class VillagerAI:
     def _get_familiarity_desc(self, familiarity: int) -> str:
         from .game_state import get_familiarity_desc
         return get_familiarity_desc(familiarity)
+    
+    # ========== 新選項輔助方法 ==========
+    
+    def _get_work_description(self, villager: dict) -> str:
+        """取得工作描述（含工具與材料需求）"""
+        from ..data.supply_chain import get_occupation_products, REQUIRED_MATERIALS
+        from ..data.items import ITEM_TYPES
+        from ..game.inventory import OCCUPATION_TOOLS
+        
+        occupation = villager.get("occupation", "")
+        products = get_occupation_products(occupation)
+        required = REQUIRED_MATERIALS.get(occupation, [])
+        tool_info = OCCUPATION_TOOLS.get(occupation)
+        
+        # 工具描述
+        tool_desc = ""
+        if tool_info:
+            tool_desc = f"使用{tool_info['name']}"
+        
+        # 產出描述（列出所有產品）
+        product_desc = ""
+        if products:
+            product_names = []
+            for prod in products:
+                item_type = ITEM_TYPES.get(prod)
+                product_names.append(item_type.name if item_type else prod)
+            product_desc = f"生產{'、'.join(product_names)}"
+        else:
+            product_desc = "賺錢"
+        
+        # 組合描述
+        if tool_desc:
+            base_desc = f"{tool_desc}工作 → {product_desc}"
+        else:
+            base_desc = f"去工作 → {product_desc}"
+        
+        # 材料描述
+        if required:
+            material_names = []
+            for mat in required:
+                item_type = ITEM_TYPES.get(mat)
+                material_names.append(item_type.name if item_type else mat)
+            material_desc = "、".join(material_names)
+            return f"{base_desc}（需消耗：{material_desc}）"
+        
+        return base_desc
+    
+    def _get_sell_info(self, villager: dict, game_state) -> str:
+        """取得可賣物品資訊"""
+        sell_action = self._get_sell_action(villager, game_state)
+        if sell_action:
+            return sell_action
+        return ""
+    
+    def _get_buy_food_info(self, villager: dict, game_state) -> str:
+        """取得可購買食物資訊"""
+        from ..data.supply_chain import FOOD_SELLERS
+        
+        # 背包已有食物 → 不顯示 go_buy_food（應該用 eat）
+        inventory = villager.get("inventory", [])
+        for slot in inventory:
+            if slot and slot.get("item_id") in ("bread", "meat"):
+                return ""
+        
+        # 地上有食物 → 不顯示 go_buy_food（應該用 go_pickup）
+        owned_items = game_state.get_items_by_owner(villager["id"])
+        for item in owned_items:
+            if item.get("item_id") in ("bread", "meat", "meat_raw"):
+                return ""
+        
+        money = villager.get("money", 0)
+        has_stove = game_state.get_stove_by_residence(villager["id"]) is not None
+        FOOD_PRICES = {"bread": 3, "meat_raw": 5}
+        
+        for food_item, seller_occupation in FOOD_SELLERS:
+            if food_item == "meat_raw" and not has_stove:
+                continue
+            price = FOOD_PRICES.get(food_item, 5)
+            if money < price:
+                continue
+            if self._check_supplier_stock(game_state, seller_occupation, food_item):
+                food_name = "麵包" if food_item == "bread" else "生肉"
+                return f"去買{food_name}吃 → 只恢復飽足度（需 ${price}）"
+        return ""
+    
+    def _get_eat_info(self, villager: dict) -> str:
+        """取得背包食物資訊"""
+        from ..data.items import ITEM_TYPES
+        inventory = villager.get("inventory", [])
+        for slot in inventory:
+            if slot and slot.get("item_id") in ("bread", "meat"):
+                item_type = ITEM_TYPES.get(slot.get("item_id"))
+                name = item_type.name if item_type else slot.get("item_id")
+                return f"吃{name} → 只恢復飽足度"
+        return ""
+    
+    def _get_cook_info(self, villager: dict, game_state) -> str:
+        """取得可煮食物資訊（背包有生肉且有灶台）"""
+        has_stove = game_state.get_stove_by_residence(villager["id"]) is not None
+        if not has_stove:
+            return ""
+        
+        inventory = villager.get("inventory", [])
+        for slot in inventory:
+            if slot and slot.get("item_id") == "meat_raw":
+                return "回家煮生肉 → 只恢復飽足度"
+        return ""
+    
+    def _get_pickup_info(self, villager: dict, game_state) -> str:
+        """取得可撿地上物品資訊"""
+        from ..data.items import ITEM_TYPES
+        owned_items = game_state.get_items_by_owner(villager["id"])
+        if not owned_items:
+            return ""
+        
+        # 統計地上物品
+        item_counts = {}
+        for item in owned_items:
+            item_id = item.get("item_id")
+            qty = item.get("quantity", 1)
+            item_counts[item_id] = item_counts.get(item_id, 0) + qty
+        
+        if not item_counts:
+            return ""
+        
+        # 產生描述
+        item_names = []
+        item_ids = []
+        for item_id, qty in item_counts.items():
+            item_type = ITEM_TYPES.get(item_id)
+            name = item_type.name if item_type else item_id
+            item_names.append(f"{name} x{qty}")
+            item_ids.append(item_id)
+        
+        items_desc = "、".join(item_names)
+        ids_desc = "/".join(item_ids)
+        return f"撿起地上的物品（需指定 item: {ids_desc}）"
+    
+    def _get_buy_tool_info(self, villager: dict, game_state) -> str:
+        """取得可購買工具資訊"""
+        from ..game.inventory import OCCUPATION_TOOLS
+        
+        occupation = villager.get("occupation", "")
+        tool_info = OCCUPATION_TOOLS.get(occupation)
+        
+        # 此職業不需要工具
+        if not tool_info:
+            return ""
+        
+        # 檢查背包是否已有工具（且耐久度 > 0）
+        inventory = villager.get("inventory", [])
+        for slot in inventory:
+            if slot and slot.get("item_id") == tool_info["id"]:
+                if slot.get("durability", 0) > 0:
+                    return ""  # 已有可用工具
+        
+        # 沒有工具，檢查金錢是否足夠
+        money = villager.get("money", 0)
+        if money < tool_info["price"]:
+            return ""  # 錢不夠
+        
+        return f"去鐵匠買{tool_info['name']}（需 ${tool_info['price']}）"
+    
+    def _get_buy_material_info(self, villager: dict, game_state) -> str:
+        """取得可購買材料資訊"""
+        from ..data.supply_chain import REQUIRED_MATERIALS, MATERIAL_PRODUCERS
+        from ..game.production import MATERIAL_PRICES
+        
+        occupation = villager.get("occupation", "")
+        required = REQUIRED_MATERIALS.get(occupation, [])
+        if not required:
+            return ""
+        
+        money = villager.get("money", 0)
+        inventory = villager.get("inventory", [])
+        
+        for material in required:
+            # 檢查背包是否已有
+            has_material = False
+            for slot in inventory:
+                if slot and slot.get("item_id") == material and slot.get("quantity", 0) >= 1:
+                    has_material = True
+                    break
+            
+            if has_material:
+                continue
+            
+            # 需要買材料
+            price = MATERIAL_PRICES.get(material, 5)
+            if money < price:
+                continue
+            
+            supplier_occupation = MATERIAL_PRODUCERS.get(material)
+            if supplier_occupation and self._check_supplier_stock(game_state, supplier_occupation, material):
+                from ..data.items import ITEM_TYPES
+                item_type = ITEM_TYPES.get(material)
+                name = item_type.name if item_type else material
+                return f"去買{name}（工作材料，需 ${price}）"
+        
+        return ""
+    
+    def _get_buy_goods_targets(self, villager: dict, game_state) -> List[dict]:
+        """取得可收購物品的村民列表（商人專用）"""
+        # 只有商人可以收購
+        if villager.get("occupation") != "merchant":
+            return []
+        
+        money = villager.get("money", 0)
+        if money < 10:
+            return []
+        
+        # 找所有有可收購物品的村民
+        purchasable = []
+        for v in game_state.villagers.values():
+            if v["id"] == villager["id"]:
+                continue
+            
+            # 檢查該村民的背包和地上物品
+            items_to_buy = self._get_villager_purchasable_items(v, game_state)
+            if items_to_buy:
+                purchasable.append({
+                    "villager_id": v["id"],
+                    "villager_name": v["name"],
+                    "items": items_to_buy
+                })
+        
+        return purchasable
+    
+    def _get_buy_goods_info(self, villager: dict, game_state) -> str:
+        """取得可收購物品資訊描述（商人專用）"""
+        from ..data.items import ITEM_TYPES
+        
+        purchasable = self._get_buy_goods_targets(villager, game_state)
+        if not purchasable:
+            return ""
+        
+        # 生成描述（列出可收購的村民，格式：人名(ID)）
+        desc_parts = []
+        for p in purchasable[:3]:
+            desc_parts.append(f"{p['villager_name']}({p['villager_id']})")
+        
+        return f"去收購物品賺錢（需指定 buy_target: {'; '.join(desc_parts)}）"
+    
+    def _get_villager_purchasable_items(self, villager: dict, game_state) -> List[tuple]:
+        """取得某村民可被商人收購的物品列表"""
+        from ..data.supply_chain import MERCHANT_BUY_PRICES, EXCESS_THRESHOLDS
+        from ..data.item_categories import TOOLS
+        
+        money = villager.get("money", 0)
+        stats = villager.get("stats", {})
+        satiety = stats.get("satiety", 100)
+        is_broke_and_hungry = money < 12 and satiety < 50
+        
+        # 統計所有物品（背包 + 地上）
+        item_counts = {}
+        
+        # 背包物品
+        inventory = villager.get("inventory", [])
+        for slot in inventory:
+            if slot:
+                item_id = slot.get("item_id")
+                if item_id and item_id not in TOOLS:
+                    qty = slot.get("quantity", 1)
+                    item_counts[item_id] = item_counts.get(item_id, 0) + qty
+        
+        # 地上物品
+        ground_items = game_state.get_items_by_owner(villager["id"])
+        for item in ground_items:
+            item_id = item.get("item_id")
+            if item_id and item_id not in TOOLS:
+                qty = item.get("quantity", 1)
+                item_counts[item_id] = item_counts.get(item_id, 0) + qty
+        
+        # 找出過剩或缺錢可賣的物品
+        result = []
+        for item_id, qty in item_counts.items():
+            if item_id not in MERCHANT_BUY_PRICES:
+                continue
+            threshold = EXCESS_THRESHOLDS.get(item_id, 10)
+            if qty >= threshold or (is_broke_and_hungry and qty >= 1):
+                result.append((item_id, qty))
+        
+        return result

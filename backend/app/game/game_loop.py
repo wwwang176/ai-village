@@ -19,7 +19,6 @@ from .conversation import ConversationSystem, Conversation
 from .production import ProductionSystem
 from .models import Task
 from .task_effects import TaskContext, TaskEffectExecutor
-from .action_handlers import ActionContext, ActionHandlerExecutor
 
 logger = logging.getLogger("GameLoop")
 
@@ -67,15 +66,6 @@ class GameLoop:
             manager=connection_manager
         )
         self.task_executor = TaskEffectExecutor(task_context)
-        
-        # 行為處理器執行器
-        action_context = ActionContext(
-            game_state=game_state,
-            production=self.production_system,
-            inventory=self.inventory_system,
-            sheep=self.sheep_system
-        )
-        self.action_executor = ActionHandlerExecutor(action_context)
     
     async def run(self):
         """主循環"""
@@ -83,25 +73,38 @@ class GameLoop:
         last_time = time.time()
         
         print("🔄 遊戲主循環啟動")
+        logger.info("🔄 Game loop started")
         
-        while self.running:
-            current_time = time.time()
-            delta_time = current_time - last_time
-            last_time = current_time
-            
-            # 只在有連線時處理
-            if self.manager.active_connections:
-                # 確保遊戲已初始化
-                if not self.game_state.initialized:
-                    self.game_state.initialize()
+        try:
+            while self.running:
+                current_time = time.time()
+                delta_time = current_time - last_time
+                last_time = current_time
                 
-                # 更新遊戲狀態
-                await self.tick(delta_time, current_time)
-            
-            # 控制 tick 頻率
-            elapsed = time.time() - current_time
-            sleep_time = max(0, self.tick_interval - elapsed)
-            await asyncio.sleep(sleep_time)
+                # 調試：每 5 秒輸出一次連線狀態
+                if not hasattr(self, '_debug_conn_time'):
+                    self._debug_conn_time = 0
+                if current_time - self._debug_conn_time > 5:
+                    self._debug_conn_time = current_time
+                    logger.info(f"🔍 連線數: {len(self.manager.active_connections)}")
+                
+                # 只在有連線時處理
+                if self.manager.active_connections:
+                    # 確保遊戲已初始化
+                    if not self.game_state.initialized:
+                        self.game_state.initialize()
+                    
+                    # 更新遊戲狀態
+                    await self.tick(delta_time, current_time)
+                
+                # 控制 tick 頻率
+                elapsed = time.time() - current_time
+                sleep_time = max(0, self.tick_interval - elapsed)
+                await asyncio.sleep(sleep_time)
+        except Exception as e:
+            logger.error(f"❌ Game loop error: {e}")
+            import traceback
+            traceback.print_exc()
     
     async def tick(self, delta_time: float, current_time: float):
         """單次遊戲更新"""
@@ -331,6 +334,8 @@ class GameLoop:
         # 確保村民狀態正確
         if task_type in ["move", "move_to_villager"] and villager.get("state") != "walking":
             villager["state"] = "walking"
+        elif task_type == "sleep" and villager.get("state") != "sleeping":
+            villager["state"] = "sleeping"
         
         # 根據任務類型處理
         if task_type == "move":
@@ -360,6 +365,7 @@ class GameLoop:
             else:
                 # 所有任務完成
                 villager["state"] = "idle"
+                self._record_decision_result(villager, True, "完成")
     
     def process_move_task(self, villager: dict, task: dict, delta_time: float) -> bool:
         """處理移動任務，返回是否完成"""
@@ -437,9 +443,11 @@ class GameLoop:
             # 執行效果
             success = self.apply_task_effect(villager, task)
             
-            # 如果任務失敗，清空後續任務
+            # 如果任務失敗，清空後續任務並記錄
             if not success:
-                logger.info(f"❌ {villager['name']} 任務 {task_type} 失敗，清空後續任務")
+                fail_reason = task.get("fail_reason", f"任務 {task_type} 失敗")
+                logger.info(f"❌ {villager['name']} {fail_reason}，清空後續任務")
+                self._record_decision_result(villager, False, fail_reason)
                 villager["task_queue"] = []
                 villager["state"] = "idle"
             
@@ -653,10 +661,6 @@ class GameLoop:
         
         return result
     
-    def create_task_queue(self, villager: dict, action: str) -> list:
-        """將 AI 決策轉換為任務排程（委託給 ActionHandlerExecutor）"""
-        return self.action_executor.create_tasks(villager, action)
-    
     async def process_ai_decisions(self):
         """處理需要 AI 決策的村民（並行處理）"""
         import random
@@ -668,50 +672,220 @@ class GameLoop:
         # 隨機選擇，確保每個村民都有機會被處理
         random.shuffle(pending)
         
-        # 並行處理所有需要決策的村民
-        async def process_single_decision(villager):
-            """處理單個村民的 AI 決策"""
-            async with self.ai_semaphore:  # 限制同時請求數
-                try:
-                    decision = await self.villager_ai.make_decision(
-                        villager, 
-                        self.game_state
-                    )
-                    
-                    action = decision.get("action", "wander")
-                    reason = decision.get("reason", "")
-                    
-                    # 檢查村民是否已有任務（避免異步競爭覆蓋）
-                    if villager.get("task_queue"):
-                        logger.info(f"⏭️ {villager['name']} 已有任務，丟棄此決策")
-                        return
-                    
-                    # 將 AI 決策轉換為任務排程
-                    tasks = self.create_task_queue(villager, action)
-                    
-                    # 顯示 AI 決策結果
-                    logger.info(f"🤖 AI決策: {villager['name']} → {action} (原因: {reason})")
+        await asyncio.gather(*[self._process_decision(v) for v in pending])
+    
+    async def _process_decision(self, villager):
+        """統一決策系統：一次決定所有行動"""
+        async with self.ai_semaphore:
+            try:
+                # 檢查村民是否已有任務
+                if villager.get("task_queue"):
+                    logger.info(f"⏭️ {villager['name']} 已有任務，跳過")
+                    return
+                
+                # 統一決策（合併目的地和動作決策）
+                decision = await self.villager_ai.make_decision(
+                    villager, 
+                    self.game_state
+                )
+                
+                action = decision.get("action", "wander")
+                reason = decision.get("reason", "")
+                
+                logger.info(f"🎯 決策: {villager['name']} → {action} (原因: {reason})")
+                
+                # 記錄待完成決策
+                villager["pending_decision"] = {"action": action, "reason": reason}
+                
+                # 建立任務
+                tasks = self._create_destination_tasks(villager, action, decision)
+                
+                if tasks:
                     logger.info(f"📋 任務排程: {[t['type'] for t in tasks]}")
-                    
-                    # 添加任務到村民
                     self.game_state.add_tasks(villager["id"], tasks)
                     
-                    # 推送決策給前端（包含 reason 用於泡泡顯示）
                     await self.manager.broadcast({
                         "type": "villager_decision",
                         "data": {
                             "villager_id": villager["id"],
-                            "decision": {
-                                "action": action,
-                                "reason": reason
-                            }
+                            "decision": {"action": action, "reason": reason}
                         }
                     })
-                except Exception as e:
-                    logger.error(f"❌ AI決策失敗 {villager['name']}: {e}")
+                else:
+                    logger.warning(f"⚠️ {villager['name']} 無法執行 {action}")
+                    
+            except Exception as e:
+                logger.error(f"❌ 多輪決策失敗 {villager['name']}: {e}")
+    
+    def _create_destination_tasks(self, villager, action: str, decision: dict = None) -> List[dict]:
+        """建立行動任務（方向 A：一次決定，直接執行）"""
+        tasks = []
+        decision = decision or {}
         
-        # 並行執行所有決策（不限制數量，由 semaphore 控制並發）
-        await asyncio.gather(*[process_single_decision(v) for v in pending])
+        if action == "go_work":
+            occupation = villager.get("occupation", "")
+            
+            # 牧羊人：剪羊毛
+            if occupation == "shepherd":
+                sheep_tasks = self.sheep_system.create_shepherd_work_tasks(villager)
+                if sheep_tasks:
+                    tasks.extend(sheep_tasks)
+                else:
+                    # 沒有可剪毛的羊，閒置
+                    tasks.append(Task(type="idle", duration=2).to_dict())
+            
+            # 屠夫：買羊 + 殺羊
+            elif occupation == "butcher":
+                butcher_tasks = self.sheep_system.create_butcher_work_tasks(villager)
+                if butcher_tasks:
+                    tasks.extend(butcher_tasks)
+                else:
+                    # 無法工作，閒置
+                    tasks.append(Task(type="idle", duration=2).to_dict())
+            
+            # 其他職業：一般工作流程
+            else:
+                work_target = self.game_state.resolve_action_target(villager, "go_work")
+                if work_target:
+                    tasks.append(Task(type="move", target=work_target).to_dict())
+                tasks.append(Task(type="work", duration=5).to_dict())
+        
+        elif action == "go_sell":
+            # 去找商人賣東西（根據 item 參數）
+            item_id = decision.get("item")
+            sell_info = self._find_sell_target(villager, item_id)
+            if sell_info:
+                merchant = self.game_state.get_villager(sell_info["merchant_id"])
+                if merchant:
+                    tasks.append(Task(type="move_to_villager", target=(merchant["x"], merchant["y"]), target_villager_id=merchant["id"]).to_dict())
+                    tasks.append(Task(
+                        type="sell_to_merchant",
+                        merchant_id=sell_info["merchant_id"],
+                        item=sell_info["item"],
+                        duration=2
+                    ).to_dict())
+        
+        elif action == "go_buy_food":
+            # 去買食物
+            food_info = self._find_food_seller(villager)
+            if food_info:
+                seller = self.game_state.get_villager(food_info["seller_id"])
+                if seller:
+                    tasks.append(Task(type="move_to_villager", target=(seller["x"], seller["y"]), target_villager_id=seller["id"]).to_dict())
+                    tasks.append(Task(
+                        type="buy_food",
+                        seller_id=food_info["seller_id"],
+                        food_item=food_info["food_item"],
+                        duration=2
+                    ).to_dict())
+        
+        elif action == "eat":
+            # 直接吃背包裡的食物
+            tasks.append(Task(type="eat", duration=2).to_dict())
+        
+        elif action == "go_cook":
+            # 回家煮生肉
+            stove = self.game_state.get_stove_by_residence(villager["id"])
+            if stove:
+                tasks.append(Task(type="move", target=(stove["x"], stove["y"])).to_dict())
+                tasks.append(Task(type="cook", duration=3).to_dict())
+                tasks.append(Task(type="eat", duration=2).to_dict())
+        
+        elif action == "go_pickup":
+            # 去撿地上的物品（根據 item 參數）
+            item_id = decision.get("item")
+            pickup_info = self._find_pickup_target(villager, item_id)
+            if pickup_info:
+                tasks.append(Task(type="move", target=(pickup_info["x"], pickup_info["y"])).to_dict())
+                tasks.append(Task(type="pickup", item_id=pickup_info["item_id"], world_item_id=pickup_info["world_item_id"], duration=1).to_dict())
+        
+        elif action == "go_buy_material":
+            # 去買工作材料
+            material_info = self._find_material_seller(villager)
+            if material_info:
+                supplier = self.game_state.get_villager(material_info["supplier_id"])
+                if supplier:
+                    tasks.append(Task(type="move_to_villager", target=(supplier["x"], supplier["y"]), target_villager_id=supplier["id"]).to_dict())
+                    tasks.append(Task(
+                        type="buy_material",
+                        supplier_id=material_info["supplier_id"],
+                        material=material_info["material"],
+                        duration=2
+                    ).to_dict())
+        
+        elif action == "go_buy_tool":
+            # 去鐵匠買工具（找鐵匠村民）
+            blacksmith_villager = None
+            for v in self.game_state.villagers.values():
+                if v.get("occupation") == "blacksmith":
+                    blacksmith_villager = v
+                    break
+            if blacksmith_villager:
+                tasks.append(Task(type="move_to_villager", target=(blacksmith_villager["x"], blacksmith_villager["y"]), target_villager_id=blacksmith_villager["id"]).to_dict())
+                tasks.append(Task(type="buy_tool", duration=2).to_dict())
+        
+        elif action == "go_buy_goods":
+            # 商人主動去收購物品（根據 buy_target 參數）
+            target_villager_id = decision.get("buy_target")
+            goods_info = self._find_goods_seller(villager, target_villager_id)
+            if goods_info:
+                seller = self.game_state.get_villager(goods_info["seller_id"])
+                if seller:
+                    tasks.append(Task(type="move_to_villager", target=(seller["x"], seller["y"]), target_villager_id=seller["id"]).to_dict())
+                    tasks.append(Task(
+                        type="buy_from_villager",
+                        seller_id=goods_info["seller_id"],
+                        item=goods_info["item"],
+                        duration=2
+                    ).to_dict())
+        
+        elif action == "go_sleep":
+            # 回家睡覺
+            bed = self.game_state.get_bed_by_residence(villager["id"])
+            if bed:
+                tasks.append(Task(type="move", target=(bed["x"], bed["y"])).to_dict())
+            tasks.append(Task(type="sleep", duration=10).to_dict())
+        
+        elif action == "go_plaza":
+            # 去廣場
+            target_pos = self.game_state.resolve_action_target(villager, "go_plaza")
+            if target_pos:
+                tasks.append(Task(type="move", target=target_pos).to_dict())
+        
+        elif action == "go_bar":
+            # 去酒吧
+            target_pos = self.game_state.resolve_action_target(villager, "go_bar")
+            if target_pos:
+                tasks.append(Task(type="move", target=target_pos).to_dict())
+        
+        elif action == "wander":
+            # 閒逛
+            target_pos = self.game_state.resolve_action_target(villager, "wander")
+            if target_pos:
+                tasks.append(Task(type="move", target=target_pos).to_dict())
+        
+        elif action == "talk":
+            # 找人聊天
+            target_id = decision.get("target")
+            if target_id:
+                target_villager = self.game_state.get_villager(target_id)
+                if target_villager:
+                    tasks.append(Task(type="move", target=(target_villager["x"], target_villager["y"])).to_dict())
+                    tasks.append(Task(type="initiate_chat", target_villager_id=target_id, duration=3).to_dict())
+        
+        elif action == "buy_beer":
+            # 跟酒保買啤酒
+            tasks.append(Task(type="buy_beer", duration=2).to_dict())
+        
+        elif action == "idle":
+            # 什麼都不做，閒置一下
+            tasks.append(Task(type="idle", duration=3).to_dict())
+        
+        # 如果沒有產生任務，預設閒置
+        if not tasks:
+            tasks.append(Task(type="idle", duration=2).to_dict())
+        
+        return tasks
     
     def get_villager_target(self, villager: dict):
         """取得村民的目標位置"""
@@ -784,6 +958,270 @@ class GameLoop:
         }
         
         await self.manager.broadcast(state)
+    
+    # ========== 新選項輔助方法 ==========
+    
+    def _record_decision_result(self, villager: dict, success: bool, detail: str = ""):
+        """記錄決策結果到 action_history"""
+        pending = villager.get("pending_decision")
+        if not pending:
+            return
+        
+        # 初始化 action_history
+        if "action_history" not in villager:
+            villager["action_history"] = []
+        
+        # 記錄結果
+        record = {
+            "action": pending.get("action", "unknown"),
+            "result": "success" if success else "fail",
+            "detail": detail
+        }
+        villager["action_history"].append(record)
+        
+        # 只保留最近 3 筆
+        if len(villager["action_history"]) > 3:
+            villager["action_history"] = villager["action_history"][-3:]
+        
+        # 清除待完成決策
+        villager["pending_decision"] = None
+        
+        result_icon = "✅" if success else "❌"
+        logger.info(f"📝 {villager['name']} 決策記錄: {pending.get('action')} {result_icon} {detail}")
+    
+    def _find_sell_target(self, villager: dict, target_item: str = None) -> dict:
+        """找到可賣物品的商人
+        
+        Args:
+            villager: 村民資料
+            target_item: 指定要賣的物品（由 GPT 決定），None 則找第一個可賣物品
+        """
+        from ..data.item_categories import TOOLS
+        from ..data.supply_chain import MERCHANT_BUY_PRICES
+        
+        # 找商人
+        merchant = None
+        for v in self.game_state.villagers.values():
+            if v.get("occupation") == "merchant":
+                merchant = v
+                break
+        
+        if not merchant or merchant.get("money", 0) < 5:
+            return None
+        
+        # 統計背包和地上的物品
+        inventory = villager.get("inventory", [])
+        ground_items = self.game_state.get_items_by_owner(villager["id"])
+        
+        # 如果有指定物品，檢查背包或地上是否有該物品
+        if target_item:
+            # 檢查背包
+            for slot in inventory:
+                if slot and slot.get("item_id") == target_item:
+                    if target_item not in TOOLS and target_item in MERCHANT_BUY_PRICES:
+                        return {"merchant_id": merchant["id"], "item": target_item}
+            # 檢查地上
+            for item in ground_items:
+                if item.get("item_id") == target_item:
+                    if target_item not in TOOLS and target_item in MERCHANT_BUY_PRICES:
+                        return {"merchant_id": merchant["id"], "item": target_item}
+        
+        # 沒指定或指定物品不存在，fallback 到第一個可賣物品
+        # 先檢查背包
+        for slot in inventory:
+            if slot:
+                item_id = slot.get("item_id")
+                if item_id and item_id not in TOOLS and item_id in MERCHANT_BUY_PRICES:
+                    return {"merchant_id": merchant["id"], "item": item_id}
+        # 再檢查地上
+        for item in ground_items:
+            item_id = item.get("item_id")
+            if item_id and item_id not in TOOLS and item_id in MERCHANT_BUY_PRICES:
+                return {"merchant_id": merchant["id"], "item": item_id}
+        
+        return None
+    
+    def _find_food_seller(self, villager: dict) -> dict:
+        """找到可購買食物的賣家"""
+        from ..data.supply_chain import FOOD_SELLERS
+        
+        money = villager.get("money", 0)
+        has_stove = self.game_state.get_stove_by_residence(villager["id"]) is not None
+        FOOD_PRICES = {"bread": 3, "meat_raw": 5}
+        
+        for food_item, seller_occupation in FOOD_SELLERS:
+            if food_item == "meat_raw" and not has_stove:
+                continue
+            price = FOOD_PRICES.get(food_item, 5)
+            if money < price:
+                continue
+            
+            # 找有庫存的賣家（檢查背包和地上）
+            for v in self.game_state.villagers.values():
+                if v.get("occupation") != seller_occupation:
+                    continue
+                
+                # 檢查背包
+                inventory = v.get("inventory", [])
+                for slot in inventory:
+                    if slot and slot.get("item_id") == food_item and slot.get("quantity", 0) >= 1:
+                        return {"seller_id": v["id"], "food_item": food_item}
+                
+                # 檢查地上
+                owner_items = self.game_state.get_items_by_owner(v["id"])
+                for item in owner_items:
+                    if item.get("item_id") == food_item and item.get("quantity", 0) >= 1:
+                        return {"seller_id": v["id"], "food_item": food_item}
+        
+        return None
+    
+    def _find_pickup_target(self, villager: dict, target_item_id: str = None) -> dict:
+        """找到可撿的物品（指定 item_id，找最近的）"""
+        owned_items = self.game_state.get_items_by_owner(villager["id"])
+        vx, vy = villager.get("x", 0), villager.get("y", 0)
+        
+        # 篩選符合條件的物品
+        candidates = []
+        for item in owned_items:
+            if target_item_id:
+                if item.get("item_id") == target_item_id:
+                    candidates.append(item)
+            else:
+                candidates.append(item)
+        
+        if not candidates:
+            return None
+        
+        # 找最近的
+        def distance(item):
+            return abs(item["x"] - vx) + abs(item["y"] - vy)
+        
+        nearest = min(candidates, key=distance)
+        return {"x": nearest["x"], "y": nearest["y"], "item_id": nearest["item_id"], "world_item_id": nearest["id"]}
+    
+    def _find_material_seller(self, villager: dict) -> dict:
+        """找到可購買材料的供應商"""
+        from ..data.supply_chain import REQUIRED_MATERIALS, MATERIAL_PRODUCERS
+        from ..game.production import MATERIAL_PRICES
+        
+        occupation = villager.get("occupation", "")
+        required = REQUIRED_MATERIALS.get(occupation, [])
+        if not required:
+            return None
+        
+        money = villager.get("money", 0)
+        inventory = villager.get("inventory", [])
+        
+        for material in required:
+            # 檢查是否已有材料
+            has_material = False
+            for slot in inventory:
+                if slot and slot.get("item_id") == material and slot.get("quantity", 0) >= 1:
+                    has_material = True
+                    break
+            
+            if has_material:
+                continue
+            
+            price = MATERIAL_PRICES.get(material, 5)
+            if money < price:
+                continue
+            
+            supplier_occupation = MATERIAL_PRODUCERS.get(material)
+            if not supplier_occupation:
+                continue
+            
+            # 找有庫存的供應商（檢查背包和地上）
+            for v in self.game_state.villagers.values():
+                if v.get("occupation") != supplier_occupation:
+                    continue
+                
+                # 檢查背包
+                inv = v.get("inventory", [])
+                for slot in inv:
+                    if slot and slot.get("item_id") == material and slot.get("quantity", 0) >= 1:
+                        return {"supplier_id": v["id"], "material": material}
+                
+                # 檢查地上
+                owner_items = self.game_state.get_items_by_owner(v["id"])
+                for item in owner_items:
+                    if item.get("item_id") == material and item.get("quantity", 0) >= 1:
+                        return {"supplier_id": v["id"], "material": material}
+        
+        return None
+    
+    def _find_goods_seller(self, villager: dict, target_villager_id: str = None) -> dict:
+        """找到可收購物品的村民（商人專用）
+        
+        Args:
+            villager: 商人資料
+            target_villager_id: 指定要收購的村民 ID（由 GPT 決定），None 則找第一個
+        """
+        from ..data.supply_chain import MERCHANT_BUY_PRICES, EXCESS_THRESHOLDS
+        from ..data.item_categories import TOOLS
+        
+        money = villager.get("money", 0)
+        if money < 10:
+            return None
+        
+        # 如果有指定目標，只檢查該村民
+        villagers_to_check = []
+        if target_villager_id:
+            target = self.game_state.get_villager(target_villager_id)
+            if target:
+                villagers_to_check = [target]
+        else:
+            villagers_to_check = list(self.game_state.villagers.values())
+        
+        # 遍歷村民，找有過剩物品的
+        for v in villagers_to_check:
+            if v["id"] == villager["id"]:
+                continue
+            
+            v_money = v.get("money", 0)
+            v_stats = v.get("stats", {})
+            v_satiety = v_stats.get("satiety", 100)
+            is_broke_and_hungry = v_money < 12 and v_satiety < 50
+            
+            # 統計該村民的物品（背包 + 地上）
+            item_counts = {}
+            
+            inventory = v.get("inventory", [])
+            for slot in inventory:
+                if slot:
+                    item_id = slot.get("item_id")
+                    if item_id and item_id not in TOOLS:
+                        qty = slot.get("quantity", 1)
+                        item_counts[item_id] = item_counts.get(item_id, 0) + qty
+            
+            ground_items = self.game_state.get_items_by_owner(v["id"])
+            for item in ground_items:
+                item_id = item.get("item_id")
+                if item_id and item_id not in TOOLS:
+                    qty = item.get("quantity", 1)
+                    item_counts[item_id] = item_counts.get(item_id, 0) + qty
+            
+            # 找出可收購的物品
+            purchasable_items = []
+            for item_id, qty in item_counts.items():
+                if item_id not in MERCHANT_BUY_PRICES:
+                    continue
+                threshold = EXCESS_THRESHOLDS.get(item_id, 10)
+                if qty >= threshold or (is_broke_and_hungry and qty >= 1):
+                    price = MERCHANT_BUY_PRICES[item_id]
+                    if money >= price:
+                        purchasable_items.append({"item_id": item_id, "qty": qty, "price": price})
+            
+            if purchasable_items:
+                # 只取第一個可收購物品
+                first_item = purchasable_items[0]
+                return {
+                    "seller_id": v["id"],
+                    "item": first_item["item_id"],
+                    "price": first_item["price"]
+                }
+        
+        return None
     
     def stop(self):
         """停止主循環"""

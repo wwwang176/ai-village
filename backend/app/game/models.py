@@ -82,8 +82,10 @@ class Task:
     item: Optional[str] = None                   # 物品名稱（賣東西用）
     food_item: Optional[str] = None              # 食物名稱
     sheep_id: Optional[str] = None               # 羊 ID
-    item_id: Optional[str] = None                # 地上物品 ID（撿起用）
+    item_id: Optional[str] = None                # 物品類型（撿起用）
+    world_item_id: Optional[str] = None          # 世界物品唯一 ID（撿起用）
     quantity: int = 1                            # 交易數量
+    trigger_action_decision: bool = False        # 任務完成後是否觸發動作決策
     
     def to_dict(self) -> dict:
         result = {"type": self.type}
@@ -111,8 +113,12 @@ class Task:
             result["sheep_id"] = self.sheep_id
         if self.item_id:
             result["item_id"] = self.item_id
+        if self.world_item_id:
+            result["world_item_id"] = self.world_item_id
         if self.quantity != 1:
             result["quantity"] = self.quantity
+        if self.trigger_action_decision:
+            result["trigger_action_decision"] = self.trigger_action_decision
         return result
     
     @classmethod
@@ -131,6 +137,7 @@ class Task:
             food_item=data.get("food_item"),
             sheep_id=data.get("sheep_id"),
             item_id=data.get("item_id"),
+            world_item_id=data.get("world_item_id"),
             quantity=data.get("quantity", 1)
         )
 

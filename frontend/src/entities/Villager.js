@@ -476,9 +476,9 @@ export class Villager extends Entity {
    * 去社交
    */
   goSocialize(map) {
-    // 去酒館或市集
+    // 去酒館或廣場
     const socialSpots = map.buildings.filter(b => 
-      b.type === 'tavern' || b.type === 'market' || b.type === 'church'
+      b.type === 'tavern' || b.type === 'plaza' || b.type === 'church'
     );
     
     if (socialSpots.length > 0) {

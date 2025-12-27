@@ -12,7 +12,7 @@ export class MapGenerator {
     this.buildingTypes = {
       tavern: { name: '酒館', width: 6, height: 5, required: true },
       church: { name: '教堂', width: 7, height: 6, required: true },
-      market: { name: '市集', width: 5, height: 4, required: true },
+      plaza: { name: '廣場', width: 5, height: 4, required: true },
       blacksmith: { name: '鐵匠舖', width: 5, height: 4, required: true },
       house: { name: '民宅', width: 4, height: 4, required: false },
       bakery: { name: '麵包坊', width: 4, height: 4, required: false },
@@ -92,7 +92,7 @@ export class MapGenerator {
    * 放置必要建築
    */
   placeRequiredBuildings(buildings, terrain, collision) {
-    const requiredTypes = ['tavern', 'church', 'market', 'blacksmith'];
+    const requiredTypes = ['tavern', 'church', 'plaza', 'blacksmith'];
     
     // 將必要建築放在地圖中央區域
     const centerX = Math.floor(this.width / 2);

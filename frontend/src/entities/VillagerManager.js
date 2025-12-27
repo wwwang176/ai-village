@@ -16,7 +16,7 @@ export class VillagerManager {
   generateVillagers(count, buildings) {
     // 先為每個需要工作人員的建築分配村民
     const workBuildings = buildings.filter(b => 
-      ['tavern', 'church', 'market', 'blacksmith', 'bakery', 'farm'].includes(b.type)
+      ['tavern', 'church', 'plaza', 'blacksmith', 'bakery', 'farm'].includes(b.type)
     );
     
     const houses = buildings.filter(b => b.type === 'house');

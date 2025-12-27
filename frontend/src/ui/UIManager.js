@@ -327,7 +327,7 @@ export class UIManager {
     const names = {
       tavern: '酒保',
       church: '神父',
-      market: '商人',
+      plaza: '廣場',
       blacksmith: '鐵匠',
       bakery: '麵包師',
       farm: '農夫',

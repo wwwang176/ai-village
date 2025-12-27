@@ -79,7 +79,7 @@ class ConversationSystem:
                 dy = a["y"] - b["y"]
                 dist = (dx**2 + dy**2) ** 0.5
                 
-                # 在市集或酒吧範圍內，距離放寬為 3 格
+                # 在廣場或酒吧範圍內，距離放寬為 3 格
                 in_social_building = self._is_in_social_building(a["x"], a["y"])
                 encounter_distance = 3.0 if in_social_building else 1.5
                 
@@ -89,8 +89,8 @@ class ConversationSystem:
         return encounters
     
     def _is_in_social_building(self, x: float, y: float) -> bool:
-        """檢查座標是否在市集或酒吧範圍內"""
-        social_building_types = ["market", "tavern"]
+        """檢查座標是否在廣場或酒吧範圍內"""
+        social_building_types = ["plaza", "tavern"]
         
         for building in self.game_state.map_data.get("buildings", []):
             if building["type"] not in social_building_types:
@@ -123,7 +123,7 @@ class ConversationSystem:
         if current_time - last_chat_a < 60 or current_time - last_chat_b < 60:
             return
         
-        # 計算聊天觸發機率（基礎 30%，市集/酒吧內 × 2）
+        # 計算聊天觸發機率（基礎 30%，廣場/酒吧內 × 2）
         chat_chance = 0.6 if in_social_building else 0.3
         personality_a = villager_a.get("personality", [])
         personality_b = villager_b.get("personality", [])

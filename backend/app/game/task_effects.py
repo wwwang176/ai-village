@@ -81,6 +81,7 @@ class EatEffect(TaskEffect):
         
         # 沒有食物可吃
         logger.info(f"😢 {villager['name']} 想吃東西但背包沒有食物")
+        task["fail_reason"] = "吃東西：背包沒有食物"
         return False
 
 
@@ -114,53 +115,53 @@ class WorkEffect(TaskEffect):
         stats = villager.get("stats", {})
         stats["energy"] = max(0, stats.get("energy", 100) - 3)
         
-        # 檢查並消耗工具耐久度
-        tool_result = ctx.production.use_tool(villager)
-        if tool_result == "no_tool":
+        # 先檢查是否有工具（不消耗）
+        if not ctx.production.has_tool(villager):
             logger.info(f"⚒️ {villager['name']} 沒有工具，無法工作")
+            task["fail_reason"] = "工作：沒有工具"
             return False
         
-        # 執行生產
+        # 先執行生產（檢查材料並消耗）
         production_result = ctx.production.produce(villager)
         
-        if production_result["success"]:
-            product = production_result["product"]
-            quantity = production_result["quantity"]
-            location = production_result["location"]
-            
-            # 觸發生產動畫（物品從自己飛到自己）
-            from ..data.items import ITEM_TYPES
-            item_type = ITEM_TYPES.get(product)
-            icon = item_type.icon if item_type else "📦"
-            
-            villager_x = villager.get("x", 0)
-            villager_y = villager.get("y", 0)
-            
-            ctx.queue_broadcast({
-                "type": "trade_animation",
-                "data": {
-                    "from_pos": {"x": villager_x, "y": villager_y - 1},  # 從頭頂飛出
-                    "to_pos": {"x": villager_x, "y": villager_y},
-                    "item_id": product,
-                    "icon": icon,
-                    "quantity": quantity
-                }
-            })
-            
-            if tool_result == "broken":
-                logger.info(f"⚒️ {villager['name']} 生產了 {product} x{quantity}（{location}），工具損壞！")
-            else:
-                logger.info(f"⚒️ {villager['name']} 生產了 {product} x{quantity}（{location}），工具耐久度: {tool_result}%")
-            return True
-        else:
+        if not production_result["success"]:
+            # 材料不足，不消耗工具耐久度
             reason = production_result.get("reason", "未知原因")
-            if tool_result == "broken":
-                logger.info(f"⚒️ {villager['name']} 無法生產：{reason}，工具損壞！")
-            elif tool_result != "no_need":
-                logger.info(f"⚒️ {villager['name']} 無法生產：{reason}（工具耐久度: {tool_result}%）")
-            else:
-                logger.info(f"⚒️ {villager['name']} 無法生產：{reason}")
-            return True  # 工作失敗不清空任務，讓村民繼續嘗試
+            logger.info(f"⚒️ {villager['name']} 無法生產：{reason}")
+            task["fail_reason"] = f"工作：{reason}"
+            return False  # 材料不足也算失敗，記錄原因
+        
+        # 生產成功，才消耗工具耐久度
+        tool_result = ctx.production.use_tool(villager)
+        
+        product = production_result["product"]
+        quantity = production_result["quantity"]
+        location = production_result["location"]
+        
+        # 觸發生產動畫（物品從自己飛到自己）
+        from ..data.items import ITEM_TYPES
+        item_type = ITEM_TYPES.get(product)
+        icon = item_type.icon if item_type else "📦"
+        
+        villager_x = villager.get("x", 0)
+        villager_y = villager.get("y", 0)
+        
+        ctx.queue_broadcast({
+            "type": "trade_animation",
+            "data": {
+                "from_pos": {"x": villager_x, "y": villager_y - 1},  # 從頭頂飛出
+                "to_pos": {"x": villager_x, "y": villager_y},
+                "item_id": product,
+                "icon": icon,
+                "quantity": quantity
+            }
+        })
+        
+        if tool_result == "broken":
+            logger.info(f"⚒️ {villager['name']} 生產了 {product} x{quantity}（{location}），工具損壞！")
+        else:
+            logger.info(f"⚒️ {villager['name']} 生產了 {product} x{quantity}（{location}），工具耐久度: {tool_result}%")
+        return True
 
 
 # ==================== 購買相關效果 ====================
@@ -198,6 +199,7 @@ class BuyToolEffect(TaskEffect):
             return True
         else:
             logger.info(f"🔨 {villager['name']} 無法購買工具（錢不夠或不需要）")
+            task["fail_reason"] = "買工具：錢不夠或不需要"
             return False
 
 
@@ -223,7 +225,9 @@ class BuyMaterialEffect(TaskEffect):
             })
             return True
         else:
+            seller_name = trade_info.get('seller_name', '賣家')
             logger.info(f"💰 {villager['name']} 購買失敗：{trade_info['reason']}")
+            task["fail_reason"] = f"向 {seller_name} 買原料：{trade_info['reason']}"
             return False
 
 
@@ -255,7 +259,9 @@ class BuyFoodEffect(TaskEffect):
             return True
         else:
             # 購買失敗
+            seller_name = food_result.get('seller_name', '賣家')
             logger.info(f"🍽️ {villager['name']} 購買失敗：{food_result['reason']}")
+            task["fail_reason"] = f"向 {seller_name} 買食物：{food_result['reason']}"
             return False
 
 
@@ -422,6 +428,7 @@ class ShearSheepEffect(TaskEffect):
             return True
         else:
             logger.info(f"🧶 {villager['name']} 剪毛失敗：{result['reason']}")
+            task["fail_reason"] = f"剪羊毛：{result['reason']}"
             return False
 
 
@@ -435,7 +442,9 @@ class BuySheepEffect(TaskEffect):
             logger.info(f"🐑 {villager['name']} 向 {result['seller_name']} 購買了一隻活羊（花費 ${result['price']}）")
             return True
         else:
+            seller_name = result.get('seller_name', '賣家')
             logger.info(f"🐑 {villager['name']} 買羊失敗：{result['reason']}")
+            task["fail_reason"] = f"向 {seller_name} 買羊：{result['reason']}"
             return False
 
 
@@ -481,18 +490,19 @@ class SlaughterSheepEffect(TaskEffect):
             return True
         else:
             logger.info(f"🔪 {villager['name']} 宰殺失敗：{result['reason']}")
+            task["fail_reason"] = f"宰殺羊：{result['reason']}"
             return False
 
 
 # ==================== 煮飯相關效果 ====================
 
 class CookEffect(TaskEffect):
-    """煮飯效果 - 使用灶台把生肉煮成熟肉並吃掉"""
+    """煮飯效果 - 使用灶台把生肉煮成熟肉"""
     
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
         inventory = villager.get("inventory", [None] * 5)
         
-        # 第一步：把背包裡所有生肉轉換成熟肉
+        # 把背包裡所有生肉轉換成熟肉
         total_converted = 0
         for i, slot in enumerate(inventory):
             if slot and slot.get("item_id") == "meat_raw":
@@ -502,44 +512,23 @@ class CookEffect(TaskEffect):
         
         if total_converted > 0:
             logger.info(f"🍳 {villager['name']} 用灶台把 {total_converted} 個生肉煮成熟肉")
-        
-        # 第二步：吃一個熟肉
-        meat_slot = None
-        meat_index = -1
-        for i, slot in enumerate(villager["inventory"]):
-            if slot and slot.get("item_id") == "meat":
-                meat_slot = slot
-                meat_index = i
-                break
-        
-        if not meat_slot:
-            logger.info(f"🍳 {villager['name']} 沒有熟肉可以吃")
-            return False
-        
-        # 消耗一個熟肉
-        if meat_slot.get("quantity", 1) > 1:
-            meat_slot["quantity"] -= 1
+            return True
         else:
-            villager["inventory"][meat_index] = None
-        
-        # 恢復飽足度
-        from .production import FOOD_INFO
-        stats = villager.get("stats", {})
-        old_satiety = stats.get("satiety", 100)
-        meat_restore = FOOD_INFO.get("meat", {}).get("satiety_restore", 50)
-        stats["satiety"] = min(100, old_satiety + meat_restore)
-        
-        logger.info(f"🍳 {villager['name']} 吃了熟肉 (飽足: {old_satiety:.0f} → {stats['satiety']:.0f})")
-        return True
+            logger.info(f"🍳 {villager['name']} 沒有生肉可煮")
+            task["fail_reason"] = "煮飯：沒有生肉可煮"
+            return False
 
 
 class PickupEffect(TaskEffect):
     """撿起地上物品效果"""
     
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
+        world_item_id = task.get("world_item_id")
         item_id = task.get("item_id")
-        if not item_id:
+        
+        if not world_item_id:
             logger.info(f"📦 {villager['name']} 沒有指定要撿的物品")
+            task["fail_reason"] = "撿物品：沒有指定要撿的物品"
             return False
         
         # 從 game_state 取得物品（透過 production 存取）
@@ -556,12 +545,14 @@ class PickupEffect(TaskEffect):
                 logger.info(f"📦 {villager['name']} 背包滿了，丟下 {dropped['item_id']} x{dropped.get('quantity', 1)}")
             else:
                 logger.info(f"📦 {villager['name']} 背包滿了且沒有可丟的物品，無法撿取")
+                task["fail_reason"] = "撿物品：背包滿了"
                 return False
         
-        # 找到並移除地上的物品
-        item = game_state.remove_world_item(item_id)
+        # 找到並移除地上的物品（使用世界物品唯一 ID）
+        item = game_state.remove_world_item(world_item_id)
         if not item:
-            logger.info(f"📦 {villager['name']} 找不到物品 {item_id}")
+            logger.info(f"📦 {villager['name']} 找不到物品 {item_id} (id: {world_item_id})")
+            task["fail_reason"] = "撿物品：找不到物品"
             return False
         
         # 放到村民背包
@@ -583,6 +574,7 @@ class SellToMerchantEffect(TaskEffect):
         
         if not merchant_id or not item_id:
             logger.info(f"💰 {villager['name']} 販賣失敗：缺少參數")
+            task["fail_reason"] = "賣物品：缺少參數"
             return False
         
         # 找商人
@@ -590,7 +582,10 @@ class SellToMerchantEffect(TaskEffect):
         merchant = game_state.get_villager(merchant_id)
         if not merchant:
             logger.info(f"💰 {villager['name']} 找不到商人")
+            task["fail_reason"] = "賣物品：找不到商人"
             return False
+        
+        merchant_name = merchant.get('name', '商人')
         
         # 取得價格
         price = MERCHANT_BUY_PRICES.get(item_id, 5)
@@ -599,24 +594,40 @@ class SellToMerchantEffect(TaskEffect):
         merchant_money = merchant.get("money", 0)
         if merchant_money < price:
             logger.info(f"💰 商人 {merchant['name']} 沒有足夠的錢 (需要 ${price}，擁有 ${merchant_money})")
+            task["fail_reason"] = f"賣給 {merchant_name}：商人沒錢"
             return False
         
-        # 檢查賣家背包是否有物品
+        # 計算賣家背包庫存
         inventory = villager.get("inventory", [None] * 5)
-        item_slot = None
-        item_index = -1
+        bag_qty = 0
+        bag_slots = []  # [(index, slot), ...]
         for i, slot in enumerate(inventory):
             if slot and slot.get("item_id") == item_id:
-                item_slot = slot
-                item_index = i
-                break
+                bag_slots.append((i, slot))
+                bag_qty += slot.get("quantity", 0)
         
-        if not item_slot:
-            logger.info(f"💰 {villager['name']} 背包沒有 {item_id}")
+        # 計算賣家地上庫存
+        ground_items = []
+        for item in game_state.get_items_by_owner(villager["id"]):
+            if item.get("item_id") == item_id:
+                ground_items.append(item)
+        
+        # 決定賣出來源：背包有則只賣背包，背包沒有則賣地上一堆
+        if bag_qty > 0:
+            # 賣背包的全部
+            sell_qty = bag_qty
+            sell_from = "bag"
+        elif ground_items:
+            # 賣地上隨機一堆（取第一堆）
+            import random
+            target_item = random.choice(ground_items)
+            sell_qty = target_item.get("quantity", 1)
+            sell_from = "ground"
+        else:
+            logger.info(f"💰 {villager['name']} 沒有 {item_id} 可賣")
+            task["fail_reason"] = f"賣給 {merchant_name}：沒有 {item_id}"
             return False
         
-        # 計算賣出數量（全部賣出）
-        sell_qty = item_slot.get("quantity", 1)
         total_price = price * sell_qty
         
         # 檢查商人是否有足夠的錢買全部
@@ -625,15 +636,33 @@ class SellToMerchantEffect(TaskEffect):
             sell_qty = merchant_money // price
             if sell_qty <= 0:
                 logger.info(f"💰 商人 {merchant['name']} 錢不夠買任何 {item_id}")
+                task["fail_reason"] = f"賣給 {merchant_name}：商人沒錢"
                 return False
             total_price = price * sell_qty
         
-        # 執行交易
-        # 1. 賣家移除物品
-        if item_slot.get("quantity", 1) <= sell_qty:
-            villager["inventory"][item_index] = None
+        # 執行交易 - 從賣家扣除物品
+        if sell_from == "bag":
+            # 從背包扣
+            remaining = sell_qty
+            for i, slot in bag_slots:
+                if remaining <= 0:
+                    break
+                slot_qty = slot.get("quantity", 0)
+                deduct = min(slot_qty, remaining)
+                if slot_qty <= deduct:
+                    villager["inventory"][i] = None
+                else:
+                    slot["quantity"] = slot_qty - deduct
+                remaining -= deduct
         else:
-            item_slot["quantity"] -= sell_qty
+            # 從地上扣（整堆移除或部分扣除）
+            item_qty = target_item.get("quantity", 0)
+            if sell_qty >= item_qty:
+                # 整堆移除
+                game_state.remove_world_item(target_item["id"])
+            else:
+                # 部分扣除
+                target_item["quantity"] = item_qty - sell_qty
         
         # 2. 金錢轉移
         villager["money"] = villager.get("money", 0) + total_price
@@ -681,6 +710,7 @@ class SellExcessEffect(TaskEffect):
         
         if not merchant_id or not item_id:
             logger.info(f"💸 {villager['name']} 變賣失敗：缺少參數")
+            task["fail_reason"] = "變賣物品：缺少參數"
             return False
         
         # 找商人
@@ -688,7 +718,10 @@ class SellExcessEffect(TaskEffect):
         merchant = game_state.get_villager(merchant_id)
         if not merchant:
             logger.info(f"💸 {villager['name']} 找不到商人")
+            task["fail_reason"] = "變賣物品：找不到商人"
             return False
+        
+        merchant_name = merchant.get('name', '商人')
         
         # 取得原價
         price = MATERIAL_PRICES.get(item_id, 2)
@@ -697,6 +730,7 @@ class SellExcessEffect(TaskEffect):
         merchant_money = merchant.get("money", 0)
         if merchant_money < price:
             logger.info(f"💸 商人 {merchant['name']} 沒有足夠的錢收購 {item_id}")
+            task["fail_reason"] = f"變賣給 {merchant_name}：商人沒錢"
             return False
         
         # 檢查賣家背包是否有物品
@@ -711,6 +745,7 @@ class SellExcessEffect(TaskEffect):
         
         if not item_slot:
             logger.info(f"💸 {villager['name']} 背包沒有 {item_id}")
+            task["fail_reason"] = f"變賣給 {merchant_name}：背包沒有 {item_id}"
             return False
         
         # 計算賣出數量（全部賣出）
@@ -722,6 +757,7 @@ class SellExcessEffect(TaskEffect):
             sell_qty = merchant_money // price
             if sell_qty <= 0:
                 logger.info(f"💸 商人 {merchant['name']} 錢不夠買任何 {item_id}")
+                task["fail_reason"] = f"變賣給 {merchant_name}：商人沒錢"
                 return False
             total_price = price * sell_qty
         
@@ -760,11 +796,122 @@ class SellExcessEffect(TaskEffect):
         return True
 
 
+# ==================== 商人收購效果 ====================
+
+class BuyFromVillagerEffect(TaskEffect):
+    """商人主動收購村民物品（一次收購一個物品）"""
+    
+    def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
+        from ..data.supply_chain import MERCHANT_BUY_PRICES
+        
+        seller_id = task.get("seller_id")
+        item_id = task.get("item")
+        
+        if not seller_id or not item_id:
+            logger.info(f"🛒 {villager['name']} 收購失敗：缺少參數")
+            task["fail_reason"] = "收購：缺少參數"
+            return False
+        
+        # 找賣家
+        game_state = ctx.production.game_state
+        seller = game_state.get_villager(seller_id)
+        if not seller:
+            logger.info(f"🛒 {villager['name']} 找不到賣家")
+            task["fail_reason"] = "收購：找不到賣家"
+            return False
+        
+        seller_name = seller.get('name', '村民')
+        merchant_money = villager.get("money", 0)
+        price = MERCHANT_BUY_PRICES.get(item_id, 5)
+        
+        if merchant_money < price:
+            logger.info(f"🛒 {villager['name']} 金錢不足，無法收購")
+            task["fail_reason"] = "收購：金錢不足"
+            return False
+        
+        # 先檢查賣家背包
+        seller_inventory = seller.get("inventory", [None] * 5)
+        item_slot = None
+        item_index = -1
+        for i, slot in enumerate(seller_inventory):
+            if slot and slot.get("item_id") == item_id:
+                item_slot = slot
+                item_index = i
+                break
+        
+        if item_slot:
+            # 從背包購買 1 個
+            if item_slot.get("quantity", 1) <= 1:
+                seller["inventory"][item_index] = None
+            else:
+                item_slot["quantity"] -= 1
+        else:
+            # 檢查地上
+            ground_items = game_state.get_items_by_owner(seller_id)
+            found = False
+            for ground_item in ground_items:
+                if ground_item.get("item_id") == item_id:
+                    qty = ground_item.get("quantity", 1)
+                    if qty <= 1:
+                        game_state.remove_world_item(ground_item.get("world_item_id"))
+                    else:
+                        ground_item["quantity"] -= 1
+                    found = True
+                    break
+            
+            if not found:
+                logger.info(f"🛒 {villager['name']} 收購失敗：{seller_name} 沒有 {item_id}")
+                task["fail_reason"] = f"收購：{seller_name} 沒有 {item_id}"
+                return False
+        
+        # 金錢轉移
+        villager["money"] -= price
+        seller["money"] = seller.get("money", 0) + price
+        
+        # 商人從出口獲得賣價（收購價 × 1.2），淨賺 20%
+        export_sell_price = int(price * 1.2)
+        villager["money"] += export_sell_price
+        export_profit = export_sell_price - price
+        
+        logger.info(f"🛒 {villager['name']} 從 {seller_name} 收購了 {item_id} x1，花費 ${price}，獲利 ${export_profit}")
+        
+        # 取得物品圖示
+        from ..data.items import ITEM_TYPES
+        item_type = ITEM_TYPES.get(item_id)
+        item_icon = item_type.icon if item_type else "📦"
+        
+        # 廣播交易動畫 1: 村民向商人飛物品
+        ctx.queue_broadcast({
+            "type": "trade_animation",
+            "data": {
+                "from_pos": {"x": seller.get("x", 0), "y": seller.get("y", 0)},
+                "to_pos": {"x": villager.get("x", 0), "y": villager.get("y", 0)},
+                "item_id": item_id,
+                "icon": item_icon,
+                "quantity": 1
+            }
+        })
+        
+        # 廣播交易動畫 2: 商人向村民飛錢袋
+        ctx.queue_broadcast({
+            "type": "trade_animation",
+            "data": {
+                "from_pos": {"x": villager.get("x", 0), "y": villager.get("y", 0)},
+                "to_pos": {"x": seller.get("x", 0), "y": seller.get("y", 0)},
+                "item_id": "coins",
+                "icon": "💰",
+                "quantity": price
+            }
+        })
+        return True
+
+
 # ==================== 效果註冊表 ====================
 
 TASK_EFFECTS: Dict[str, TaskEffect] = {
     "eat": EatEffect(),
     "rest": RestEffect(),
+    "sleep": RestEffect(),  # sleep 與 rest 使用相同效果（恢復體力）
     "socialize": SocializeEffect(),
     "work": WorkEffect(),
     "buy_tool": BuyToolEffect(),
@@ -780,6 +927,7 @@ TASK_EFFECTS: Dict[str, TaskEffect] = {
     "pickup": PickupEffect(),
     "sell_to_merchant": SellToMerchantEffect(),
     "sell_excess": SellExcessEffect(),
+    "buy_from_villager": BuyFromVillagerEffect(),
 }
 
 

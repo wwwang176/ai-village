@@ -32,8 +32,9 @@ class TargetResolver:
         """
         action_targets = {
             "go_work": lambda v: self._get_work_target(v),
+            "go_workplace": lambda v: self._get_work_target(v),  # 多輪決策別名
             "go_home": lambda v: self._get_bed_target(v),
-            "go_market": lambda v: self._get_building_target("market"),
+            "go_plaza": lambda v: self._get_building_target("plaza"),
             "go_bar": lambda v: self._get_building_target("tavern"),
             "go_blacksmith": lambda v: self._get_villager_by_occupation("blacksmith"),
             "eat": lambda v: self._get_eat_target(v),
@@ -56,7 +57,7 @@ class TargetResolver:
             building = self.game_state.get_building_by_id(workplace_id)
             if building:
                 return self.game_state.get_building_door(building)
-        return self._get_building_target("market")
+        return self._get_building_target("plaza")
     
     def _get_home_target(self, villager: dict) -> Optional[Tuple[int, int]]:
         """取得住所"""
@@ -138,7 +139,7 @@ class TargetResolver:
             target_villager = candidates[0][0]
             return ((target_villager["x"], target_villager["y"]), target_villager["id"])
         
-        return (self._get_building_target("market"), None)
+        return (self._get_building_target("plaza"), None)
     
     def _get_wander_target(self, villager: dict) -> Optional[Tuple[int, int]]:
         """隨機閒逛目標"""

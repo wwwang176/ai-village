@@ -25,7 +25,7 @@ WORK_BUILDINGS = [
     {"type": "blacksmith", "name": "鐵匠舖", "x": 72, "y": 16, "width": 8, "height": 7},
     
     # === 中央區：商業（河流左側）===
-    {"type": "market", "name": "市集", "x": 38, "y": 40, "width": 16, "height": 10},
+    {"type": "plaza", "name": "廣場", "x": 38, "y": 40, "width": 16, "height": 10},
     
     # === 左下區：木材 ===
     {"type": "lumber_camp", "name": "伐木場", "x": 4, "y": 76, "width": 12, "height": 10},
@@ -45,7 +45,7 @@ WORK_BUILDINGS = [
 ]
 
 # 開放式建築（戶外，不需要圍牆）
-OPEN_BUILDINGS = ["farm", "mine", "lumber_camp", "pasture", "market"]
+OPEN_BUILDINGS = ["farm", "mine", "lumber_camp", "pasture", "plaza"]
 
 # 地形類型對照
 TERRAIN_TYPES = {
@@ -53,7 +53,7 @@ TERRAIN_TYPES = {
     "mine": 5,       # 礦場
     "lumber_camp": 6, # 伐木場
     "pasture": 7,    # 牧場
-    "market": 8,     # 市集廣場
+    "plaza": 8,      # 廣場
     "default": 3,    # 一般地板
     "river": 9,      # 河流
     "bridge": 10,    # 橋樑

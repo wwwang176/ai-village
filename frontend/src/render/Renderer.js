@@ -25,7 +25,7 @@ export class Renderer {
     this.lighting = new LightingRenderer(ctx, camera, tileSize);
     
     // 開放式建築列表（不需要渲染頂部）
-    this.openBuildings = ['farm', 'mine', 'lumber_camp', 'pasture', 'market'];
+    this.openBuildings = ['farm', 'mine', 'lumber_camp', 'pasture', 'plaza'];
   }
   
   /**

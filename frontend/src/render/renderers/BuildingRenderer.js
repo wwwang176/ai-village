@@ -28,7 +28,7 @@ export class BuildingRenderer extends BaseRenderer {
       tailor_shop: { wall: '#b08080', wallDark: '#a07070', roof: '#906060', roofDark: '#805050' },
       
       // 特殊
-      market: { wall: '#deb887', wallDark: '#cea877', roof: '#cd853f', roofDark: '#bd752f' },
+      plaza: { wall: '#deb887', wallDark: '#cea877', roof: '#cd853f', roofDark: '#bd752f' },
       tavern: { wall: '#8b7355', wallDark: '#7b6345', roof: '#6b4423', roofDark: '#5b3413' },
       church: { wall: '#d4c4a8', wallDark: '#c4b498', roof: '#8b8b8b', roofDark: '#7b7b7b' },
       
@@ -44,7 +44,7 @@ export class BuildingRenderer extends BaseRenderer {
     this.windowFrameColor = '#5d4037';
     
     // 開放式建築（不畫牆壁和屋頂）
-    this.openBuildings = ['farm', 'mine', 'lumber_camp', 'pasture', 'market'];
+    this.openBuildings = ['farm', 'mine', 'lumber_camp', 'pasture', 'plaza'];
     
     // 2.5D 設定
     this.wallHeight = 24; // 正面牆壁高度（像素）
