@@ -22,23 +22,23 @@ WORK_BUILDINGS = [
     
     # === 河流右側：礦業 ===
     {"type": "mine", "name": "礦場", "x": 72, "y": 4, "width": 12, "height": 8},
-    {"type": "blacksmith", "name": "鐵匠舖", "x": 72, "y": 16, "width": 8, "height": 7},
+    {"type": "blacksmith", "name": "鐵匠舖", "x": 72, "y": 16, "width": 7, "height": 7},
     
     # === 中央區：商業（河流左側）===
     {"type": "plaza", "name": "廣場", "x": 38, "y": 40, "width": 16, "height": 10},
     
     # === 左下區：木材 ===
     {"type": "lumber_camp", "name": "伐木場", "x": 4, "y": 76, "width": 12, "height": 10},
-    {"type": "carpentry", "name": "木工坊", "x": 20, "y": 80, "width": 8, "height": 7},
+    {"type": "carpentry", "name": "木工坊", "x": 20, "y": 80, "width": 7, "height": 7},
     
     # === 河流右側：畜牧 ===
     {"type": "pasture", "name": "牧場", "x": 72, "y": 72, "width": 16, "height": 12},
-    {"type": "butcher_shop", "name": "肉舖", "x": 72, "y": 60, "width": 8, "height": 7},
+    {"type": "butcher_shop", "name": "肉舖", "x": 72, "y": 60, "width": 7, "height": 7},
     
     # === 河流右側：服飾 ===
-    {"type": "weaver_shop", "name": "織坊", "x": 72, "y": 28, "width": 8, "height": 6},
-    {"type": "tannery", "name": "皮革坊", "x": 82, "y": 28, "width": 8, "height": 6},
-    {"type": "tailor_shop", "name": "裁縫店", "x": 82, "y": 38, "width": 8, "height": 6},
+    {"type": "weaver_shop", "name": "織坊", "x": 72, "y": 28, "width": 7, "height": 6},
+    {"type": "tannery", "name": "皮革坊", "x": 82, "y": 28, "width": 7, "height": 6},
+    {"type": "tailor_shop", "name": "裁縫店", "x": 82, "y": 38, "width": 7, "height": 6},
     
     # === 社交區域 ===
     {"type": "tavern", "name": "酒吧", "x": 56, "y": 52, "width": 7, "height": 6},
@@ -60,6 +60,13 @@ TERRAIN_TYPES = {
 }
 
 
+def _buildings_overlap(x1: int, y1: int, w1: int, h1: int, 
+                       x2: int, y2: int, w2: int, h2: int, margin: int = 0) -> bool:
+    """檢查兩個建築是否重疊（含間距）"""
+    return not (x1 + w1 + margin <= x2 or x2 + w2 + margin <= x1 or
+                y1 + h1 + margin <= y2 or y2 + h2 + margin <= y1)
+
+
 def generate_map(seed: int, width: int = 96, height: int = 96) -> dict:
     """
     生成遊戲地圖
@@ -76,13 +83,35 @@ def generate_map(seed: int, width: int = 96, height: int = 96) -> dict:
     
     buildings = []
     
-    # 添加工作建築
+    # 添加工作建築（帶 ±1 隨機偏移，避免重疊）
     for i, b in enumerate(WORK_BUILDINGS):
         building = b.copy()
         building["id"] = f"building_{i}"
+        
+        # 嘗試 ±1 隨機偏移
+        best_x, best_y = building["x"], building["y"]
+        offset_x = random.randint(-1, 1)
+        offset_y = random.randint(-1, 1)
+        new_x = building["x"] + offset_x
+        new_y = building["y"] + offset_y
+        
+        # 檢查邊界
+        if new_x >= 0 and new_y >= 0 and new_x + building["width"] < width and new_y + building["height"] < height:
+            # 檢查是否與已有建築重疊（含 1 格間距）
+            overlap = False
+            for existing in buildings:
+                if _buildings_overlap(new_x, new_y, building["width"], building["height"],
+                                     existing["x"], existing["y"], existing["width"], existing["height"], margin=1):
+                    overlap = True
+                    break
+            if not overlap:
+                best_x, best_y = new_x, new_y
+        
+        building["x"] = best_x
+        building["y"] = best_y
         building["doorX"] = building["x"] + building["width"] // 2
         building["doorY"] = building["y"] + building["height"] - 1
-        building["doorWidth"] = 2
+        building["doorWidth"] = 1
         buildings.append(building)
     
     # 生成隨機散落的民宅
@@ -201,7 +230,7 @@ def _generate_random_houses(
                 "width": house_w, "height": house_h,
                 "doorX": x + house_w // 2,
                 "doorY": y + house_h - 1,
-                "doorWidth": 2
+                "doorWidth": 1
             })
     
     print(f"🏠 生成了 {len(houses)} 間民宅")

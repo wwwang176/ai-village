@@ -424,27 +424,24 @@ export class BuildingRenderer extends BaseRenderer {
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
     this.ctx.fillRect(screenX, wallBottom - 3, width, 3);
     
-    // 門和窗戶
-    const doorWidth = ts;
+    // 門（使用後端傳來的 doorX 和 doorWidth）
+    const doorGridWidth = building.doorWidth || 1;
+    const doorStartGridX = building.doorX - Math.floor(doorGridWidth / 2) - building.x;
+    const doorX = screenX + doorStartGridX * ts;
+    const doorPixelWidth = doorGridWidth * ts;
     const doorHeight = wallHeight - 4;
+    this.renderDoor(doorX, wallTop + 2, doorPixelWidth, doorHeight);
     
+    // 窗戶
     if (building.width >= 5) {
-      // 雙窗戶：門在中央，窗戶在兩側
-      const doorX = screenX + Math.floor(width / 2) - doorWidth / 2;
-      this.renderDoor(doorX, wallTop + 2, doorWidth, doorHeight);
+      // 雙窗戶：兩側
       const windowY = wallTop + 4;
       this.renderWindow(screenX + ts, windowY);
       this.renderWindow(screenX + width - ts * 2, windowY);
     } else if (building.width >= 4) {
-      // 單窗戶：窗戶靠左，門靠右
-      const doorX = screenX + width - ts * 1.5;
-      this.renderDoor(doorX, wallTop + 2, doorWidth, doorHeight);
+      // 單窗戶：靠左
       const windowY = wallTop + 4;
       this.renderWindow(screenX + ts * 0.5, windowY);
-    } else {
-      // 小房子：只有門在中央
-      const doorX = screenX + Math.floor(width / 2) - doorWidth / 2;
-      this.renderDoor(doorX, wallTop + 2, doorWidth, doorHeight);
     }
     
     // === 屋頂（東西向雙坡） ===

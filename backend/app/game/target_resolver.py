@@ -3,7 +3,10 @@
 """
 
 import random
+import logging
 from typing import Optional, Tuple, List, TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .game_state import GameState
@@ -79,12 +82,28 @@ class TargetResolver:
         return None
     
     def _get_furniture_interact_pos(self, furniture: dict) -> Optional[Tuple[int, int]]:
-        """取得家具的互動位置（隨機選擇一個）"""
+        """取得家具的互動位置（排除不可行走位置後隨機選擇）"""
         offsets = furniture.get("interact_offsets", [(0, 0)])
-        offset = random.choice(offsets)
-        x = int(furniture["x"]) + offset[0]
-        y = int(furniture["y"]) + offset[1]
-        return (x, y)
+        fx, fy = int(furniture["x"]), int(furniture["y"])
+        
+        # 過濾出可行走的位置
+        walkable_positions = []
+        for offset in offsets:
+            x, y = fx + offset[0], fy + offset[1]
+            walkable = self.game_state.pathfinder.is_walkable(x, y) if self.game_state.pathfinder else False
+            logger.info(f"🏠 家具互動點檢查: offset={offset}, pos=({x},{y}), walkable={walkable}")
+            if walkable:
+                walkable_positions.append((x, y))
+        
+        # 如果有可行走的位置，隨機選一個
+        if walkable_positions:
+            chosen = random.choice(walkable_positions)
+            logger.info(f"🏠 選擇互動點: {chosen} (從 {walkable_positions} 中)")
+            return chosen
+        
+        # 都不可行走，fallback 到家具本身位置
+        logger.warning(f"🏠 所有互動點都不可行走，fallback 到家具位置: ({fx}, {fy})")
+        return (fx, fy)
     
     def _get_bed_target(self, villager: dict) -> Optional[Tuple[int, int]]:
         """取得床的位置"""

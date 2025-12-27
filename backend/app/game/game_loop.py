@@ -787,7 +787,9 @@ class GameLoop:
             # 回家煮生肉
             stove = self.game_state.get_stove_by_residence(villager["id"])
             if stove:
-                tasks.append(Task(type="move", target=(stove["x"], stove["y"])).to_dict())
+                # 使用灶台的互動點而非灶台本身座標
+                interact_pos = self.game_state.target_resolver._get_furniture_interact_pos(stove)
+                tasks.append(Task(type="move", target=interact_pos).to_dict())
                 tasks.append(Task(type="cook", duration=3).to_dict())
                 tasks.append(Task(type="eat", duration=2).to_dict())
         
@@ -843,7 +845,9 @@ class GameLoop:
             # 回家睡覺
             bed = self.game_state.get_bed_by_residence(villager["id"])
             if bed:
-                tasks.append(Task(type="move", target=(bed["x"], bed["y"])).to_dict())
+                # 使用床的互動點而非床本身座標
+                interact_pos = self.game_state.target_resolver._get_furniture_interact_pos(bed)
+                tasks.append(Task(type="move", target=interact_pos).to_dict())
             tasks.append(Task(type="sleep", duration=10).to_dict())
         
         elif action == "go_plaza":
