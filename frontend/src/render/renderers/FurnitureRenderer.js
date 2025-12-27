@@ -33,16 +33,23 @@ export class FurnitureRenderer extends BaseRenderer {
     const { x: screenX, y: screenY } = this.toScreen(item.x, item.y);
     const size = this.tileSize * 0.6;
     const offset = (this.tileSize - size) / 2;
+    const zoom = this.camera.zoom || 1;
+    
+    // LOD: 極遠景只畫簡單方塊
+    if (zoom <= 0.5) {
+      this.renderFurnitureLOD(screenX + offset, screenY + offset, size, item.type);
+      return;
+    }
     
     switch (item.type) {
       case 'stove':
-        this.renderStove(screenX + offset, screenY + offset, size);
+        this.renderStove(screenX + offset, screenY + offset, size, zoom);
         break;
       case 'bed':
-        this.renderBed(screenX + offset, screenY + offset, size);
+        this.renderBed(screenX + offset, screenY + offset, size, zoom);
         break;
       case 'workbench':
-        this.renderWorkbench(screenX + offset, screenY + offset, size);
+        this.renderWorkbench(screenX + offset, screenY + offset, size, zoom);
         break;
       default:
         this.renderGeneric(screenX + offset, screenY + offset, size);
@@ -50,12 +57,32 @@ export class FurnitureRenderer extends BaseRenderer {
   }
   
   /**
+   * LOD 簡化渲染（極遠景）
+   */
+  renderFurnitureLOD(x, y, size, type) {
+    const colors = {
+      'stove': '#8B4513',
+      'bed': '#A8D4E6',
+      'workbench': '#8B5A2B'
+    };
+    this.ctx.fillStyle = colors[type] || '#8d6e63';
+    this.ctx.fillRect(x, y, size, size);
+  }
+  
+  /**
    * 渲染灶台
    */
-  renderStove(x, y, size) {
+  renderStove(x, y, size, zoom = 1) {
     // 棕色底座
     this.ctx.fillStyle = '#8B4513';
     this.ctx.fillRect(x, y, size, size);
+    
+    // LOD: 中遠景省略火焰細節
+    if (zoom <= 0.75) {
+      this.ctx.fillStyle = '#FF4500';
+      this.ctx.fillRect(x + size * 0.3, y + size * 0.3, size * 0.4, size * 0.4);
+      return;
+    }
     
     // 火焰線條
     this.ctx.strokeStyle = '#FF4500';
@@ -83,11 +110,23 @@ export class FurnitureRenderer extends BaseRenderer {
   /**
    * 渲染床（2.5D 效果，整張床高度 1.5 格）
    */
-  renderBed(x, y, size) {
+  renderBed(x, y, size, zoom = 1) {
     // 床的總高度 = 1.8 格
     const bedHeight = size * 1.8;
     // Y 座標向北偏移，讓床從上一格開始
     const startY = y - size * 0.8;
+    
+    // LOD: 中遠景簡化渲染
+    if (zoom <= 0.75) {
+      // 簡化：只畫床頭、被子、床尾
+      this.ctx.fillStyle = '#D4A574';
+      this.ctx.fillRect(x, startY, size, bedHeight * 0.15);
+      this.ctx.fillStyle = '#A8D4E6';
+      this.ctx.fillRect(x, startY + bedHeight * 0.15, size, bedHeight * 0.7);
+      this.ctx.fillStyle = '#D4A574';
+      this.ctx.fillRect(x, startY + bedHeight * 0.85, size, bedHeight * 0.15);
+      return;
+    }
     
     // 木色床頭板（約 10%）
     this.ctx.fillStyle = '#D4A574';
@@ -131,10 +170,21 @@ export class FurnitureRenderer extends BaseRenderer {
   /**
    * 渲染工作台（2.5D 風格，向北延伸）
    */
-  renderWorkbench(x, y, size) {
+  renderWorkbench(x, y, size, zoom = 1) {
     // 桌面 1 格 + 桌腳 0.3 格，總高度 1.3 格
     // 向北偏移 0.3 格，讓桌腳底部貼到格子南端
     const startY = y - size * 0.3;
+    
+    // LOD: 中遠景簡化渲染
+    if (zoom <= 0.75) {
+      // 簡化：只畫桌面和桌腳
+      this.ctx.fillStyle = '#5D3A1A';
+      this.ctx.fillRect(x + size * 0.1, startY + size, size * 0.12, size * 0.3);
+      this.ctx.fillRect(x + size * 0.78, startY + size, size * 0.12, size * 0.3);
+      this.ctx.fillStyle = '#A0724B';
+      this.ctx.fillRect(x, startY, size, size);
+      return;
+    }
     
     // 桌腳（左右，先畫在最底層）- 從 startY + size 到 startY + 1.3*size
     this.ctx.fillStyle = '#5D3A1A';

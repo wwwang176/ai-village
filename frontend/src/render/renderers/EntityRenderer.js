@@ -233,6 +233,7 @@ export class EntityRenderer extends BaseRenderer {
     const screenX = screen.x;
     const screenY = screen.y - 8; // 往上偏移，讓腳對齊格子中央
     const size = this.tileSize;
+    const zoom = this.camera.zoom || 1;
     
     // 根據羊毛狀態決定顏色和大小
     let bodyColor, bodyColorDark, bodyScale;
@@ -255,11 +256,34 @@ export class EntityRenderer extends BaseRenderer {
     const centerX = screenX + size / 2;
     const centerY = screenY + size / 2 + 2;
     
+    // LOD: 極遠景只畫簡單橢圓
+    if (zoom <= 0.5) {
+      this.ctx.fillStyle = bodyColor;
+      this.ctx.fillRect(centerX - bodyW / 2, centerY - bodyH / 2, bodyW, bodyH);
+      return;
+    }
+    
     // === 陰影 ===
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
     this.ctx.beginPath();
     this.ctx.ellipse(centerX, screenY + size - 1, bodyW / 2.5, 2, 0, 0, Math.PI * 2);
     this.ctx.fill();
+    
+    // LOD: 中遠景簡化渲染
+    if (zoom <= 0.75) {
+      // 簡化：只畫身體和頭
+      this.ctx.fillStyle = bodyColor;
+      this.ctx.beginPath();
+      this.ctx.ellipse(centerX, centerY, bodyW / 2, bodyH / 2, 0, 0, Math.PI * 2);
+      this.ctx.fill();
+      // 簡化頭
+      this.ctx.fillStyle = '#3d3d3d';
+      const headSize = isAdult ? size * 0.18 : size * 0.12;
+      this.ctx.beginPath();
+      this.ctx.arc(centerX - bodyW / 2.5, centerY - bodyH / 6, headSize, 0, Math.PI * 2);
+      this.ctx.fill();
+      return;
+    }
     
     // === 腿部（4隻腳）===
     const legColor = '#2a2a2a';

@@ -481,6 +481,8 @@ class GameState:
                 )
                 self.furniture[stove.id] = stove.to_dict()
                 self.next_furniture_id += 1
+                # 灶台加入碰撞地圖（不可穿越）
+                self.pathfinder.add_collision(int(stove.x), int(stove.y))
                 
                 # 在建築內部放置床（右上角）
                 bed = Furniture(
@@ -492,6 +494,7 @@ class GameState:
                 )
                 self.furniture[bed.id] = bed.to_dict()
                 self.next_furniture_id += 1
+                # 床不加入碰撞地圖（村民需要站在床上睡覺）
             
             # 工作建築：生成工作台（排除開放式建築和酒吧）
             elif building_type not in NO_WORKBENCH_BUILDINGS:
@@ -508,6 +511,8 @@ class GameState:
                 )
                 self.furniture[workbench.id] = workbench.to_dict()
                 self.next_furniture_id += 1
+                # 工作台加入碰撞地圖（不可穿越）
+                self.pathfinder.add_collision(int(workbench.x), int(workbench.y))
         
         print(f"🏠 生成了 {len(self.furniture)} 件家具")
     
