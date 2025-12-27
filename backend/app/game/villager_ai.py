@@ -355,7 +355,7 @@ class VillagerAI:
 4. 社交（以上都滿足時才考慮）
 
 【行為注意事項】
-1. 如果金錢超過200，則吃飽比工作賺錢更重要
+1. 如果金錢超過200，則「吃飽」比「工作賺錢」優先級更高
 2. 工作必須有工具，缺少工具可以去買或撿地上的
 3. 工作必須要有材料，缺少材料可以去買或撿地上的
 4. 飽足滿足時，不需要吃東西
@@ -481,15 +481,15 @@ class VillagerAI:
         
         # 8. go_sleep
         if "go_sleep" in available:
-            actions.append("- go_sleep：回家睡覺 → 恢復體力")
+            actions.append("- go_sleep：回家睡覺 → 只恢復體力")
         
         # 9. go_plaza
         if "go_plaza" in available:
-            actions.append("- go_plaza：去廣場找人聊天 → 恢復社交")
+            actions.append("- go_plaza：去廣場找人聊天 → 只恢復社交")
         
         # 10. go_bar
         if "go_bar" in available:
-            actions.append("- go_bar：去酒吧社交喝酒 → 恢復社交（需 $100）")
+            actions.append("- go_bar：去酒吧社交喝酒 → 只恢復社交（需 $100）")
         
         # 11. wander
         if "wander" in available:
@@ -501,7 +501,7 @@ class VillagerAI:
         
         # 13. buy_beer
         if "buy_beer" in available:
-            actions.append("- buy_beer：跟酒保買杯啤酒喝（$3）")
+            actions.append("- buy_beer：跟酒保買杯啤酒喝（需 $3）")
         
         # 14. idle
         if "idle" in available:
@@ -1101,7 +1101,7 @@ class VillagerAI:
                 continue
             if self._check_supplier_stock(game_state, seller_occupation, food_item):
                 food_name = "麵包" if food_item == "bread" else "生肉"
-                return f"去買{food_name}吃 → 恢復飽足度（需 ${price}）"
+                return f"去買{food_name}吃 → 只恢復飽足度（需 ${price}）"
         return ""
     
     def _get_eat_info(self, villager: dict) -> str:
@@ -1112,7 +1112,7 @@ class VillagerAI:
             if slot and slot.get("item_id") in ("bread", "meat"):
                 item_type = ITEM_TYPES.get(slot.get("item_id"))
                 name = item_type.name if item_type else slot.get("item_id")
-                return f"吃{name} → 恢復飽足度"
+                return f"吃{name} → 只恢復飽足度"
         return ""
     
     def _get_cook_info(self, villager: dict, game_state) -> str:
@@ -1124,7 +1124,7 @@ class VillagerAI:
         inventory = villager.get("inventory", [])
         for slot in inventory:
             if slot and slot.get("item_id") == "meat_raw":
-                return "回家煮生肉 → 恢復飽足度"
+                return "回家煮生肉 → 只恢復飽足度"
         return ""
     
     def _get_pickup_info(self, villager: dict, game_state) -> str:
