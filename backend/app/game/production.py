@@ -204,6 +204,10 @@ class ProductionSystem:
         
         seller_name = seller.get("name", "未知")
         
+        # 檢查賣家是否在睡覺
+        if seller.get("state") == "sleeping":
+            return {"success": False, "reason": f"{seller_name} 在睡覺", "seller_name": seller_name}
+        
         # 計算賣家背包庫存
         seller_inventory = seller.get("inventory", [None] * 5)
         bag_qty = 0

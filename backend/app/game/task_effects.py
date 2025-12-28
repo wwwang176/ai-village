@@ -182,16 +182,23 @@ class BuyToolEffect(TaskEffect):
     """購買工具效果"""
     
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
+        # 找鐵匠
+        game_state = ctx.production.game_state
+        blacksmith = None
+        for v in game_state.villagers.values():
+            if v.get("occupation") == "blacksmith":
+                blacksmith = v
+                break
+        
+        # 檢查鐵匠是否在睡覺
+        if blacksmith and blacksmith.get("state") == "sleeping":
+            logger.info(f"🔨 {villager['name']} 無法購買工具：鐵匠在睡覺")
+            task["fail_reason"] = "買工具：鐵匠在睡覺"
+            return False
+        
         tool_info = ctx.inventory.buy_tool(villager)
         if tool_info:
             logger.info(f"🔨 {villager['name']} 購買了 {tool_info['name']}！(花費 ${tool_info['price']})")
-            # 找鐵匠位置
-            game_state = ctx.production.game_state
-            blacksmith = None
-            for v in game_state.villagers.values():
-                if v.get("occupation") == "blacksmith":
-                    blacksmith = v
-                    break
             
             villager_x = villager.get("x", 0)
             villager_y = villager.get("y", 0)
@@ -296,6 +303,11 @@ class BuyBeerEffect(TaskEffect):
         
         if not bartender:
             logger.info(f"🍺 {villager['name']} 找不到酒保")
+            return True  # 不算失敗，繼續社交
+        
+        # 檢查酒保是否在睡覺
+        if bartender.get("state") == "sleeping":
+            logger.info(f"🍺 {villager['name']} 無法買啤酒：酒保在睡覺")
             return True  # 不算失敗，繼續社交
         
         # 檢查酒保是否在酒吧內
@@ -485,6 +497,15 @@ class BuySheepEffect(TaskEffect):
     
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
         seller_id = task.get("seller_id")
+        
+        # 檢查牧羊人是否在睡覺
+        if seller_id:
+            seller = ctx.production.game_state.get_villager(seller_id)
+            if seller and seller.get("state") == "sleeping":
+                logger.info(f"🐑 {villager['name']} 無法買羊：牧羊人在睡覺")
+                task["fail_reason"] = "買羊：牧羊人在睡覺"
+                return False
+        
         result = ctx.sheep.execute_buy(villager, seller_id)
         if result["success"]:
             logger.info(f"🐑 {villager['name']} 向 {result['seller_name']} 購買了一隻活羊（花費 ${result['price']}）")
@@ -636,6 +657,12 @@ class SellToMerchantEffect(TaskEffect):
             return False
         
         merchant_name = merchant.get('name', '商人')
+        
+        # 檢查商人是否在睡覺
+        if merchant.get("state") == "sleeping":
+            logger.info(f"💰 {villager['name']} 無法賣物品：商人在睡覺")
+            task["fail_reason"] = f"賣給 {merchant_name}：商人在睡覺"
+            return False
         
         # 取得價格
         price = MERCHANT_BUY_PRICES.get(item_id, 5)
@@ -871,6 +898,13 @@ class BuyFromVillagerEffect(TaskEffect):
             return False
         
         seller_name = seller.get('name', '村民')
+        
+        # 檢查賣家是否在睡覺
+        if seller.get("state") == "sleeping":
+            logger.info(f"🛒 {villager['name']} 無法收購：{seller_name} 在睡覺")
+            task["fail_reason"] = f"收購：{seller_name} 在睡覺"
+            return False
+        
         merchant_money = villager.get("money", 0)
         price = MERCHANT_BUY_PRICES.get(item_id, 5)
         

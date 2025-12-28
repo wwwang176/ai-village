@@ -480,11 +480,16 @@ class GameLoop:
         dist = (dx**2 + dy**2) ** 0.5
         
         # 距離 < 8 格時，通知目標村民等待
-        if dist < 8 and target_villager.get("state") not in ["talking", "waiting_social"]:
-            target_villager["state"] = "waiting_social"
-            target_villager["waiting_for"] = villager["id"]
-            target_villager["waiting_since"] = time.time()
-            logger.info(f"👋 {target_villager['name']} 看到 {villager['name']} 走過來，停下等待")
+        # 但如果目標村民在睡覺，不等待並結束任務
+        if dist < 8:
+            if target_villager.get("state") == "sleeping":
+                logger.info(f"😴 {villager['name']} 發現 {target_villager['name']} 在睡覺，不打擾了")
+                return True  # 結束任務
+            elif target_villager.get("state") not in ["talking", "waiting_social"]:
+                target_villager["state"] = "waiting_social"
+                target_villager["waiting_for"] = villager["id"]
+                target_villager["waiting_since"] = time.time()
+                logger.info(f"👋 {target_villager['name']} 看到 {villager['name']} 走過來，停下等待")
         
         # 距離 < 3 格時，任務完成（準備開始對話）
         if dist < 3:
@@ -667,6 +672,11 @@ class GameLoop:
         target_villager = self.game_state.villagers.get(target_villager_id)
         if not target_villager:
             return True
+        
+        # 檢查對方是否在睡覺
+        if target_villager.get("state") == "sleeping":
+            logger.info(f"💬 {villager['name']} 想跟 {target_villager['name']} 聊天，但對方在睡覺")
+            return True  # 任務完成，但不打擾睡覺的人
         
         # 清除等待狀態
         if target_villager.get("waiting_for") == villager["id"]:
@@ -888,7 +898,10 @@ class GameLoop:
                 # 使用床的互動點而非床本身座標
                 interact_pos = self.game_state.target_resolver._get_furniture_interact_pos(bed)
                 tasks.append(Task(type="move", target=interact_pos).to_dict())
-            tasks.append(Task(type="sleep", duration=10).to_dict())
+            # 根據體力決定睡眠時長：體力0%=120秒，體力100%=30秒，最少30秒
+            energy = villager.get("energy", 50)
+            sleep_duration = max(30, int(120 - energy * 0.9))
+            tasks.append(Task(type="sleep", duration=sleep_duration).to_dict())
         
         elif action == "go_plaza":
             # 去廣場
@@ -927,7 +940,7 @@ class GameLoop:
         
         # 如果沒有產生任務，預設閒置
         if not tasks:
-            tasks.append(Task(type="idle", duration=2).to_dict())
+            tasks.append(Task(type="idle", duration=3).to_dict())
         
         return tasks
     
