@@ -514,21 +514,23 @@ class CookEffect(TaskEffect):
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
         inventory = villager.get("inventory", [None] * 5)
         
-        # 把背包裡所有生肉轉換成熟肉
-        total_converted = 0
+        # 1. 先計算總生肉數量並移除所有生肉格子
+        total_raw_meat = 0
         for i, slot in enumerate(inventory):
             if slot and slot.get("item_id") == "meat_raw":
-                qty = slot.get("quantity", 1)
-                villager["inventory"][i] = {"item_id": "meat", "quantity": qty}
-                total_converted += qty
+                total_raw_meat += slot.get("quantity", 1)
+                villager["inventory"][i] = None  # 清空生肉格子
         
-        if total_converted > 0:
-            logger.info(f"🍳 {villager['name']} 用灶台把 {total_converted} 個生肉煮成熟肉")
-            return True
-        else:
+        if total_raw_meat == 0:
             logger.info(f"🍳 {villager['name']} 沒有生肉可煮")
             task["fail_reason"] = "煮飯：沒有生肉可煮"
             return False
+        
+        # 2. 使用 InventorySystem 加入熟肉（會自動合併已有的熟肉，超過10個放地上）
+        location = ctx.inventory.add_item(villager, "meat", total_raw_meat)
+        
+        logger.info(f"🍳 {villager['name']} 用灶台把 {total_raw_meat} 個生肉煮成熟肉（{location}）")
+        return True
 
 
 class PickupEffect(TaskEffect):
