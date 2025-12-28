@@ -782,7 +782,7 @@ class GameLoop:
                     tasks.extend(sheep_tasks)
                 else:
                     # 沒有可剪毛的羊，閒置
-                    tasks.append(Task(type="idle", duration=2).to_dict())
+                    tasks.append(Task(type="idle", duration=6).to_dict())
             
             # 屠夫：買羊 + 殺羊
             elif occupation == "butcher":
@@ -791,14 +791,14 @@ class GameLoop:
                     tasks.extend(butcher_tasks)
                 else:
                     # 無法工作，閒置
-                    tasks.append(Task(type="idle", duration=2).to_dict())
+                    tasks.append(Task(type="idle", duration=6).to_dict())
             
             # 其他職業：一般工作流程
             else:
                 work_target = self.game_state.resolve_action_target(villager, "go_work")
                 if work_target:
                     tasks.append(Task(type="move", target=work_target).to_dict())
-                tasks.append(Task(type="work", duration=5).to_dict())
+                tasks.append(Task(type="work", duration=10).to_dict())
         
         elif action == "go_sell":
             # 去找商人賣東西（根據 item 參數）
@@ -831,7 +831,7 @@ class GameLoop:
         
         elif action == "eat":
             # 直接吃背包裡的食物
-            tasks.append(Task(type="eat", duration=2).to_dict())
+            tasks.append(Task(type="eat", duration=5).to_dict())
         
         elif action == "go_cook":
             # 回家煮生肉
@@ -840,8 +840,8 @@ class GameLoop:
                 # 使用灶台的互動點而非灶台本身座標
                 interact_pos = self.game_state.target_resolver._get_furniture_interact_pos(stove)
                 tasks.append(Task(type="move", target=interact_pos).to_dict())
-                tasks.append(Task(type="cook", duration=3).to_dict())
-                tasks.append(Task(type="eat", duration=2).to_dict())
+                tasks.append(Task(type="cook", duration=6).to_dict())
+                tasks.append(Task(type="eat", duration=5).to_dict())
         
         elif action == "go_pickup":
             # 去撿地上的物品（根據 item 參數）
@@ -936,11 +936,11 @@ class GameLoop:
         
         elif action == "idle":
             # 什麼都不做，閒置一下
-            tasks.append(Task(type="idle", duration=3).to_dict())
+            tasks.append(Task(type="idle", duration=6).to_dict())
         
         # 如果沒有產生任務，預設閒置
         if not tasks:
-            tasks.append(Task(type="idle", duration=3).to_dict())
+            tasks.append(Task(type="idle", duration=6).to_dict())
         
         return tasks
     

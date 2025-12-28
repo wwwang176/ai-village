@@ -144,7 +144,7 @@ class SheepSystem:
             tasks.append({
                 "type": "tend_sheep",
                 "sheep_id": sheep["id"],
-                "duration": 3
+                "duration": 6
             })
             logger.info(f"🐑 {villager['name']} 準備去照顧羊 {sheep['id']}")
             return tasks
@@ -159,7 +159,7 @@ class SheepSystem:
             tasks.append({
                 "type": "shear_sheep",
                 "sheep_id": sheep["id"],
-                "duration": 5
+                "duration": 10
             })
             logger.info(f"🐑 {villager['name']} 準備去剪羊 {sheep['id']} 的毛")
             return tasks
@@ -185,7 +185,7 @@ class SheepSystem:
             tasks.append({
                 "type": "slaughter_sheep",
                 "sheep_id": sheep["id"],
-                "duration": 6
+                "duration": 12
             })
             logger.info(f"🔪 {villager['name']} 準備去宰殺羊 {sheep['id']}")
         else:
