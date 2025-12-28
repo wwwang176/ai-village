@@ -50,8 +50,8 @@ export const ITEM_ICONS = {
   livestock: '🐄',
   ore: '🪨',
   wood: '🪵',
-  wool: '🧶',
-  hide: '☁️',
+  wool: '☁️',
+  hide: '🟫',
   // 中間產物
   flour: '🌫️',
   meat_raw: '🥩',

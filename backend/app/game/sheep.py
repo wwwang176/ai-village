@@ -47,7 +47,7 @@ class SheepSystem:
                 if sheep["wool_grow_time"] >= 180:
                     sheep["wool_ready"] = True
                     sheep["wool_grow_time"] = 0
-                    logger.info(f"🧶 羊 {sheep['id']} 的毛長好了，可以剪毛")
+                    logger.info(f"☁️ 羊 {sheep['id']} 的毛長好了，可以剪毛")
             
             # 4. 繁殖檢查（每 30 秒檢查一次）
             if current_time - sheep.get("last_breed_check", 0) > 30:

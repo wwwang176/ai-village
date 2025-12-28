@@ -267,9 +267,9 @@ export class HistoryChart {
       wood: '🪵 木材',
       ore: '🪨 礦石',
       iron: '🔩 鐵錠',
-      wool: '🧶 羊毛',
+      wool: '☁️ 羊毛',
       cloth: '🧵 布料',
-      hide: '☁️ 獸皮',
+      hide: '🟫 獸皮',
       leather: '🟤 皮革',
       furniture: '🪑 家具',
       clothes: '👕 衣服'

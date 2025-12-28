@@ -436,10 +436,10 @@ class ShearSheepEffect(TaskEffect):
         result = ctx.sheep.execute_shear(villager, sheep_id, ctx.production.use_tool)
         if result["success"]:
             location = ctx.inventory.add_item(villager, "wool", result["wool_qty"])
-            logger.info(f"🧶 {villager['name']} 剪了羊 {sheep_id} 的毛，獲得羊毛 x{result['quantity']}（{location}）")
+            logger.info(f"☁️ {villager['name']} 剪了羊 {sheep_id} 的毛，獲得羊毛 x{result['quantity']}（{location}）")
             return True
         else:
-            logger.info(f"🧶 {villager['name']} 剪毛失敗：{result['reason']}")
+            logger.info(f"☁️ {villager['name']} 剪毛失敗：{result['reason']}")
             task["fail_reason"] = f"剪羊毛：{result['reason']}"
             return False
 
@@ -493,7 +493,7 @@ class SlaughterSheepEffect(TaskEffect):
                     "from_pos": {"x": villager_x + 0.5, "y": villager_y - 1},
                     "to_pos": {"x": villager_x, "y": villager_y},
                     "item_id": "hide",
-                    "icon": "☁️",
+                    "icon": "🟫",
                     "quantity": result["hide_qty"]
                 }
             })

@@ -28,11 +28,11 @@ ITEM_TYPES = {
         category="material", stack_max=10, price=2
     ),
     "wool": ItemType(
-        id="wool", name="羊毛", icon="🧶",
+        id="wool", name="羊毛", icon="☁️",
         category="material", stack_max=10, price=3
     ),
     "hide": ItemType(
-        id="hide", name="羊皮", icon="☁️",
+        id="hide", name="羊皮", icon="🟫",
         category="material", stack_max=10, price=4
     ),
     
