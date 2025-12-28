@@ -1,11 +1,10 @@
 /**
  * 遊戲主類 - 管理所有遊戲系統
- * 支援離線模式和後端模式
+ * 後端驅動模式
  */
 
 import { Renderer } from '../render/Renderer.js';
 import { Camera } from '../render/Camera.js';
-import { MapGenerator } from '../world/MapGenerator.js';
 import { GameMap } from '../world/GameMap.js';
 import { TimeSystem } from './TimeSystem.js';
 import { VillagerManager } from '../entities/VillagerManager.js';
@@ -27,7 +26,6 @@ export class Game {
       mapWidth: config.mapWidth || 64,
       mapHeight: config.mapHeight || 64,
       villagerCount: config.villagerCount || 29, // 29 NPC + 1 玩家 = 30
-      useBackend: config.useBackend || false,    // 是否使用後端
     };
     
     this.isRunning = false;
@@ -83,12 +81,8 @@ export class Game {
       mapHeight: this.config.mapHeight * this.config.tileSize
     });
     
-    // 根據模式初始化
-    if (this.config.useBackend) {
-      await this.initWithBackend();
-    } else {
-      await this.initOffline();
-    }
+    // 使用後端模式初始化
+    await this.initWithBackend();
     
     // 初始化渲染器
     this.renderer = new Renderer(this.ctx, this.camera, this.config.tileSize);
@@ -114,17 +108,15 @@ export class Game {
       }
     }, 500);
     
-    // 初始化歷史圖表（僅後端模式）
-    if (this.config.useBackend) {
-      this.historyChart = new HistoryChart(this.api);
-      
-      // 每 30 秒自動更新圖表
-      setInterval(() => {
-        if (this.historyChart) {
-          this.historyChart.update();
-        }
-      }, 30000);
-    }
+    // 初始化歷史圖表
+    this.historyChart = new HistoryChart(this.api);
+    
+    // 每 30 秒自動更新圖表
+    setInterval(() => {
+      if (this.historyChart) {
+        this.historyChart.update();
+      }
+    }, 30000);
     
     // 初始化天氣特效
     this.weatherEffect = new WeatherEffect();
@@ -216,41 +208,7 @@ export class Game {
     }
   }
   
-  /**
-   * 離線模式初始化
-   */
-  async initOffline() {
-    console.log('🎮 離線模式');
-    
-    // 生成地圖
-    console.log('🗺️ 生成地圖中...');
-    const mapGenerator = new MapGenerator({
-      width: this.config.mapWidth,
-      height: this.config.mapHeight,
-      tileSize: this.config.tileSize
-    });
-    const mapData = mapGenerator.generate();
-    
-    this.map = new GameMap(mapData, this.config.tileSize);
-    console.log(`✅ 地圖生成完成: ${this.map.buildings.length} 棟建築物`);
-    
-    // 初始化時間系統
-    this.timeSystem = new TimeSystem();
-    
-    // 初始化村民管理器
-    this.villagerManager = new VillagerManager(this.map);
-    this.villagerManager.generateVillagers(this.config.villagerCount, this.map.buildings);
-    console.log(`✅ 生成 ${this.villagerManager.villagers.length} 位村民`);
-    
-    // 初始化玩家
-    const playerSpawn = this.map.getPlayerSpawnPoint();
-    this.player = new Player({
-      x: playerSpawn.x,
-      y: playerSpawn.y,
-      name: '玩家'
-    });
-  }
-  
+
   /**
    * 後端模式初始化 (WebSocket)
    */
@@ -268,9 +226,8 @@ export class Game {
       await this.waitForInit();
       
     } catch (error) {
-      console.error('後端連接失敗，切換到離線模式:', error);
-      this.config.useBackend = false;
-      await this.initOffline();
+      console.error('❌ 後端連接失敗:', error);
+      throw new Error('無法連接到後端伺服器，請確認後端服務已啟動');
     }
   }
   
@@ -640,7 +597,7 @@ export class Game {
    * 更新遊戲狀態
    */
   update(deltaTime) {
-    // 無論離線或後端模式，都讓前端平滑更新時間
+    // 前端平滑更新時間
     // 後端 tick 會定期校正時間，前端在兩次 tick 之間平滑遞增
     this.timeSystem.update(deltaTime);
     
@@ -650,13 +607,8 @@ export class Game {
     // 更新鏡頭（僅在跟隨模式下跟隨村民）
     this.camera.update();
     
-    // 離線模式：本地更新村民
-    // 後端模式：村民由後端控制，本地只做插值動畫
-    if (!this.config.useBackend) {
-      this.villagerManager.update(deltaTime, this.map, this.timeSystem);
-    } else {
-      this.villagerManager.updateAnimation(deltaTime);
-    }
+    // 村民由後端控制，本地只做插值動畫
+    this.villagerManager.updateAnimation(deltaTime);
     
     // 更新 UI
     this.uiManager.update(this.selectedVillager, this.timeSystem);
