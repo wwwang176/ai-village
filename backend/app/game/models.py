@@ -203,6 +203,8 @@ class Sheep:
     wool_grow_time: float = 0
     last_move_time: float = 0
     last_breed_check: float = 0
+    care_timer: float = 0        # 累計未照顧時間
+    needs_care: bool = False     # 是否需要照顧
     
     def to_dict(self) -> dict:
         return {
@@ -216,7 +218,9 @@ class Sheep:
             "wool_ready": self.wool_ready,
             "wool_grow_time": self.wool_grow_time,
             "last_move_time": self.last_move_time,
-            "last_breed_check": self.last_breed_check
+            "last_breed_check": self.last_breed_check,
+            "care_timer": self.care_timer,
+            "needs_care": self.needs_care
         }
     
     @classmethod
@@ -232,7 +236,9 @@ class Sheep:
             wool_ready=data.get("wool_ready", False),
             wool_grow_time=data.get("wool_grow_time", 0),
             last_move_time=data.get("last_move_time", 0),
-            last_breed_check=data.get("last_breed_check", 0)
+            last_breed_check=data.get("last_breed_check", 0),
+            care_timer=data.get("care_timer", 0),
+            needs_care=data.get("needs_care", False)
         )
 
 

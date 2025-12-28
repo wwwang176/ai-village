@@ -172,6 +172,10 @@ export class EntityRenderer extends BaseRenderer {
     if (villager.state === 'shear_sheep') {
       this.renderWorkParticles(cx, screenY + 5, 'shepherd');
     }
+    // 照顧羊時顯示粒子動畫
+    if (villager.state === 'tend_sheep') {
+      this.renderWorkParticles(cx, screenY + 5, 'tender');
+    }
     // 屠宰羊時顯示粒子動畫
     if (villager.state === 'slaughter_sheep') {
       this.renderWorkParticles(cx, screenY + 5, 'butcher');
@@ -195,6 +199,7 @@ export class EntityRenderer extends BaseRenderer {
       'miner': '#FFA500',      // 橙黃火花
       'lumberjack': '#DEB887', // 淺棕木屑
       'shepherd': '#FFFFFF',   // 白色羊毛
+      'tender': '#90EE90',     // 淺綠色（照顧）
       'butcher': '#8B0000'     // 暗紅色血滴
     };
     const color = colors[occupation] || '#FFFFFF';

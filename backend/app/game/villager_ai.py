@@ -833,20 +833,25 @@ class VillagerAI:
         return False
     
     def _can_shepherd_work(self, villager: dict, game_state) -> bool:
-        """檢查牧羊人是否能工作（有可剪毛的成羊）"""
+        """檢查牧羊人是否能工作（有需要照顧的羊或有可剪毛的羊）"""
         owned_sheep = game_state.get_sheep_by_owner(villager["id"])
         
-        # 檢查是否有可剪毛的成羊（成羊且羊毛已長好）
+        # 1. 檢查是否有需要照顧的羊
+        needs_care_sheep = [s for s in owned_sheep if s.get("needs_care")]
+        if needs_care_sheep:
+            logger.info(f"🔍 _can_work: {villager['name']}(shepherd) 有 {len(needs_care_sheep)} 隻需要照顧的羊")
+            return True
+        
+        # 2. 檢查是否有可剪毛的成羊
         shearable_sheep = [
             s for s in owned_sheep 
             if s.get("is_adult") and s.get("wool_ready", False)
         ]
-        
         if shearable_sheep:
             logger.info(f"🔍 _can_work: {villager['name']}(shepherd) 有 {len(shearable_sheep)} 隻可剪毛的羊")
             return True
         
-        logger.info(f"🔍 _can_work: {villager['name']}(shepherd) 沒有可剪毛的羊")
+        logger.info(f"🔍 _can_work: {villager['name']}(shepherd) 沒有需要照顧或可剪毛的羊")
         return False
     
     def _can_buy_food(self, villager: dict, game_state) -> bool:

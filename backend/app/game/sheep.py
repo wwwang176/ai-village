@@ -32,7 +32,18 @@ class SheepSystem:
                 sheep["last_move_time"] = current_time
                 self.move_randomly(sheep)
             
-            # 2. 小羊成長（每遊戲天檢查一次）
+            # 2. 照顧計時（所有羊都需要定期照顧）
+            sheep["care_timer"] = sheep.get("care_timer", 0) + delta_time
+            if sheep["care_timer"] >= 65:  # 65 秒需要照顧一次
+                if not sheep.get("needs_care"):
+                    sheep["needs_care"] = True
+                    logger.info(f"🐑 羊 {sheep['id']} 需要照顧了！")
+            
+            # 3. 只有被照顧過的羊才會成長/長毛
+            if sheep.get("needs_care"):
+                continue  # 需要照顧，停止成長
+            
+            # 4. 小羊成長（每遊戲天檢查一次）
             if not sheep["is_adult"]:
                 # 簡化：每 60 秒遊戲時間 = 1 天
                 sheep["age_days"] += delta_time / 60
@@ -40,8 +51,8 @@ class SheepSystem:
                     sheep["is_adult"] = True
                     logger.info(f"🐑 小羊 {sheep['id']} 長大成成羊了！")
             
-            # 3. 成羊長毛（每 3 天可以剪一次）
-            if sheep["is_adult"] and not sheep["wool_ready"]:
+            # 5. 成羊長毛（每 3 天可以剪一次）
+            elif not sheep["wool_ready"]:
                 # 簡化：每 180 秒遊戲時間 = 可以剪毛
                 sheep["wool_grow_time"] = sheep.get("wool_grow_time", 0) + delta_time
                 if sheep["wool_grow_time"] >= 180:
@@ -49,7 +60,7 @@ class SheepSystem:
                     sheep["wool_grow_time"] = 0
                     logger.info(f"☁️ 羊 {sheep['id']} 的毛長好了，可以剪毛")
             
-            # 4. 繁殖檢查（每 30 秒檢查一次）
+            # 6. 繁殖檢查（每 30 秒檢查一次）
             if current_time - sheep.get("last_breed_check", 0) > 30:
                 sheep["last_breed_check"] = current_time
                 self.check_breeding(sheep)
@@ -119,28 +130,40 @@ class SheepSystem:
     # ==================== 牧羊人工作任務 ====================
     
     def create_shepherd_work_tasks(self, villager: dict) -> List[dict]:
-        """建立牧羊人的工作任務（剪毛）"""
+        """建立牧羊人的工作任務（優先照顧羊，其次剪毛）"""
         tasks = []
+        owned_sheep = self.game_state.get_sheep_by_owner(villager["id"])
         
-        # 找到可以剪毛的羊
-        sheep_ready = self.game_state.get_sheep_ready_for_shearing(villager["id"])
-        
-        if not sheep_ready:
+        # 1. 優先找需要照顧的羊
+        needs_care_sheep = [s for s in owned_sheep if s.get("needs_care")]
+        if needs_care_sheep:
+            # 選擇最近的一隻需要照顧的羊
+            sheep = min(needs_care_sheep, key=lambda s: 
+                (s["x"] - villager["x"])**2 + (s["y"] - villager["y"])**2
+            )
+            tasks.append({
+                "type": "tend_sheep",
+                "sheep_id": sheep["id"],
+                "duration": 3
+            })
+            logger.info(f"🐑 {villager['name']} 準備去照顧羊 {sheep['id']}")
             return tasks
         
-        # 選擇最近的一隻羊
-        sheep = min(sheep_ready, key=lambda s: 
-            (s["x"] - villager["x"])**2 + (s["y"] - villager["y"])**2
-        )
+        # 2. 其次找可剪毛的羊
+        sheep_ready = self.game_state.get_sheep_ready_for_shearing(villager["id"])
+        if sheep_ready:
+            # 選擇最近的一隻羊
+            sheep = min(sheep_ready, key=lambda s: 
+                (s["x"] - villager["x"])**2 + (s["y"] - villager["y"])**2
+            )
+            tasks.append({
+                "type": "shear_sheep",
+                "sheep_id": sheep["id"],
+                "duration": 5
+            })
+            logger.info(f"🐑 {villager['name']} 準備去剪羊 {sheep['id']} 的毛")
+            return tasks
         
-        # 剪毛任務（會自動追蹤羊的位置）
-        tasks.append({
-            "type": "shear_sheep",
-            "sheep_id": sheep["id"],
-            "duration": 5
-        })
-        
-        logger.info(f"🐑 {villager['name']} 準備去剪羊 {sheep['id']} 的毛")
         return tasks
     
     # ==================== 屠夫工作任務 ====================
@@ -218,6 +241,26 @@ class SheepSystem:
         return tasks
     
     # ==================== 執行任務 ====================
+    
+    def execute_tend(self, villager: dict, sheep_id: str) -> dict:
+        """執行照顧羊
+        
+        返回: {"success": bool, "reason": str}
+        """
+        sheep = self.game_state.sheep.get(sheep_id)
+        
+        if not sheep:
+            return {"success": False, "reason": "找不到這隻羊"}
+        
+        if sheep["owner_id"] != villager["id"]:
+            return {"success": False, "reason": "這不是你的羊"}
+        
+        # 照顧成功，重置計時器
+        sheep["needs_care"] = False
+        sheep["care_timer"] = 0
+        
+        return {"success": True, "sheep_id": sheep_id}
+    
     
     def execute_shear(self, villager: dict, sheep_id: str, use_tool_func) -> dict:
         """執行剪羊毛

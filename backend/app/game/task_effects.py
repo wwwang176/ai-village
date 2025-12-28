@@ -436,12 +436,48 @@ class ShearSheepEffect(TaskEffect):
         result = ctx.sheep.execute_shear(villager, sheep_id, ctx.production.use_tool)
         if result["success"]:
             location = ctx.inventory.add_item(villager, "wool", result["wool_qty"])
+            
+            # 取得羊的位置，廣播羊毛從羊飛到牧羊人的動畫
+            sheep = ctx.sheep.game_state.sheep.get(sheep_id)
+            if sheep:
+                sheep_x = sheep.get("x", villager.get("x", 0))
+                sheep_y = sheep.get("y", villager.get("y", 0))
+                villager_x = villager.get("x", 0)
+                villager_y = villager.get("y", 0)
+                
+                ctx.queue_broadcast({
+                    "type": "trade_animation",
+                    "data": {
+                        "from_pos": {"x": sheep_x, "y": sheep_y},
+                        "to_pos": {"x": villager_x, "y": villager_y},
+                        "item_id": "wool",
+                        "icon": "☁️",
+                        "quantity": result["wool_qty"]
+                    }
+                })
+            
             logger.info(f"☁️ {villager['name']} 剪了羊 {sheep_id} 的毛，獲得羊毛 x{result['quantity']}（{location}）")
             return True
         else:
             logger.info(f"☁️ {villager['name']} 剪毛失敗：{result['reason']}")
             task["fail_reason"] = f"剪羊毛：{result['reason']}"
             return False
+
+
+class TendSheepEffect(TaskEffect):
+    """照顧羊效果"""
+    
+    def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
+        sheep_id = task.get("sheep_id")
+        result = ctx.sheep.execute_tend(villager, sheep_id)
+        if result["success"]:
+            logger.info(f"🐑 {villager['name']} 照顧了羊 {sheep_id}")
+            return True
+        else:
+            logger.info(f"🐑 {villager['name']} 照顧羊失敗：{result['reason']}")
+            task["fail_reason"] = f"照顧羊：{result['reason']}"
+            return False
+
 
 
 class BuySheepEffect(TaskEffect):
@@ -935,6 +971,7 @@ TASK_EFFECTS: Dict[str, TaskEffect] = {
     "drop_one_item": DropItemEffect(),
     "drop_item": DropForFoodEffect(),
     "shear_sheep": ShearSheepEffect(),
+    "tend_sheep": TendSheepEffect(),
     "buy_sheep": BuySheepEffect(),
     "slaughter_sheep": SlaughterSheepEffect(),
     "cook": CookEffect(),
