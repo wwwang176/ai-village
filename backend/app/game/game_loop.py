@@ -812,7 +812,7 @@ class GameLoop:
                         type="sell_to_merchant",
                         merchant_id=sell_info["merchant_id"],
                         item=sell_info["item"],
-                        duration=2
+                        duration=5
                     ).to_dict())
         
         elif action == "go_buy_food":
@@ -826,7 +826,7 @@ class GameLoop:
                         type="buy_food",
                         seller_id=food_info["seller_id"],
                         food_item=food_info["food_item"],
-                        duration=2
+                        duration=5
                     ).to_dict())
         
         elif action == "eat":
@@ -862,7 +862,7 @@ class GameLoop:
                         type="buy_material",
                         supplier_id=material_info["supplier_id"],
                         material=material_info["material"],
-                        duration=2
+                        duration=5
                     ).to_dict())
         
         elif action == "go_buy_tool":
@@ -874,7 +874,7 @@ class GameLoop:
                     break
             if blacksmith_villager:
                 tasks.append(Task(type="move_to_villager", target=(blacksmith_villager["x"], blacksmith_villager["y"]), target_villager_id=blacksmith_villager["id"]).to_dict())
-                tasks.append(Task(type="buy_tool", duration=2).to_dict())
+                tasks.append(Task(type="buy_tool", duration=5).to_dict())
         
         elif action == "go_buy_goods":
             # 商人主動去收購物品（根據 buy_target 參數）
@@ -888,7 +888,7 @@ class GameLoop:
                         type="buy_from_villager",
                         seller_id=goods_info["seller_id"],
                         item=goods_info["item"],
-                        duration=2
+                        duration=5
                     ).to_dict())
         
         elif action == "go_sleep":
@@ -928,11 +928,11 @@ class GameLoop:
                 target_villager = self.game_state.get_villager(target_id)
                 if target_villager:
                     tasks.append(Task(type="move", target=(target_villager["x"], target_villager["y"])).to_dict())
-                    tasks.append(Task(type="initiate_chat", target_villager_id=target_id, duration=3).to_dict())
+                    tasks.append(Task(type="initiate_chat", target_villager_id=target_id, duration=6).to_dict())
         
         elif action == "buy_beer":
             # 跟酒保買啤酒
-            tasks.append(Task(type="buy_beer", duration=2).to_dict())
+            tasks.append(Task(type="buy_beer", duration=5).to_dict())
         
         elif action == "idle":
             # 什麼都不做，閒置一下

@@ -234,7 +234,7 @@ class SheepSystem:
         tasks.append({
             "type": "buy_sheep",
             "seller_id": shepherd["id"],
-            "duration": 3
+            "duration": 6
         })
         
         logger.info(f"🐑 {buyer['name']} 準備向 {shepherd['name']} 購買活羊")
