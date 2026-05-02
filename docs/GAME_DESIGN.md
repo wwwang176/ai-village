@@ -16,29 +16,35 @@
 ## 🗺️ 世界設定
 
 ### 村莊規模
-- **地圖大小**: 64x64 或 80x80 格 (Tile-based)
-- **建築物數量**: 10 棟
-- **村民人數**: 30 人 (含玩家)
+- **地圖大小**: 96x96 格 (Tile-based)
+- **建築物數量**: 28 棟（14 棟固定職業建築 + 14 棟民宅，每個 NPC 各一棟）
+- **村民人數**: 14 個 NPC（每職業一人）+ 玩家
 
 ### 建築物配置
 
-#### 必要建築 (5 棟，固定生成)
+#### 固定職業建築（14 棟，每職業一棟）
 | 建築 | 功能 | 相關職業 |
 |------|------|----------|
-| 酒館 | 社交中心、買酒、聽八卦 | 酒保 |
-| 教堂 | 祈禱、婚禮、葬禮 | 神父 |
-| 廣場 | 社交、公告、集會 | 商人 |
-| 鐵匠舖 | 製造/修理工具 | 鐵匠 |
-| 水井 | 公共設施、社交點 | - |
+| 農舍 (farm) | 種田生產穀物 | 農夫 |
+| 磨坊 (mill) | 將穀物磨成麵粉 | 磨坊主 |
+| 麵包坊 (bakery) | 烤麵包 | 麵包師 |
+| 屠夫鋪 (butcher_shop) | 宰殺羊隻產出生肉與羊皮 | 屠夫 |
+| 牧場 (pasture) | 養羊、剪羊毛 | 牧羊人 |
+| 礦場 (mine) | 挖鐵礦 | 礦工 |
+| 伐木場 (lumber_camp) | 砍木材 | 伐木工 |
+| 鐵匠舖 (blacksmith) | 煉鐵錠、賣工具 | 鐵匠 |
+| 木工坊 (carpentry) | 製作家具 | 木匠 |
+| 織工坊 (weaver_shop) | 將羊毛織成布料 | 織工 |
+| 製革坊 (tannery) | 將羊皮鞣成皮革 | 皮革匠 |
+| 裁縫店 (tailor_shop) | 製作衣服 | 裁縫 |
+| 酒館 (tavern) | 社交中心、賣啤酒、聽八卦 | 酒保 |
+| 廣場 (plaza) | 社交、商人駐點、集會 | 商人 |
 
-#### 隨機建築 (5 棟，從池中抽選)
-- 民宅 (村民住所)
-- 麵包坊
-- 農舍
-- 旅店
-- 裁縫店
-- 磨坊
-- 藥草店
+#### 民宅（14 棟，每個 NPC 一棟）
+- 每個 NPC 都會自動分配一棟住所，內含床、灶台等基本家具
+
+#### 🔮 未來功能（規劃中）
+- **教堂** + 神父職業：祈禱、婚禮、葬禮等社交活動
 
 ### 地形元素
 - **可通行**: 道路、草地、地板、門
@@ -56,43 +62,53 @@ Villager = {
   // 基本資料
   id: "villager_001",
   name: "艾德蒙",
-  age: 32,
-  gender: "male",
-  occupation: "blacksmith",  // 職業
-  residence: "building_007", // 住所
-  
+  occupation: "blacksmith",  // 14 種職業之一
+
+  // 位置
+  x: 45,
+  y: 32,
+
   // 狀態數值 (0-100)
   stats: {
     energy: 80,      // 體力
     satiety: 70,     // 飽足度
     social: 50,      // 社交需求
-    happiness: 65,   // 心情度
-    health: 90       // 健康
+    happiness: 65    // 心情度
   },
-  
-  // 性格特質 (2-3個)
-  personality: ["friendly", "hardworking", "curious"],
-  
-  // 記憶系統
+
+  // 金錢
+  money: 50,
+
+  // 性格特質（7 維度各抽一個，共 4 個有效特質）
+  personality: ["extrovert", "friendly", "trusting", "early_bird"],
+
+  // 喜好系統（生成時隨機分配）
+  preferences: {
+    hobbies: ["釣魚", "下棋"],
+    favorite_foods: ["麵包"],
+    dislikes: ["吵雜"]
+  },
+
+  // 記憶系統（對話結束後 AI 生成的摘要）
   memories: [
-    { event: "與瑪莉在水井聊天", timestamp: 1234567, sentiment: "positive" },
-    { event: "被約翰拒絕借錢", timestamp: 1234000, sentiment: "negative" }
+    { with: "瑪莉", summary: "在廣場聊到天氣，雙方情緒愉快" }
   ],
-  
-  // 日程傾向
-  schedule: {
-    wakeUpTime: 6,    // 早上6點起床
-    sleepTime: 22,    // 晚上10點睡覺
-    workHours: [8, 12, 14, 18]  // 工作時段
+
+  // 關係（dict by villager_id）
+  relationships: {
+    "villager_002": { affection: 35, familiarity: 50 }
   },
-  
+
+  // 背包（5 格，每格物品或工具）
+  inventory: [
+    { item_id: "hammer", durability: 75 },
+    { item_id: "iron", quantity: 3 },
+    null, null, null
+  ],
+
   // 當前狀態
-  currentState: {
-    action: "walking",           // idle, walking, interacting, sleeping
-    targetPosition: { x: 45, y: 32 },
-    path: [],                    // A* 計算的路徑
-    currentActivity: null        // 正在進行的活動
-  }
+  state: "idle",   // idle, walking, working, sleeping, talking, waiting_social
+  action_history: [...]  // 最近行為與成功/失敗結果
 }
 ```
 
@@ -116,27 +132,28 @@ Relationship = {
 }
 ```
 
-### 性格特質池
+### 性格特質池（7 維度對立系統）
 
-#### 正面特質
-- `friendly` - 友善：更常主動社交
-- `hardworking` - 勤勞：工作時間更長
-- `generous` - 慷慨：願意幫助他人
-- `optimistic` - 樂觀：心情度下降較慢
-- `curious` - 好奇：喜歡探索和聊天
+每個村民從 7 個維度中各抽一個正面或反面特質，共 4 個有效特質。
 
-#### 負面特質
-- `greedy` - 貪婪：重視金錢
-- `lazy` - 懶惰：經常休息
-- `suspicious` - 多疑：信任他人較慢
-- `grumpy` - 暴躁：容易起衝突
-- `gossip` - 愛八卦：會傳播消息
+| 維度 | 正面 | 反面 | 影響 |
+|------|------|------|------|
+| **social** | `extrovert`（外向）喜歡社交，常去廣場 | `introvert`（內向）偏好獨處，專注工作 | 聊天觸發機率 ×2 / ×0.5 |
+| **temper** | `friendly`（友善）樂於助人 | `grumpy`（暴躁）討厭被打擾 | 聊天後好感度 +2 / -1 |
+| **trust** | `trusting`（信任）容易相信他人 | `suspicious`（多疑）對陌生人警戒 | 熟悉度提升 ×1.5 / ×0.7 |
+| **romance** | `romantic`（浪漫）容易產生好感 | `reserved`（矜持）感情內斂 | 異性好感度 ×1.5 / ×0.7 |
+| **courage** | `brave`（勇敢）狀態偏低也敢撐 | `timid`（膽小）狀態稍低就想處理 | 對陌生人搭話機率 ×2 / ×0.3 |
+| **outlook** | `optimistic`（樂觀）傾向繼續工作 | `pessimistic`（悲觀）傾向先滿足需求 | 心情變化幅度 |
+| **schedule** | `early_bird`（早起鳥）白天積極 | `night_owl`（夜貓子）夜間活躍 | 工作效率 / 體力下降速度（見下表） |
 
-#### 中性特質
-- `introvert` - 內向：社交需求較低
-- `extrovert` - 外向：社交需求較高
-- `romantic` - 浪漫：重視愛情關係
-- `religious` - 虔誠：常去教堂
+**作息性格效果（schedule 維度）**
+
+| 效果 | 時段 | early_bird | night_owl |
+|------|------|------------|-----------|
+| 工作效率 | 白天（6:00-18:00） | +5% | -5% |
+|          | 晚上（18:00-6:00） | -5% | +5% |
+| 體力下降 | 白天 | ×0.8（慢） | ×1.2（快） |
+|          | 晚上 | ×1.2（快） | ×0.8（慢） |
 
 ---
 
@@ -197,24 +214,18 @@ MapObject = {
 
 ### 物件類型清單
 
-#### 功能型物件 (滿足需求)
+#### 功能型物件（滿足需求）
 | 物件 | 動作 | 效果 |
 |------|------|------|
 | 床 | 睡覺 | 恢復體力 |
-| 餐桌 | 進食 | 降低飢餓 |
-| 水井 | 打水 | 取得水、社交機會 |
-| 工作台 | 工作 | 賺錢 |
-| 椅子 | 坐下 | 輕微恢復 |
-| 爐火 | 取暖 | 冬季恢復健康 |
+| 灶台 | 煮生肉 | 將生肉煮成熟肉 |
+| 工作建築 | 工作 | 生產物品、賺錢 |
 
-#### 社交型物件 (觸發互動)
+#### 社交型物件（觸發互動）
 | 物件 | 動作 | 社交效果 |
 |------|------|----------|
-| 酒館吧台 | 買酒、聊天 | 高社交機會 |
-| 教堂長椅 | 祈禱 | 遇見其他村民 |
-| 廣場攝位 | 社交 | 對話觸發點 |
-| 公共長凳 | 休息 | 隨機搭話 |
-| 公告板 | 閱讀 | 獲取資訊 |
+| 酒館吧台 | 跟酒保買啤酒、和其他人聊天 | 高社交機會（廣場+酒吧內相遇距離放寬至 3 格） |
+| 廣場 | 自由聊天 | 對話觸發點（同上） |
 
 ---
 
@@ -226,95 +237,55 @@ MapObject = {
 3. 發生突發事件時
 4. 玩家主動與 NPC 對話時
 
-### API 請求格式
+### 實際呼叫方式
 
-```javascript
-// 行為決策請求
-{
-  "type": "behavior_decision",
-  "villager": {
-    "name": "艾德蒙",
-    "personality": ["friendly", "hardworking"],
-    "currentStats": {
-      "energy": 60,
-      "satiety": 60,
-      "social": 30
-    },
-    "recentMemories": [
-      "早上在水井遇到瑪莉，聊了天氣"
-    ]
-  },
-  "currentTime": "14:30",
-  "currentLocation": "鐵匠舖",
-  "availableActions": [
-    { "id": "continue_work", "description": "繼續打鐵" },
-    { "id": "go_tavern", "description": "去酒館休息" },
-    { "id": "go_home", "description": "回家吃東西" },
-    { "id": "visit_church", "description": "去教堂祈禱" }
-  ],
-  "nearbyVillagers": ["約翰 (朋友)", "瑪莉 (鄰居)"]
-}
+決策呼叫使用 OpenAI **chat.completions API + function calling (tools)**，動作集合用 enum 約束 AI 只能從規則層核可的選項中選擇。
 
-// API 回應格式
-{
-  "chosenAction": "go_tavern",
-  "reason": "工作了一整個早上，想去酒館放鬆一下，也許能遇到朋友",
-  "mood": "tired_but_content"
-}
+```python
+# backend/app/game/villager_ai.py - 決策呼叫
+response = await self.client.chat.completions.create(
+    model="gpt-5.4-nano",
+    messages=[
+        {"role": "system", "content": SYSTEM_PROMPT},  # 靜態,內含產業鏈與行為原則
+        {"role": "user", "content": destination_prompt}  # 含村民狀態、可用動作、記憶
+    ],
+    tools=[{
+        "type": "function",
+        "function": {
+            "name": "choose_action",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": available_actions},
+                    "reason": {"type": "string", "description": "選擇原因（15 字內）"},
+                    # 視動作需要可能還有 item / target / buy_target
+                },
+                "required": ["action", "reason"],
+            }
+        }
+    }],
+    tool_choice={"type": "function", "function": {"name": "choose_action"}},
+    max_completion_tokens=150
+)
+result = json.loads(response.choices[0].message.tool_calls[0].function.arguments)
+# {"action": "go_buy_food", "reason": "飽足偏低先買麵包"}
 ```
 
-### 社交互動請求
+可選動作清單由規則層決定（見 `_get_available_destination_actions`）：
+`go_work / go_buy_material / go_buy_food / go_buy_tool / go_sell / eat / go_cook / go_pickup / go_sleep / go_plaza / go_bar / wander / talk / buy_beer / idle`
 
-```javascript
-// 兩人相遇時的對話請求
-{
-  "type": "social_interaction",
-  "location": "水井",
-  "ambiance": "peaceful_morning",
-  "participants": [
-    {
-      "name": "艾德蒙",
-      "personality": ["friendly"],
-      "relationshipWith_other": { "affection": 35, "tags": ["friend"] },
-      "currentMood": "content"
-    },
-    {
-      "name": "瑪莉",
-      "personality": ["curious", "gossip"],
-      "relationshipWith_other": { "affection": 40, "tags": ["friend"] },
-      "currentMood": "excited"
-    }
-  ],
-  "recentVillageEvents": ["昨天有旅行商人來訪"]
-}
+### 對話與相遇生成
 
-// API 回應格式
-{
-  "willInteract": true,
-  "initiator": "瑪莉",
-  "dialogue": [
-    { "speaker": "瑪莉", "text": "艾德蒙！你聽說了嗎？昨天那個商人帶來了東方的香料！" },
-    { "speaker": "艾德蒙", "text": "真的嗎？價格如何？" },
-    { "speaker": "瑪莉", "text": "貴得很！不過聽說老約翰買了一些..." }
-  ],
-  "relationshipChange": {
-    "affection": +2,
-    "familiarity": +1
-  },
-  "newMemory": "在水井與瑪莉聊到旅行商人的事"
-}
-```
+兩村民相遇時呼叫另一個 chat.completions（無 tools），生成 JSON 形式的對話內容，傳入雙方狀態、性格、心情、記憶與村莊賣家清單。對話結束後再呼叫一次生成總結與好感變化（-3 ~ +3）。詳見 `backend/app/game/conversation.py`。
 
 ### API 成本控制策略
 
 | 策略 | 說明 |
 |------|------|
-| **批次限制** | 每秒最多 2-3 次 API 呼叫 |
+| **批次限制** | 每 tick 最多處理 2 個村民決策 |
 | **優先級排序** | 玩家附近的村民優先決策 |
-| **本地化簡單行為** | 睡覺、吃飯、例行工作不需 API |
-| **視野外簡化** | 玩家視野外的村民用規則系統 |
-| **快取回應** | 相似情境可重用之前的決策 |
-| **決策節流** | 同一村民至少間隔 5 秒才能再次請求 |
+| **決策節流** | 同一村民至少間隔 4 秒才能再次請求 |
+| **prompt 快取** | system prompt 維持靜態以利 OpenAI prompt cache（命中時 input token 約 1/4 計費） |
 
 ---
 
@@ -324,8 +295,8 @@ MapObject = {
 
 ```javascript
 TileMap = {
-  width: 64,
-  height: 64,
+  width: 96,
+  height: 96,
   tileSize: 16,  // 像素
   
   layers: {
@@ -510,7 +481,7 @@ TimeSystem = {
 // map.json
 {
   "seed": 12345,              // 隨機種子 (可重現)
-  "size": { "width": 64, "height": 64 },
+  "size": { "width": 96, "height": 96 },
   "buildings": [
     {
       "id": "building_001",
@@ -559,6 +530,45 @@ Layer 6: UI 層
 
 ---
 
+## 🏗️ 已實作的子系統
+
+### 經濟與產業鏈
+14 種職業組成的食物 / 器具 / 服飾 三條產業鏈，從 L1 原料 → L2 半成品 → L3 成品逐層加工，村民間自由交易。
+**詳見 [economy-system-design.md](economy-system-design.md)** — 含完整職業表、配方、價格、商人收購。
+
+### 工具耐久度
+- 8 種職業需要工具（農夫鋤頭、礦工鶴嘴鋤、伐木工斧頭、牧羊人剪刀、屠夫屠刀、鐵匠錘子、木匠鋸子、皮革匠刮刀）
+- 每次工作消耗 5 點耐久；歸零後工具直接消失
+- 沒工具無法工作 → 必須去鐵匠買新的
+- 詳見 economy-system-design.md「工具耐久度」段落
+
+### 對話與記憶系統
+- 兩村民距離小於 1.5 格（廣場/酒吧內 3 格）會觸發相遇
+- 由 AI 生成對話內容，最多 6 輪
+- 對話結束後 AI 生成摘要與好感變化（-3 ~ +3），存入 `memories`
+- 好感度與熟悉度影響：對話風格、是否搭話、好感變化幅度
+- 對話冷卻時間：避免同一對村民反覆觸發
+
+### 商人收購系統
+- 商人主動收購所有非工具物品（含原料、半成品、成品）
+- 收購價賺 20% 出口利潤；L3 成品有更高溢價（家具 $33、衣服 $35）
+- 過剩門檻：庫存達門檻自動列為可賣，或現金 < $12 且飢餓時降低門檻
+- 詳見 supply_chain.py 的 `MERCHANT_BUY_PRICES` 與 `EXCESS_THRESHOLDS`
+
+### 天氣系統
+4 種天氣：晴天 ☀️、多雲 ⛅、下雨 🌧️、暴風雨 ⛈️。
+
+| 天氣 | 室外體力消耗加成 | 畫面變暗 |
+|------|------------------|----------|
+| 晴天 | 0 | 0% |
+| 多雲 | 0 | 10% |
+| 下雨 | +1/tick | 20% |
+| 暴風雨 | +2/tick | 40% |
+
+天氣會影響 AI 決策（雨夜傾向待室內），對話內容也會引述天氣作為話題。
+
+---
+
 ## 🛠️ 技術架構
 
 ### 目前架構 ✅
@@ -600,8 +610,7 @@ Layer 6: UI 層
 │       │   ├── Renderer.js  # 渲染 (含對話泡泡)
 │       │   └── Camera.js
 │       ├── /world
-│       │   ├── GameMap.js
-│       │   └── MapGenerator.js
+│       │   └── GameMap.js
 │       └── /ui
 │           └── UIManager.js
 │
@@ -611,11 +620,28 @@ Layer 6: UI 層
 │   └── /app
 │       ├── main.py          # FastAPI 入口
 │       ├── /api
-│       │   └── routes.py    # HTTP API
+│       │   ├── ai.py            # AI 決策路由
+│       │   ├── game.py          # 遊戲狀態與 WebSocket
+│       │   └── villagers.py     # 村民資訊路由
+│       ├── /data
+│       │   ├── items.py         # 物品定義（價格/飽足度的 single source of truth）
+│       │   ├── occupations.py   # 14 職業定義
+│       │   ├── personalities.py # 7 維度性格系統
+│       │   ├── supply_chain.py  # 供應鏈與商人收購
+│       │   └── weather.py       # 天氣類型
+│       ├── /models
+│       │   └── item.py          # ItemType / ItemStack
 │       └── /game
 │           ├── game_state.py    # 遊戲狀態管理
 │           ├── game_loop.py     # 遊戲主循環
-│           ├── villager_ai.py   # GPT AI 決策
+│           ├── map_generator.py # 地圖隨機生成（後端負責）
+│           ├── villager_ai.py   # GPT AI 決策（含對話與相遇生成）
+│           ├── conversation.py  # 對話系統
+│           ├── inventory.py     # 背包與工具耐久
+│           ├── production.py    # 生產與交易執行
+│           ├── task_effects.py  # 任務副作用（吃、睡、買等）
+│           ├── target_resolver.py # 動作目標座標解析
+│           ├── sheep.py         # 羊隻系統
 │           └── pathfinding.py   # A* 路徑尋找
 │
 └── /saves                   # 存檔目錄
@@ -697,7 +723,7 @@ OPENAI_MODEL=gpt-5.4-nano  # 或其他模型
 docker-compose up --build -d
 
 # 4. 開啟瀏覽器
-http://localhost:3000
+http://localhost:4000
 ```
 
 ### 環境變數
@@ -713,6 +739,6 @@ http://localhost:3000
 ## 📝 備註
 
 - 地圖一旦生成就會持久保存，除非玩家手動刪除存檔
-- 無 API Key 時會使用規則系統（離線模式）
+- ⚠️ 必須提供 OpenAI API Key 才能啟動（無 fallback、無離線模式）
 - 村民行為由 AI 決定，後端計算 A* 路徑
 - 前端只負責渲染和使用者輸入
