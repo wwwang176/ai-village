@@ -25,20 +25,8 @@ cp .env.example .env
 docker-compose up --build
 
 # 4. 開啟瀏覽器
-# http://localhost:3000
+# http://localhost:4000
 ```
-
-### 離線模式（不需要後端）
-
-```bash
-# 直接用任何靜態伺服器啟動 frontend 資料夾
-cd frontend
-python -m http.server 3000
-
-# 開啟 http://localhost:3000
-```
-
-離線模式下，NPC 使用簡單規則系統，不會呼叫 GPT API。
 
 ## 🎮 操作方式
 
@@ -84,6 +72,11 @@ ai-city/
 │
 └── saves/                  # 遊戲存檔 (持久化)
 ```
+
+## 📚 文件
+
+- [遊戲設計文檔](GAME_DESIGN.md) — 整體遊戲設計、世界觀與機制
+- [經濟系統設計](docs/economy-system-design.md) — 職業、產業鏈、物品與價格表
 
 ## 🔧 API 端點
 
@@ -137,14 +130,6 @@ uvicorn app.main:app --reload --port 8000
 cd frontend
 python -m http.server 3000
 ```
-
-## 🎯 開發計劃
-
-- [x] Phase 1: 基礎建設
-- [x] Phase 2: Docker 容器化
-- [x] Phase 3: AI 整合
-- [ ] Phase 4: 完善功能
-- [ ] Phase 5: 美術潤色
 
 ## 📄 授權
 
