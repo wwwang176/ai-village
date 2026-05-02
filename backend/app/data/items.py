@@ -29,7 +29,7 @@ ITEM_TYPES = {
     ),
     "wool": ItemType(
         id="wool", name="羊毛", icon="☁️",
-        category="material", stack_max=10, price=3
+        category="material", stack_max=10, price=2
     ),
     "hide": ItemType(
         id="hide", name="羊皮", icon="🟫",
@@ -39,37 +39,37 @@ ITEM_TYPES = {
     # ========== 半成品（L2 職業產出）==========
     "flour": ItemType(
         id="flour", name="麵粉", icon="🌫️",
-        category="material", stack_max=10, price=4
+        category="material", stack_max=10, price=3
     ),
     "meat_raw": ItemType(
         id="meat_raw", name="生肉", icon="🥩",
-        category="material", stack_max=10, price=5
+        category="material", stack_max=10, price=5, satiety_restore=0
     ),
     "iron": ItemType(
         id="iron", name="鐵錠", icon="🔩",
-        category="material", stack_max=10, price=6
+        category="material", stack_max=10, price=8
     ),
     "plank": ItemType(
         id="plank", name="木板", icon="📏",
-        category="material", stack_max=10, price=4
+        category="material", stack_max=10, price=6
     ),
     "cloth": ItemType(
         id="cloth", name="布料", icon="🧵",
-        category="material", stack_max=10, price=6
+        category="material", stack_max=10, price=7
     ),
     "leather": ItemType(
         id="leather", name="皮革", icon="🟤",
-        category="material", stack_max=10, price=9
+        category="material", stack_max=10, price=10
     ),
     
     # ========== 成品（消費品）==========
     "bread": ItemType(
         id="bread", name="麵包", icon="🍞",
-        category="food", stack_max=10, price=3, satiety_restore=40
+        category="food", stack_max=10, price=3, satiety_restore=35
     ),
     "meat": ItemType(
         id="meat", name="肉品", icon="🍖",
-        category="food", stack_max=10, price=6, satiety_restore=60
+        category="food", stack_max=10, price=5, satiety_restore=55
     ),
     "clothes": ItemType(
         id="clothes", name="衣服", icon="👕",
@@ -81,7 +81,7 @@ ITEM_TYPES = {
     ),
     "beer": ItemType(
         id="beer", name="啤酒", icon="🍺",
-        category="drink", stack_max=10, price=2, satiety_restore=2
+        category="drink", stack_max=10, price=3, satiety_restore=2
     ),
     
     # ========== 工具 ==========

@@ -700,9 +700,9 @@ class GameState:
     
     def get_trade_options(self, villager: dict, nearby_villagers: List[dict]) -> dict:
         """取得村民的交易選項（根據供應鏈過濾）"""
-        from .production import MATERIAL_PRICES, FOOD_INFO
+        from .production import get_material_price, get_food_info
         from ..data.supply_chain import (
-            SUPPLY_CHAIN, MATERIAL_PRODUCERS, FOOD_SELLERS, 
+            SUPPLY_CHAIN, MATERIAL_PRODUCERS, FOOD_SELLERS,
             MERCHANT_BUY_PRICES
         )
         
@@ -728,7 +728,7 @@ class GameState:
                         continue
                     stock = self._count_villager_stock(npc_villager, item_id)
                     if stock > 0:
-                        price = MATERIAL_PRICES.get(item_id, 5)
+                        price = get_material_price(item_id)
                         if my_money >= price:
                             can_buy.append({
                                 "from_id": npc_id,
@@ -746,7 +746,7 @@ class GameState:
                     continue
                 stock = self._count_villager_stock(npc_villager, food_item)
                 if stock > 0:
-                    price = FOOD_INFO.get(food_item, {}).get("price", 5)
+                    price = get_food_info(food_item).get("price", 5)
                     if my_money >= price:
                         can_buy.append({
                             "from_id": npc_id,

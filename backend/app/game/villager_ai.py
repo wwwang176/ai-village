@@ -835,8 +835,7 @@ class VillagerAI:
     def _can_work(self, villager: dict, game_state) -> bool:
         """檢查村民是否有足夠原料可以工作（有原料，或有錢+供應商有貨）"""
         from ..data.supply_chain import REQUIRED_MATERIALS, MATERIAL_PRODUCERS
-        from ..game.production import MATERIAL_PRICES
-        
+
         occupation = villager.get("occupation", "")
         required = REQUIRED_MATERIALS.get(occupation, [])
         
@@ -1283,16 +1282,16 @@ class VillagerAI:
     def _get_buy_material_info(self, villager: dict, game_state) -> str:
         """取得可購買材料資訊"""
         from ..data.supply_chain import REQUIRED_MATERIALS, MATERIAL_PRODUCERS
-        from ..game.production import MATERIAL_PRICES
-        
+        from ..game.production import get_material_price
+
         occupation = villager.get("occupation", "")
         required = REQUIRED_MATERIALS.get(occupation, [])
         if not required:
             return ""
-        
+
         money = villager.get("money", 0)
         inventory = villager.get("inventory", [])
-        
+
         for material in required:
             # 檢查背包是否已有
             has_material = False
@@ -1300,12 +1299,12 @@ class VillagerAI:
                 if slot and slot.get("item_id") == material and slot.get("quantity", 0) >= 1:
                     has_material = True
                     break
-            
+
             if has_material:
                 continue
-            
+
             # 需要買材料
-            price = MATERIAL_PRICES.get(material, 5)
+            price = get_material_price(material)
             if money < price:
                 continue
             

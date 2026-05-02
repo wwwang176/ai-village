@@ -25,25 +25,27 @@ OCCUPATION_TOOLS = {
     "tailor": "shears",
 }
 
-# 原料價格表（平衡後：L1=$80/分, L2=$100/分, L3=$120/分）
-MATERIAL_PRICES = {
-    # L1 產出
-    "grain": 2, "ore": 3, "wood": 2, "wool": 2,
-    # L2 產出
-    "flour": 3, "iron": 8, "cloth": 7, "leather": 10,
-    "hide": 4, "meat_raw": 5,
-    # L3 產出（麵包師 $80/分，因為食物是生存必需）
-    "bread": 3,
-    # 飲料
-    "beer": 3,
-}
+# 物品基礎價與飽足度的 single source of truth：backend/app/data/items.py
+# 透過下方 helper 查詢，避免兩處資料漂移。
 
-# 食物資訊
-FOOD_INFO = {
-    "bread": {"name": "麵包", "price": 3, "satiety_restore": 35},
-    "meat": {"name": "熟肉", "price": 5, "satiety_restore": 55},
-    "beer": {"name": "啤酒", "price": 3, "satiety_restore": 2},
-}
+def get_material_price(item_id: str, default: int = 5) -> int:
+    """取得物品基礎交易價（村民間流通）"""
+    from ..data.items import ITEM_TYPES
+    item = ITEM_TYPES.get(item_id)
+    return item.price if item else default
+
+
+def get_food_info(item_id: str) -> dict:
+    """取得食物的 name / price / satiety_restore"""
+    from ..data.items import ITEM_TYPES
+    item = ITEM_TYPES.get(item_id)
+    if not item:
+        return {"name": item_id, "price": 5, "satiety_restore": 30}
+    return {
+        "name": item.name,
+        "price": item.price,
+        "satiety_restore": item.satiety_restore,
+    }
 
 
 class ProductionSystem:
@@ -315,7 +317,7 @@ class ProductionSystem:
         """執行食物購買"""
         seller_id = task.get("seller_id")
         food_item = task.get("food_item")
-        food_info = FOOD_INFO.get(food_item, {"name": food_item, "price": 4, "satiety_restore": 30})
+        food_info = get_food_info(food_item)
         
         result = self.execute_trade(
             buyer=buyer,
@@ -341,7 +343,7 @@ class ProductionSystem:
         supplier_id = task.get("supplier_id")
         material = task.get("material")
         want_quantity = task.get("quantity", 3)
-        price_per_unit = MATERIAL_PRICES.get(material, 5)
+        price_per_unit = get_material_price(material)
         
         result = self.execute_trade(
             buyer=buyer,

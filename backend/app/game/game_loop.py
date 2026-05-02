@@ -1159,7 +1159,7 @@ class GameLoop:
     def _find_material_seller(self, villager: dict) -> dict:
         """找到可購買材料的供應商"""
         from ..data.supply_chain import REQUIRED_MATERIALS, MATERIAL_PRODUCERS
-        from ..game.production import MATERIAL_PRICES
+        from ..game.production import get_material_price
         
         occupation = villager.get("occupation", "")
         required = REQUIRED_MATERIALS.get(occupation, [])
@@ -1180,7 +1180,7 @@ class GameLoop:
             if has_material:
                 continue
             
-            price = MATERIAL_PRICES.get(material, 5)
+            price = get_material_price(material)
             if money < price:
                 continue
             

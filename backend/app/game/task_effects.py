@@ -59,8 +59,8 @@ class EatEffect(TaskEffect):
         inventory = villager.get("inventory", [None] * 5)
         stats = villager.get("stats", {})
         old_satiety = stats.get("satiety", 100)
-        from .production import FOOD_INFO
-        
+        from .production import get_food_info
+
         # 尋找背包裡可直接吃的食物（麵包或熟肉）
         for i, slot in enumerate(inventory):
             if slot and slot.get("item_id") in ("bread", "meat"):
@@ -70,9 +70,9 @@ class EatEffect(TaskEffect):
                     slot["quantity"] -= 1
                 else:
                     villager["inventory"][i] = None
-                
+
                 # 恢復飽足度
-                food_info = FOOD_INFO.get(item_id, {})
+                food_info = get_food_info(item_id)
                 restore = food_info.get("satiety_restore", 35)
                 food_name = food_info.get("name", item_id)
                 stats["satiety"] = min(100, old_satiety + restore)
@@ -288,8 +288,8 @@ class BuyBeerEffect(TaskEffect):
     """在酒吧買啤酒效果（直接消耗，不經過背包）"""
     
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
-        from ..game.production import FOOD_INFO
-        beer_info = FOOD_INFO.get("beer", {"price": 2, "satiety_restore": 2})
+        from ..game.production import get_food_info
+        beer_info = get_food_info("beer")
         beer_price = beer_info["price"]
         beer_qty = 1  # 一次買 1 杯
         satiety_per_beer = beer_info["satiety_restore"]
@@ -779,17 +779,17 @@ class SellExcessEffect(TaskEffect):
     """變賣物品給商人（原價）"""
     
     def execute(self, villager: dict, task: dict, ctx: TaskContext) -> bool:
-        from ..game.production import MATERIAL_PRICES
+        from ..game.production import get_material_price
         from ..data.item_categories import TOOLS
-        
+
         merchant_id = task.get("merchant_id")
         item_id = task.get("item")
-        
+
         if not merchant_id or not item_id:
             logger.info(f"💸 {villager['name']} 變賣失敗：缺少參數")
             task["fail_reason"] = "變賣物品：缺少參數"
             return False
-        
+
         # 找商人
         game_state = ctx.production.game_state
         merchant = game_state.get_villager(merchant_id)
@@ -797,11 +797,11 @@ class SellExcessEffect(TaskEffect):
             logger.info(f"💸 {villager['name']} 找不到商人")
             task["fail_reason"] = "變賣物品：找不到商人"
             return False
-        
+
         merchant_name = merchant.get('name', '商人')
-        
+
         # 取得原價
-        price = MATERIAL_PRICES.get(item_id, 2)
+        price = get_material_price(item_id, default=2)
         
         # 檢查商人有沒有錢
         merchant_money = merchant.get("money", 0)

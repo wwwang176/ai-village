@@ -129,27 +129,36 @@ def get_shops_for_need(need_type: str) -> List[str]:
 # 商人收購系統
 # ============================================================
 
-# 商人收購的物品及價格（所有原料都可收購，商人賺 20% 出口利潤）
+# 商人收購的物品及價格。
+#
+# 商業規則：商人收購一律賺 20% 出口利潤（轉賣海外）。本表為「商人付給村民的價格」，
+# 跟物品 base price（items.py:ItemType.price）的關係如下：
+#   - 原料/半成品：預設等於 base price（如 grain=2、ore=3、flour=3、iron=8）
+#   - L2 高價成品：商人額外加碼（如 leather +1、meat +1），鼓勵村民出售
+#   - L3 終端成品：商人給予大幅溢價（家具 33、衣服 35），這是高價成品的設計溢價
+#
+# ⚠️ 修改物品 base price（items.py）時，請順手檢查本表是否需要同步更新，
+# 否則會出現像 0b10526 那次的「啤酒漲價但商人收購價沒同步」的 bug。
 MERCHANT_BUY_PRICES = {
-    # L1 原料
+    # L1 原料（與 base price 一致）
     "grain": 2,         # 穀物
     "ore": 3,           # 礦石
     "wood": 2,          # 木材
     "wool": 2,          # 羊毛
-    # L2 半成品
+    # L2 半成品（部分有商人加碼）
     "flour": 3,         # 麵粉
     "iron": 8,          # 鐵錠
     "cloth": 7,         # 布料
-    "leather": 11,      # 皮革
+    "leather": 11,      # 皮革（base 10 + 商人加碼 1）
     "hide": 4,          # 獸皮
     "meat_raw": 5,      # 生肉
     "plank": 6,         # 木板
     # L3 成品
     "bread": 3,         # 麵包
-    "meat": 6,          # 熟肉
-    "beer": 2,          # 啤酒
-    "furniture": 33,    # 家具
-    "clothes": 35,      # 衣服
+    "meat": 6,          # 熟肉（base 5 + 商人加碼 1）
+    "beer": 3,          # 啤酒
+    "furniture": 33,    # 家具（base 20，商人大幅溢價）
+    "clothes": 35,      # 衣服（base 15，商人大幅溢價）
 }
 
 # 過剩門檻（分層設計）- 達到門檻時會賣給商人
