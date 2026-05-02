@@ -44,7 +44,7 @@ docker-compose up --build
 ai-city/
 ├── docker-compose.yml      # Docker 編排檔
 ├── .env.example            # 環境變數範例
-├── GAME_DESIGN.md          # 遊戲設計文檔
+├── docs/                   # 設計文檔
 │
 ├── frontend/               # 前端 (JavaScript + Canvas)
 │   ├── Dockerfile
@@ -75,7 +75,7 @@ ai-city/
 
 ## 📚 文件
 
-- [遊戲設計文檔](GAME_DESIGN.md) — 整體遊戲設計、世界觀與機制
+- [遊戲設計文檔](docs/GAME_DESIGN.md) — 整體遊戲設計、世界觀與機制
 - [經濟系統設計](docs/economy-system-design.md) — 職業、產業鏈、物品與價格表
 
 ## 🔧 API 端點
