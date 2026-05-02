@@ -691,7 +691,7 @@ cp .env.example .env
 
 # 2. 編輯 .env，填入 API Key
 OPENAI_API_KEY=sk-xxxxxxxxxxxxx
-OPENAI_MODEL=gpt-4.1-nano  # 或其他模型
+OPENAI_MODEL=gpt-5.4-nano  # 或其他模型
 
 # 3. 啟動 Docker Compose
 docker-compose up --build -d
@@ -705,7 +705,7 @@ http://localhost:3000
 | 變數 | 預設值 | 說明 |
 |------|--------|------|
 | `OPENAI_API_KEY` | - | OpenAI API 金鑰 (必填) |
-| `OPENAI_MODEL` | gpt-3.5-turbo | 使用的模型 |
+| `OPENAI_MODEL` | gpt-5.4-nano | 使用的模型 |
 | `DEBUG_OPENAI` | true | 是否顯示 API 請求日誌 |
 
 ---

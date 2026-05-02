@@ -373,9 +373,9 @@ class ConversationSystem:
         try:
             async with ai_semaphore:
                 response = await self.villager_ai.client.chat.completions.create(
-                    model=os.getenv("OPENAI_MODEL", "gpt-4.1-nano"),
+                    model=os.getenv("OPENAI_MODEL", "gpt-5.4-nano"),
                     messages=[{"role": "user", "content": prompt}],
-                    max_tokens=100,
+                    max_completion_tokens=100,
                     temperature=0.8
                 )
             
@@ -504,9 +504,9 @@ class ConversationSystem:
         try:
             async with ai_semaphore:
                 response = await self.villager_ai.client.chat.completions.create(
-                    model=os.getenv("OPENAI_MODEL", "gpt-4.1-nano"),
+                    model=os.getenv("OPENAI_MODEL", "gpt-5.4-nano"),
                     messages=[{"role": "user", "content": prompt}],
-                    max_tokens=600,
+                    max_completion_tokens=600,
                     temperature=0.5
                 )
             

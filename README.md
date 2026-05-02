@@ -117,7 +117,7 @@ ai-city/
 | 變數 | 說明 | 預設值 |
 |------|------|--------|
 | `OPENAI_API_KEY` | OpenAI API 金鑰 | (必填) |
-| `OPENAI_MODEL` | 使用的模型 | `gpt-3.5-turbo` |
+| `OPENAI_MODEL` | 使用的模型 | `gpt-5.4-nano` |
 
 ## 📝 開發指南
 

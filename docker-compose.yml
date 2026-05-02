@@ -18,7 +18,7 @@ services:
       dockerfile: Dockerfile
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-3.5-turbo}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-5.4-nano}
       - DEBUG_OPENAI=${DEBUG_OPENAI:-true}
     volumes:
       - ./saves:/app/saves  # 持久化存檔

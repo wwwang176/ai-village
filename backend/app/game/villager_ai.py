@@ -57,7 +57,7 @@ class VillagerAI:
     def __init__(self):
         api_key = os.getenv("OPENAI_API_KEY")
         self.client = AsyncOpenAI(api_key=api_key) if api_key else None
-        self.model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+        self.model = os.getenv("OPENAI_MODEL", "gpt-5.4-nano")
         
         # 每個村民的上次 API 呼叫時間（避免 rate limit）
         self._last_api_call: Dict[str, float] = {}
@@ -106,7 +106,7 @@ class VillagerAI:
                 messages=messages,
                 tools=tools,
                 tool_choice={"type": "function", "function": {"name": "choose_action"}},
-                max_tokens=150
+                max_completion_tokens=150
             )
             
             # 解析 function call 結果
@@ -624,7 +624,7 @@ class VillagerAI:
                 model=self.model,
                 messages=messages,
                 # temperature=0.9,
-                max_tokens=400
+                max_completion_tokens=400
             )
             
             result_text = response.choices[0].message.content
@@ -660,7 +660,7 @@ class VillagerAI:
                     {"role": "user", "content": prompt}
                 ],
                 # temperature=0.85,
-                max_tokens=400,
+                max_completion_tokens=400,
                 response_format={"type": "json_object"}
             )
             
