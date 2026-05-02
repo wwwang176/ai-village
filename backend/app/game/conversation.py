@@ -307,7 +307,37 @@ class ConversationSystem:
             return "、".join(moods) if moods else "普通"
         
         my_mood = get_mood(my_stats)
-        
+
+        # 背包概要（讓對話可以提及實際擁有的東西）
+        my_inventory_items = []
+        for slot in villager.get("inventory", []):
+            if slot:
+                item_id = slot.get("item_id")
+                qty = slot.get("quantity", 1)
+                if item_id:
+                    my_inventory_items.append(f"{item_id} x{qty}")
+        my_inventory_text = "、".join(my_inventory_items) if my_inventory_items else "空"
+        my_money = villager.get("money", 0)
+
+        # 本村各職業對應的村民名字（讓對話可以提到具體人名）
+        sellers_by_occ: Dict[str, List[str]] = {}
+        for v in self.game_state.villagers.values():
+            occ = v.get("occupation")
+            if occ:
+                sellers_by_occ.setdefault(occ, []).append(v.get("name", "?"))
+        seller_order = [
+            ("baker", "麵包師（賣麵包 $3）"),
+            ("butcher", "屠夫（賣生肉 $5）"),
+            ("bartender", "酒保（賣啤酒）"),
+            ("blacksmith", "鐵匠（賣工具）"),
+        ]
+        seller_lines = []
+        for occ, label in seller_order:
+            names = sellers_by_occ.get(occ)
+            if names:
+                seller_lines.append(f"- {label}：{', '.join(names)}")
+        sellers_text = "\n".join(seller_lines) if seller_lines else "（無）"
+
         from .game_state import get_affection_desc, get_familiarity_desc
         affection_text = f"{affection}（{get_affection_desc(affection)}）"
         familiarity_text = f"{familiarity}（{get_familiarity_desc(familiarity)}）"
@@ -344,6 +374,8 @@ class ConversationSystem:
 - 性格：{', '.join(villager.get('personality', ['普通']))}
 - 興趣：{', '.join(my_prefs.get('hobbies', ['無']))}
 - 目前心情：{my_mood}
+- 背包：{my_inventory_text}
+- 金錢：${my_money}
 
 【對方資訊】
 {other_info_text}
@@ -357,6 +389,10 @@ class ConversationSystem:
 
 【你對其他人的記憶】
 {other_memories_text}
+
+【村莊資訊】（提及食物/工具相關話題時可參考）
+{sellers_text}
+注意：穀物、麵粉等原料不可吃，餓了要找麵包師買麵包或屠夫買生肉。
 
 【現在時間】第 {game_time['day']} 天 {game_time['hour']:02d}:{game_time['minute']:02d}
 【天氣】{weather_text}

@@ -362,6 +362,34 @@ class VillagerAI:
 5. 白天且體力滿足時，不需要睡覺
 6. 如果行為失敗過，就不要再重覆選擇
 
+【村莊經濟系統】
+
+食物產業鏈（只有以下三條路徑能解餓）：
+  農夫種出穀物🌾 → 磨坊主磨成麵粉🌫️ → 麵包師烤成麵包🍞（吃了 +35 飽足）
+  牧羊人養羊🐑 → 屠夫宰殺出生肉🥩（吃了 +40 飽足，但要先煮）→ 自家灶台煮成熟肉🍖（+55 飽足）
+  酒保用穀物釀啤酒🍺（+2 飽足，主要解社交）
+
+器具產業鏈（不能吃）：
+  礦工挖鐵礦🪨 → 鐵匠煉成鐵錠🔩 → 木匠做家具🪑
+  伐木工砍木材🪵 → 木匠做家具🪑
+
+服飾產業鏈（不能吃）：
+  牧羊人剪羊毛☁️ → 織工織成布料🧵
+  屠夫剝下羊皮🟫 → 皮革匠鞣成皮革🟤
+  布料 + 皮革 → 裁縫做衣服👕
+
+【吃飽的唯一方法】
+飢餓時只有三個動作能解餓：
+- eat：背包有麵包或熟肉時才可用
+- go_buy_food：去找麵包師買麵包（$3），或去找屠夫買生肉（$5）
+- go_cook：背包有生肉且家裡有灶台時，回家煮成熟肉
+
+【絕對不能誤會的事】
+- 穀物🌾、麵粉🌫️、鐵礦🪨、木材🪵、羊毛☁️、羊皮🟫、布料🧵、皮革🟤、鐵錠🔩 全部都是【原料/半成品】，吃了不會飽，撿了也不會解餓
+- go_work（工作賺錢）、go_pickup（撿原料）、go_sell（賣東西）這些動作都【不會解餓】，餓了就要選 eat / go_buy_food / go_cook
+- 即使你是農夫，種出來的穀物也【不能拿來吃】，那是要賣給磨坊主的銷售商品
+- 「飽足危急」時請優先選 eat / go_buy_food / go_cook，不要去撿穀物或工作
+
 根據你的狀態、優先級和性格，呼叫 choose_action 選擇行動。"""
     
     def _build_destination_prompt(self, villager: dict, game_state, action_info: dict = None) -> str:
@@ -593,6 +621,45 @@ class VillagerAI:
             if item_id and item_id in FOODS and item_id != "meat_raw":
                 return True
         return False
+
+    def _get_mood_desc(self, villager: dict) -> str:
+        """取得心情文字描述（給對話 prompt 使用）"""
+        stats = villager.get("stats", {})
+        moods = []
+        if stats.get("energy", 100) < 30:
+            moods.append("很累")
+        if stats.get("satiety", 100) < 30:
+            moods.append("很餓")
+        if stats.get("social", 50) < 20:
+            moods.append("寂寞")
+        if stats.get("happiness", 50) > 70:
+            moods.append("開心")
+        return "、".join(moods) if moods else "普通"
+
+    def _get_village_sellers_text(self, game_state) -> str:
+        """列出本村各職業的村民名字（給對話 prompt 使用）"""
+        by_occupation: Dict[str, List[str]] = {}
+        for v in game_state.villagers.values():
+            occ = v.get("occupation")
+            if occ:
+                by_occupation.setdefault(occ, []).append(v.get("name", "?"))
+        # 按食物優先排序，列出對話常用的職業
+        order = [
+            ("baker", "麵包師（賣麵包 $3）"),
+            ("butcher", "屠夫（賣生肉 $5）"),
+            ("bartender", "酒保（賣啤酒）"),
+            ("blacksmith", "鐵匠（賣工具）"),
+            ("miller", "磨坊主"),
+            ("farmer", "農夫"),
+            ("shepherd", "牧羊人"),
+            ("merchant", "商人"),
+        ]
+        lines = []
+        for occ, label in order:
+            names = by_occupation.get(occ)
+            if names:
+                lines.append(f"- {label}：{', '.join(names)}")
+        return "\n".join(lines) if lines else "（無）"
     
     async def generate_dialogue(
         self,
@@ -981,18 +1048,27 @@ class VillagerAI:
     def _build_encounter_prompt(self, villager_a: dict, villager_b: dict, game_state) -> str:
         rel_a = villager_a.get("relationships", {}).get(villager_b["id"], {})
         rel_b = villager_b.get("relationships", {}).get(villager_a["id"], {})
-        
+
         aff_a = rel_a.get('affection', 0)
         aff_b = rel_b.get('affection', 0)
         fam_a = rel_a.get('familiarity', 0)
         fam_b = rel_b.get('familiarity', 0)
-        
+
+        mood_a = self._get_mood_desc(villager_a)
+        mood_b = self._get_mood_desc(villager_b)
+        inv_a = self._format_inventory(villager_a)
+        inv_b = self._format_inventory(villager_b)
+        sellers = self._get_village_sellers_text(game_state)
+
         return f"""兩個村民相遇:
 
 村民 A:
 - 姓名: {villager_a['name']}
 - 職業: {self._get_occupation_name(villager_a['occupation'])}
 - 性格: {', '.join(villager_a['personality'])}
+- 心情: {mood_a}
+- 背包: {inv_a}
+- 金錢: ${villager_a.get('money', 0)}
 - 對 B 的好感: {aff_a}（{self._get_affection_desc(aff_a)}）
 - 對 B 的熟悉度: {fam_a}（{self._get_familiarity_desc(fam_a)}）
 
@@ -1000,10 +1076,17 @@ class VillagerAI:
 - 姓名: {villager_b['name']}
 - 職業: {self._get_occupation_name(villager_b['occupation'])}
 - 性格: {', '.join(villager_b['personality'])}
+- 心情: {mood_b}
+- 背包: {inv_b}
+- 金錢: ${villager_b.get('money', 0)}
 - 對 A 的好感: {aff_b}（{self._get_affection_desc(aff_b)}）
 - 對 A 的熟悉度: {fam_b}（{self._get_familiarity_desc(fam_b)}）
 
-請模擬他們的相遇互動。"""
+【村莊資訊】
+{sellers}
+
+請模擬他們的相遇互動。對話要符合他們此刻的狀態（餓了會抱怨肚子，缺工具會煩惱）。
+注意：穀物、麵粉、鐵礦等原料不可吃，餓了要找麵包師買麵包或屠夫買生肉。"""
 
     def _get_occupation_name(self, occupation: str) -> str:
         from ..data.occupations import OCCUPATIONS
@@ -1135,32 +1218,42 @@ class VillagerAI:
     def _get_pickup_info(self, villager: dict, game_state) -> str:
         """取得可撿地上物品資訊"""
         from ..data.items import ITEM_TYPES
+        from ..data.item_categories import FOODS, TOOLS, RAW_MATERIALS
         owned_items = game_state.get_items_by_owner(villager["id"])
         if not owned_items:
             return ""
-        
+
         # 統計地上物品
         item_counts = {}
         for item in owned_items:
             item_id = item.get("item_id")
             qty = item.get("quantity", 1)
             item_counts[item_id] = item_counts.get(item_id, 0) + qty
-        
+
         if not item_counts:
             return ""
-        
-        # 產生描述
+
+        # 產生描述（含類別標註，避免 AI 把原料當食物）
         item_names = []
         item_ids = []
         for item_id, qty in item_counts.items():
             item_type = ITEM_TYPES.get(item_id)
             name = item_type.name if item_type else item_id
-            item_names.append(f"{name} x{qty}")
+            if item_id in FOODS:
+                tag = "食物"
+            elif item_id in TOOLS:
+                tag = "工具"
+            elif item_id in RAW_MATERIALS:
+                tag = "原料,不可食"
+            else:
+                tag = ""
+            tag_str = f"({tag})" if tag else ""
+            item_names.append(f"{name}{tag_str} x{qty}")
             item_ids.append(item_id)
-        
+
         items_desc = "、".join(item_names)
         ids_desc = "/".join(item_ids)
-        return f"撿起地上的物品（需指定 item: {ids_desc}）"
+        return f"撿地上的 {items_desc}（需指定 item: {ids_desc}）"
     
     def _get_buy_tool_info(self, villager: dict, game_state) -> str:
         """取得可購買工具資訊"""
